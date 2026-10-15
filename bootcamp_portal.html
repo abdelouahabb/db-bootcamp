@@ -1,0 +1,3288 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Forecast & Telemetry Database Engineering Bootcamp</title>
+  <style>
+    /* =========================================================================
+       CLEAN ENTERPRISE DOCUMENTATION & LAB UI (LIGHT DEFAULT + DARK MODE)
+       ========================================================================= */
+    :root,
+    [data-theme="light"] {
+      --bg-deep: #f8fafc;
+      --bg-panel: #ffffff;
+      --bg-card: #f1f5f9;
+      --bg-card-hover: #e2e8f0;
+      --bg-code: #0f172a;
+      --bg-code-header: #1e293b;
+      --text-code: #f8fafc;
+      --border-subtle: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+
+      --accent-cyan: #0284c7;
+      --accent-cyan-dim: #e0f2fe;
+      --accent-emerald: #059669;
+      --accent-emerald-dim: #d1fae5;
+      --accent-amber: #d97706;
+      --accent-amber-dim: #fef3c7;
+      --accent-crimson: #dc2626;
+      --accent-crimson-dim: #fee2e2;
+      --accent-purple: #4f46e5;
+      --accent-purple-dim: #e0e7ff;
+
+      --byte-hdr-bg: #eef2ff;
+      --byte-hdr-border: #c7d2fe;
+      --byte-hdr-text: #3730a3;
+      --byte-8b-bg: #e0f2fe;
+      --byte-8b-border: #bae6fd;
+      --byte-8b-text: #075985;
+      --byte-4b-bg: #d1fae5;
+      --byte-4b-border: #a7f3d0;
+      --byte-4b-text: #065f46;
+      --byte-2b-bg: #fef3c7;
+      --byte-2b-border: #fde68a;
+      --byte-2b-text: #92400e;
+      --byte-1b-bg: #fce7f3;
+      --byte-1b-border: #fbcfe8;
+      --byte-1b-text: #9d174d;
+      --byte-pad-bg: #fee2e2;
+      --byte-pad-stripe: #fecaca;
+      --byte-pad-border: #f87171;
+      --byte-pad-text: #991b1b;
+
+      --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+
+    [data-theme="dark"] {
+      --bg-deep: #0d1117;
+      --bg-panel: #161b22;
+      --bg-card: #21262d;
+      --bg-card-hover: #30363d;
+      --bg-code: #090d11;
+      --bg-code-header: #161b22;
+      --text-code: #e6edf3;
+      --border-subtle: #30363d;
+      --border-strong: #484f58;
+      --text-primary: #f0f6fc;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+
+      --accent-cyan: #38bdf8;
+      --accent-cyan-dim: rgba(56, 189, 248, 0.12);
+      --accent-emerald: #10b981;
+      --accent-emerald-dim: rgba(16, 185, 129, 0.12);
+      --accent-amber: #f59e0b;
+      --accent-amber-dim: rgba(245, 158, 11, 0.12);
+      --accent-crimson: #f87171;
+      --accent-crimson-dim: rgba(248, 113, 113, 0.14);
+      --accent-purple: #818cf8;
+      --accent-purple-dim: rgba(129, 140, 248, 0.12);
+
+      --byte-hdr-bg: rgba(99, 102, 241, 0.15);
+      --byte-hdr-border: rgba(99, 102, 241, 0.4);
+      --byte-hdr-text: #c7d2fe;
+      --byte-8b-bg: rgba(56, 189, 248, 0.15);
+      --byte-8b-border: rgba(56, 189, 248, 0.4);
+      --byte-8b-text: #bae6fd;
+      --byte-4b-bg: rgba(16, 185, 129, 0.15);
+      --byte-4b-border: rgba(16, 185, 129, 0.4);
+      --byte-4b-text: #a7f3d0;
+      --byte-2b-bg: rgba(245, 158, 11, 0.15);
+      --byte-2b-border: rgba(245, 158, 11, 0.4);
+      --byte-2b-text: #fde68a;
+      --byte-1b-bg: rgba(236, 72, 153, 0.15);
+      --byte-1b-border: rgba(236, 72, 153, 0.4);
+      --byte-1b-text: #fbcfe8;
+      --byte-pad-bg: rgba(239, 68, 68, 0.18);
+      --byte-pad-stripe: rgba(185, 28, 28, 0.28);
+      --byte-pad-border: #ef4444;
+      --byte-pad-text: #fecaca;
+
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.25);
+      --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      line-height: 1.55;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top System Bar */
+    .telemetry-ribbon {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.5rem 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      gap: 0.75rem;
+    }
+
+    .telemetry-stations {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+    }
+
+    .station-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      display: inline-block;
+    }
+
+    .status-dot.warn {
+      background: var(--accent-amber);
+    }
+
+    /* Theme Toggle Button */
+    .theme-toggle-btn {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      padding: 0.3rem 0.7rem;
+      font-family: var(--font-sans);
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .theme-toggle-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-cyan);
+    }
+
+    /* Hero Header */
+    header.hero {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .hero-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.75rem 1.5rem 1.5rem;
+    }
+
+    .hero-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .argon-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 4px;
+      background: var(--accent-cyan-dim);
+      border: 1px solid var(--border-strong);
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+
+    .hero h1 {
+      font-size: clamp(1.5rem, 2.4vw, 2.05rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      color: var(--text-primary);
+      margin-top: 0.55rem;
+    }
+
+    .hero-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.94rem;
+      max-width: 920px;
+      margin-top: 0.4rem;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+
+    .metric-box {
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.75rem 0.95rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metric-box .m-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .metric-box .m-val {
+      font-size: 1.18rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      margin-top: 0.2rem;
+    }
+
+    .metric-box .m-sub {
+      font-size: 0.74rem;
+      color: var(--text-secondary);
+      margin-top: 0.1rem;
+    }
+
+    /* Navigation Tabs */
+    .nav-container {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .nav-tabs {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid transparent;
+      padding: 0.48rem 0.85rem;
+      border-radius: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .tab-btn:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    .tab-btn.active {
+      background: var(--accent-cyan-dim);
+      color: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+    }
+
+    .tab-num {
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.08rem 0.38rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .tab-btn.active .tab-num {
+      background: var(--accent-cyan);
+      color: #ffffff;
+      border-color: var(--accent-cyan);
+    }
+
+    /* Main Content Container */
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .tab-section {
+      display: none;
+    }
+
+    .tab-section.active {
+      display: block;
+    }
+
+    /* Section Headers */
+    .section-header {
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1rem;
+    }
+
+    .section-header h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin-top: 0.25rem;
+      max-width: 880px;
+    }
+
+    /* Cards & Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 1.25rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.65rem;
+      border-bottom: 1px solid var(--border-subtle);
+      gap: 0.5rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .pill {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.18rem 0.5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .pill-cyan { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+    .pill-emerald { background: var(--accent-emerald-dim); color: var(--accent-emerald); }
+    .pill-amber { background: var(--accent-amber-dim); color: var(--accent-amber); }
+    .pill-crimson { background: var(--accent-crimson-dim); color: var(--accent-crimson); }
+    .pill-purple { background: var(--accent-purple-dim); color: var(--accent-purple); }
+
+    /* File List Links */
+    .file-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin: 0.85rem 0;
+    }
+
+    .file-item {
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.65rem;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .file-item:hover {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card);
+    }
+
+    .file-item a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-family: var(--font-mono);
+      font-size: 0.79rem;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .file-item a:hover {
+      text-decoration: underline;
+    }
+
+    .file-desc {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Code Block with Copy Button */
+    .code-box {
+      background: var(--bg-code);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      padding: 0.7rem 0.85rem;
+      margin-top: 0.75rem;
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-code);
+      overflow-x: auto;
+    }
+
+    .code-box pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding-right: 5rem;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 0.45rem;
+      right: 0.45rem;
+      background: var(--bg-code-header);
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 4px;
+      padding: 0.2rem 0.55rem;
+      font-family: var(--font-mono);
+      font-size: 0.69rem;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .copy-btn:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+
+    /* Interactive Controls & Sliders */
+    .control-group {
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.9rem 1.1rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.86rem;
+      font-weight: 600;
+      margin-bottom: 0.45rem;
+      color: var(--text-primary);
+    }
+
+    .control-value {
+      font-family: var(--font-mono);
+      color: var(--accent-cyan);
+      font-size: 0.94rem;
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-cyan);
+      height: 6px;
+      background: var(--border-strong);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .action-btn {
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      padding: 0.42rem 0.85rem;
+      border-radius: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.79rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+
+    .action-btn:hover {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card);
+    }
+
+    .action-btn.active {
+      background: var(--accent-cyan-dim);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    /* Simulator 1: Tuple Tetris Memory Word Grid */
+    .word-row {
+      display: grid;
+      grid-template-columns: 95px repeat(8, 1fr);
+      gap: 4px;
+      margin-bottom: 5px;
+      align-items: stretch;
+    }
+
+    .word-label {
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0.3rem 0.45rem;
+    }
+
+    .byte-cell {
+      border-radius: 4px;
+      padding: 0.35rem 0.2rem;
+      font-family: var(--font-mono);
+      font-size: 0.67rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 44px;
+      border: 1px solid transparent;
+    }
+
+    .byte-header {
+      background: var(--byte-hdr-bg);
+      border-color: var(--byte-hdr-border);
+      color: var(--byte-hdr-text);
+    }
+
+    .byte-8b {
+      background: var(--byte-8b-bg);
+      border-color: var(--byte-8b-border);
+      color: var(--byte-8b-text);
+    }
+
+    .byte-4b {
+      background: var(--byte-4b-bg);
+      border-color: var(--byte-4b-border);
+      color: var(--byte-4b-text);
+    }
+
+    .byte-2b {
+      background: var(--byte-2b-bg);
+      border-color: var(--byte-2b-border);
+      color: var(--byte-2b-text);
+    }
+
+    .byte-1b {
+      background: var(--byte-1b-bg);
+      border-color: var(--byte-1b-border);
+      color: var(--byte-1b-text);
+    }
+
+    .byte-pad {
+      background: repeating-linear-gradient(
+        45deg,
+        var(--byte-pad-bg),
+        var(--byte-pad-bg) 5px,
+        var(--byte-pad-stripe) 5px,
+        var(--byte-pad-stripe) 10px
+      );
+      border-color: var(--byte-pad-border);
+      color: var(--byte-pad-text);
+      font-weight: 700;
+    }
+
+    .col-reorder-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-top: 0.65rem;
+    }
+
+    .col-reorder-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.42rem 0.7rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+    }
+
+    .col-move-btns button {
+      background: var(--bg-panel);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      padding: 0.12rem 0.45rem;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+    }
+
+    .col-move-btns button:hover {
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    /* Simulator 2: Status Comparison Panels */
+    .sim-compare-danger {
+      background: var(--accent-crimson-dim);
+      border: 1px solid var(--byte-pad-border);
+      border-radius: 6px;
+      padding: 0.95rem;
+    }
+
+    .sim-compare-success {
+      background: var(--accent-emerald-dim);
+      border: 1px solid var(--accent-emerald);
+      border-radius: 6px;
+      padding: 0.95rem;
+    }
+
+    .sim-callout-warn {
+      margin-top: 1rem;
+      padding: 0.8rem 0.95rem;
+      background: var(--accent-amber-dim);
+      border-left: 3px solid var(--accent-amber);
+      border-radius: 4px;
+      font-size: 0.82rem;
+      color: var(--text-primary);
+    }
+
+    /* Simulator 3 Bar Charts */
+    .bar-group {
+      margin-bottom: 1rem;
+    }
+
+    .bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.79rem;
+      margin-bottom: 0.3rem;
+      color: var(--text-primary);
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 22px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.2s ease;
+      display: flex;
+      align-items: center;
+      padding-left: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+
+    /* Simulator 5: Polyglot Architecture Map */
+    .arch-diagram {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .arch-node {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.9rem;
+      cursor: pointer;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .arch-node:hover {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card);
+    }
+
+    .arch-node.selected {
+      border: 2px solid var(--accent-cyan);
+      background: var(--accent-cyan-dim);
+    }
+
+    .arch-node-step {
+      font-family: var(--font-mono);
+      font-size: 0.69rem;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .arch-node-title {
+      font-size: 0.94rem;
+      font-weight: 700;
+      margin: 0.25rem 0;
+      color: var(--text-primary);
+    }
+
+    .arch-node-tech {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-secondary);
+    }
+
+    /* Quiz Styling */
+    .quiz-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 1.1rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .quiz-q {
+      font-weight: 700;
+      font-size: 0.94rem;
+      margin-bottom: 0.7rem;
+      color: var(--text-primary);
+    }
+
+    .quiz-options {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .quiz-opt {
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.55rem 0.85rem;
+      text-align: left;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .quiz-opt:hover:not(:disabled) {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card);
+    }
+
+    .quiz-opt.correct {
+      background: var(--accent-emerald-dim);
+      border-color: var(--accent-emerald);
+      color: var(--accent-emerald);
+      font-weight: 700;
+    }
+
+    .quiz-opt.wrong {
+      background: var(--accent-crimson-dim);
+      border-color: var(--accent-crimson);
+      color: var(--accent-crimson);
+    }
+
+    .quiz-explain {
+      margin-top: 0.7rem;
+      padding: 0.7rem 0.9rem;
+      border-radius: 4px;
+      background: var(--bg-deep);
+      border-left: 3px solid var(--accent-cyan);
+      font-size: 0.83rem;
+      color: var(--text-secondary);
+      display: none;
+    }
+
+    table.truth-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      margin-top: 0.75rem;
+    }
+
+    table.truth-table th, table.truth-table td {
+      border: 1px solid var(--border-subtle);
+      padding: 0.48rem 0.6rem;
+      text-align: center;
+    }
+
+    table.truth-table th {
+      background: var(--bg-deep);
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    footer {
+      max-width: 1400px;
+      margin: 2.5rem auto 0;
+      padding: 1.25rem 1.5rem;
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Telemetry & Theme Bar -->
+  <div class="telemetry-ribbon">
+    <div class="telemetry-stations">
+      <span class="station-pill"><span class="status-dot"></span> <strong>WMO 60390</strong> Dar El Beïda: 22.5°C | 1015.2 hPa</span>
+      <span class="station-pill"><span class="status-dot"></span> <strong>WMO 60680</strong> Tamanrasset: 31.8°C | 1011.0 hPa</span>
+      <span class="station-pill"><span class="status-dot"></span> <strong>WMO 60580</strong> Ouargla: 37.9°C | 1008.1 hPa</span>
+      <span class="station-pill"><span class="status-dot warn"></span> <strong>WMO 60419</strong> Constantine: QC_NULLIF_ACTIVE</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <span>STACK: <strong>PG 16 • POSTGIS 3.4 • MONGODB 7 • DUCKDB • PARQUET</strong></span>
+      <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Switch between Light and Dark Mode">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark Mode</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-top">
+        <div>
+          <div class="argon-badge">
+            <span>Architected &amp; Synthesized with Gemini 4 Argon</span>
+          </div>
+          <h1>5-Day Weather Forecast &amp; Telemetry Database Engineering Bootcamp</h1>
+          <p class="hero-subtitle">
+            Coursebook Reader, Storage Internals &amp; Query Engineering Lab — Covering SQLite 3, PostgreSQL 16 (8KB Heap, MVCC, WAL, Partitioning, BRIN, PostGIS), MongoDB 7.0 (BSON, Time-Series, 2dsphere, Sharding), DuckDB Vectorized OLAP, and Apache Parquet / Zarr Lakehouses.
+          </p>
+        </div>
+      </div>
+
+      <div class="hero-metrics">
+        <div class="metric-box">
+          <span class="m-label">Curriculum Repository</span>
+          <span class="m-val">58 Files</span>
+          <span class="m-sub">5 Days + 13 Ref Cards + Docker Labs</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">Tuple Alignment Savings</span>
+          <span class="m-val">20% (16 B/row)</span>
+          <span class="m-sub">80B &rarr; 64B (16 GB saved / 1B rows)</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">BRIN vs B-Tree Footprint</span>
+          <span class="m-val">99.89% Smaller</span>
+          <span class="m-sub">32 KB vs 28 MB per 1M synoptic rows</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">DuckDB + Parquet ZSTD</span>
+          <span class="m-val">20–50x Faster</span>
+          <span class="m-sub">Vectorized SIMD + Column Projection</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">Polyglot Gateway SLA</span>
+          <span class="m-val">&lt; 10 ms</span>
+          <span class="m-sub">FastAPI (PostGIS + Mongo + DuckDB)</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sticky Navigation Tabs -->
+  <div class="nav-container">
+    <div class="nav-tabs" role="tablist">
+      <button class="tab-btn active" onclick="switchTab('tab-curriculum', this)">
+        <span class="tab-num">01</span> Curriculum &amp; Reader
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-tetris', this)">
+        <span class="tab-num">02</span> PG Tuple Alignment Lab
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-sentinel', this)">
+        <span class="tab-num">03</span> Sentinel (-9999.0) &amp; 3VL Lab
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-scaling', this)">
+        <span class="tab-num">04</span> Storage &amp; BRIN Calculator
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-arch', this)">
+        <span class="tab-num">05</span> Polyglot Architecture
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-quiz', this)">
+        <span class="tab-num">06</span> 15-Question Quiz
+      </button>
+      <button class="tab-btn" onclick="openDocModal('./ATTENDEE_SETUP_GUIDE.md')" style="margin-left: auto; border-color: var(--border-strong);">
+        Attendee Setup Guide
+      </button>
+    </div>
+  </div>
+
+  <main>
+    <!-- ================================================================== -->
+    <!-- TAB 1: 5-DAY MASTER CURRICULUM & FILE EXPLORER                     -->
+    <!-- ================================================================== -->
+    <section id="tab-curriculum" class="tab-section active">
+      <div class="section-header">
+        <div>
+          <h2>5-Day Curriculum, Built-In Coursebook Reader &amp; Lab Scripts</h2>
+          <p>Click any <code>.md</code>, <code>.sql</code>, <code>.js</code>, <code>.py</code>, or <code>.yml</code> file below to open it in the built-in reader, or copy the terminal quick-start commands.</p>
+        </div>
+        <div class="btn-group">
+          <button class="action-btn active" onclick="filterCurriculum('all', this)">All Files (58)</button>
+          <button class="action-btn" onclick="filterCurriculum('days', this)">Days 0–5</button>
+          <button class="action-btn" onclick="filterCurriculum('refs', this)">13 Reference Cards</button>
+          <button class="action-btn" onclick="filterCurriculum('docker', this)">Docker Stacks</button>
+        </div>
+      </div>
+
+      <div class="grid-2" id="curriculum-grid">
+        <!-- DAY 0: ATTENDEE SETUP & PORTAL LAUNCHER -->
+        <div class="card curr-card" data-category="days" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div class="card-title">Day 0 — Attendee Setup Guide, Local Web Server &amp; Verification Suite</div>
+            <span class="pill pill-emerald">Windows • macOS • Linux</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Covers the two ways to read coursebooks (this Built-In Web Portal via <code>python3 start_bootcamp.py</code> or VS Code Markdown Preview), DBeaver Community PostGIS map viewer &amp; MongoDB Compass setup, and turnkey Docker Compose stacks.
+          </p>
+          <ul class="file-list">
+            <li class="file-item">
+              <a href="./ATTENDEE_SETUP_GUIDE.md" title="./ATTENDEE_SETUP_GUIDE.md">ATTENDEE_SETUP_GUIDE.md</a>
+              <span class="file-desc">Attendee Tooling &amp; Setup Guide (DBeaver, Compass, VS Code, Docker)</span>
+            </li>
+            <li class="file-item">
+              <a href="./README.md" title="./README.md">README.md</a>
+              <span class="file-desc">Master 5-Day Bootcamp Syllabus, File Navigator &amp; Lab Runbook</span>
+            </li>
+            <li class="file-item">
+              <a href="./start_bootcamp.py" title="./start_bootcamp.py">start_bootcamp.py</a>
+              <span class="file-desc">Zero-Dependency HTTP Portal Server &amp; Browser Launcher (Port 8088)</span>
+            </li>
+            <li class="file-item">
+              <a href="./verify_bootcamp.sh" title="./verify_bootcamp.sh">verify_bootcamp.sh</a>
+              <span class="file-desc">Automated 79-Check Pre-Flight &amp; Live SQL/Python/Docker Verification Suite</span>
+            </li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>python3 start_bootcamp.py</pre>
+          </div>
+        </div>
+
+        <!-- DAY 1 -->
+        <div class="card curr-card" data-category="days">
+          <div class="card-header">
+            <div class="card-title">Day 1 — Edge Telemetry, SQLite Foundations &amp; Hardware Sentinels</div>
+            <span class="pill pill-cyan">SQLite 3 + QC Lab</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Declarative execution order; SQLite B-Tree pages &amp; WAL mode; Three-Valued Logic (<code>3VL</code>), the <code>NOT IN (... NULL)</code> trap, and neutralizing <code>-9999.0</code> / <code>-999.0</code> hardware sentinels with <code>NULLIF()</code>.
+          </p>
+          <ul class="file-list">
+            <li class="file-item">
+              <a href="./day1/day1_master_coursebook.md" title="./day1/day1_master_coursebook.md">day1/day1_master_coursebook.md</a>
+              <span class="file-desc">Full Day 1 Coursebook</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/day1_hardware_sentinels_and_qc_guide.md" title="./day1/day1_hardware_sentinels_and_qc_guide.md">day1/day1_hardware_sentinels_and_qc_guide.md</a>
+              <span class="file-desc">-9999.0 &amp; 3VL Deep-Dive</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/day1_sqlite_and_sql_cheatsheet.md" title="./day1/day1_sqlite_and_sql_cheatsheet.md">day1/day1_sqlite_and_sql_cheatsheet.md</a>
+              <span class="file-desc">SQLite CLI &amp; SQL Reference</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/weather_ops_seed.sql" title="./day1/weather_ops_seed.sql">day1/weather_ops_seed.sql</a>
+              <span class="file-desc">WMO Seed &amp; Lab Queries</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/generate_weather_db.py" title="./day1/generate_weather_db.py">day1/generate_weather_db.py</a>
+              <span class="file-desc">250k-Row SQLite Generator</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/weather_ops.db" title="./day1/weather_ops.db">day1/weather_ops.db</a>
+              <span class="file-desc">Pre-built SQLite DB (36 KB)</span>
+            </li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>cd day1 &amp;&amp; python3 generate_weather_db.py &amp;&amp; sqlite3 weather_ops.db &lt; weather_ops_seed.sql</pre>
+          </div>
+        </div>
+
+        <!-- DAY 2 -->
+        <div class="card curr-card" data-category="days">
+          <div class="card-header">
+            <div class="card-title">Day 2 — PostgreSQL 8KB Heap, Tuple Alignment &amp; MVCC</div>
+            <span class="pill pill-emerald">PostgreSQL 16 Internals</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Process &amp; memory architecture (<code>shared_buffers</code>, <code>work_mem</code>, WAL); 8KB Heap Page anatomy (<code>PageHeaderData</code>, <code>lp_off</code>, 23-byte <code>HeapTupleHeaderData</code>); CPU 8-byte alignment; MVCC <code>xmin</code>/<code>xmax</code> vs MySQL InnoDB.
+          </p>
+          <ul class="file-list">
+            <li class="file-item">
+              <a href="./day2/day2_master_coursebook.md">day2/day2_master_coursebook.md</a>
+              <span class="file-desc">Full Day 2 Coursebook</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/day2_pageinspect_and_storage_lab.sql">day2/day2_pageinspect_and_storage_lab.sql</a>
+              <span class="file-desc">pageinspect &amp; Alignment Lab</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/day2_two_terminal_acid_lab.sql">day2/day2_two_terminal_acid_lab.sql</a>
+              <span class="file-desc">2-Terminal ACID &amp; Deadlock Lab</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/day2_postgres_vs_mysql_mvcc_guide.md">day2/day2_postgres_vs_mysql_mvcc_guide.md</a>
+              <span class="file-desc">PG vs MySQL InnoDB MVCC</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/day2_postgres_tuning_and_internals_cheatsheet.md">day2/day2_postgres_tuning_and_internals_cheatsheet.md</a>
+              <span class="file-desc">PG Memory &amp; WAL Cheatsheet</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/weather_ops_pg.sql">day2/weather_ops_pg.sql</a>
+              <span class="file-desc">Multi-Schema Synoptic/NWP Lab</span>
+            </li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>psql -U postgres -d weather_ops -f "day2/day2_pageinspect_and_storage_lab.sql"</pre>
+          </div>
+        </div>
+
+        <!-- DAY 3 -->
+        <div class="card curr-card" data-category="days">
+          <div class="card-header">
+            <div class="card-title">Day 3 — Partitioning, BRIN, Window Functions &amp; PostGIS</div>
+            <span class="pill pill-amber">PostGIS 3.4 + 5M Rows</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Window Functions (<code>LAG</code> 3h pressure tendency, 24h rolling thermal frames); Declarative Range Partitioning; <code>BRIN</code> vs <code>B-Tree</code> vs <code>GIN</code>; PostGIS <code>GEOGRAPHY(Point, 4326)</code>, <code>ST_DWithin</code>, and 5M-row benchmark.
+          </p>
+          <ul class="file-list">
+            <li class="file-item">
+              <a href="./day3/day3_master_coursebook.md">day3/day3_master_coursebook.md</a>
+              <span class="file-desc">Full Day 3 Coursebook</span>
+            </li>
+            <li class="file-item">
+              <a href="./day3/day3_weather_advanced_pg.sql">day3/day3_weather_advanced_pg.sql</a>
+              <span class="file-desc">Partitioning, BRIN &amp; PostGIS Lab</span>
+            </li>
+            <li class="file-item">
+              <a href="./day3/day3_postgis_5m_benchmark.sql">day3/day3_postgis_5m_benchmark.sql</a>
+              <span class="file-desc">5-Million-Row BRIN + GiST Lab</span>
+            </li>
+            <li class="file-item">
+              <a href="./day3/day3_postgres_extensions_guide.md">day3/day3_postgres_extensions_guide.md</a>
+              <span class="file-desc">PostGIS, TimescaleDB &amp; pg_partman</span>
+            </li>
+            <li class="file-item">
+              <a href="./day3/day3_postgres_ha_patroni_and_ops_guide.md">day3/day3_postgres_ha_patroni_and_ops_guide.md</a>
+              <span class="file-desc">Patroni HA, PgBouncer &amp; pgBackRest</span>
+            </li>
+            <li class="file-item">
+              <a href="./day3/day3_postgres_advanced_cheatsheet.md">day3/day3_postgres_advanced_cheatsheet.md</a>
+              <span class="file-desc">Advanced PG &amp; PostGIS Reference</span>
+            </li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>psql -U postgres -d weather_ops -f "day3/day3_postgis_5m_benchmark.sql"</pre>
+          </div>
+        </div>
+
+        <!-- DAY 4 -->
+        <div class="card curr-card" data-category="days">
+          <div class="card-header">
+            <div class="card-title">Day 4 — MongoDB BSON, Time-Series, 2dsphere &amp; ESR Rule</div>
+            <span class="pill pill-purple">MongoDB 7.0 + 50k Docs</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Polymorphic radiosonde soundings (<code>vertical_levels</code> arrays) &amp; 3D ultrasonic anemometers; WiredTiger BSON &amp; <code>zstd</code> compression; <code>$elemMatch</code>, <code>$unwind</code>, <code>2dsphere</code> GeoJSON (<code>[lon, lat]</code>), and the <strong>ESR Rule</strong>.
+          </p>
+          <ul class="file-list">
+            <li class="file-item">
+              <a href="./day4/day4_master_coursebook.md">day4/day4_master_coursebook.md</a>
+              <span class="file-desc">Full Day 4 Coursebook</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_weather_ops_mongo.js">day4/day4_weather_ops_mongo.js</a>
+              <span class="file-desc">Core Time-Series &amp; 2dsphere Lab</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_weather_ops_mongo_advanced.js">day4/day4_weather_ops_mongo_advanced.js</a>
+              <span class="file-desc">ESR Rule, $facet &amp; Schema Lab</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_mongo_50k_polymorphic_benchmark.js">day4/day4_mongo_50k_polymorphic_benchmark.js</a>
+              <span class="file-desc">50,000-Doc Polymorphic Benchmark</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_mongodb_architecture_ha_and_sharding_guide.md">day4/day4_mongodb_architecture_ha_and_sharding_guide.md</a>
+              <span class="file-desc">Replica Sets, Oplog &amp; Sharding</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_mongodb_complete_cheatsheet.md">day4/day4_mongodb_complete_cheatsheet.md</a>
+              <span class="file-desc">mongosh &amp; Aggregation Reference</span>
+            </li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>mongosh "mongodb://localhost:27017/weather_ops_mongo" "day4/day4_mongo_50k_polymorphic_benchmark.js"</pre>
+          </div>
+        </div>
+
+        <!-- DAY 5 -->
+        <div class="card curr-card" data-category="days">
+          <div class="card-header">
+            <div class="card-title">Day 5 — DuckDB OLAP, Parquet, 4D Grids &amp; Polyglot Capstone</div>
+            <span class="pill pill-cyan">DuckDB + Parquet + Zarr</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Row vs Columnar physics; Apache Parquet Row Groups &amp; ZSTD; DuckDB vectorized SIMD execution; Hive partitioning &amp; compaction; <code>COG</code>, <code>Zarr</code>, <code>NetCDF4</code>, <code>GRIB2</code>, <code>BUFR</code> on Ceph RGW S3; Edge-to-Core MQTT/Kafka Polyglot Lakehouse.
+          </p>
+          <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
+            <li class="file-item">
+              <a href="./day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md">day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md</a>
+              <span class="file-desc">Part 1: OLAP, Parquet &amp; 4D Grids</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md">day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md</a>
+              <span class="file-desc">Part 2: Polyglot Lakehouse Capstone</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/seed_olap_data.py">day5/seed_olap_data.py</a>
+              <span class="file-desc">10M-Row Hive Parquet + NetCDF4</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/parquet_vs_csv_benchmark.py">day5/parquet_vs_csv_benchmark.py</a>
+              <span class="file-desc">1M-Row CSV vs Parquet Benchmark</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/compact_small_parquet_files.py">day5/compact_small_parquet_files.py</a>
+              <span class="file-desc">Small-Files Compaction Benchmark</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/satellite_cog_int16_quantization.py">day5/satellite_cog_int16_quantization.py</a>
+              <span class="file-desc">Satellite COG UInt16 Quantization</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/export_pg_to_parquet.py">day5/export_pg_to_parquet.py</a>
+              <span class="file-desc">Zero-OOM Server-Side Cursor ETL</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/simulate_edge_sensors.py">day5/simulate_edge_sensors.py</a>
+              <span class="file-desc">Edge SQLite WAL + MQTT Publisher</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/stream_router.py">day5/stream_router.py</a>
+              <span class="file-desc">Polyglot Router (PG + Mongo)</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/compact_hot_to_cold.py">day5/compact_hot_to_cold.py</a>
+              <span class="file-desc">Hot-to-Cold Hive Parquet Compactor</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/serving_api.py">day5/serving_api.py</a>
+              <span class="file-desc">Unified FastAPI Gateway (&lt;10ms)</span>
+            </li>
+            <li class="file-item">
+              <a href="./day5/bootcamp_capstone_troubleshooting_and_quiz.md">day5/bootcamp_capstone_troubleshooting_and_quiz.md</a>
+              <span class="file-desc">15 Scenarios + 15 Quiz Questions</span>
+            </li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>cd day5 &amp;&amp; python3 seed_olap_data.py</pre>
+          </div>
+        </div>
+
+        <!-- DOCKER STACKS & REFERENCE CARDS -->
+        <div class="card curr-card" data-category="docker refs">
+          <div class="card-header">
+            <div class="card-title">Docker Lab Stacks &amp; 13 Architectural Reference Cards</div>
+            <span class="pill pill-emerald">13 Deep-Dive Cards</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-secondary);">
+            Turn-key Docker Compose environments (<code>PostgreSQL 16 + PostGIS 3.4</code>, <code>MongoDB 7.0 3-Node Replica Set</code>, <code>MinIO S3</code>, <code>Mosquitto MQTT</code>) plus 13 standalone reference cards.
+          </p>
+          <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
+            <li class="file-item"><a href="./reference_cards/README.md">reference_cards/README.md</a><span class="file-desc">20-Symptom Diagnostic Index</span></li>
+            <li class="file-item"><a href="./docker/docker_lab_guide.md">docker/docker_lab_guide.md</a><span class="file-desc">Docker Lab Operations Guide</span></li>
+            <li class="file-item"><a href="./docker/docker-compose.polyglot-lakehouse.yml">docker/docker-compose.polyglot-lakehouse.yml</a><span class="file-desc">PG + Mongo + MinIO + MQTT</span></li>
+            <li class="file-item"><a href="./docker/docker-compose.ha-replicaset.yml">docker/docker-compose.ha-replicaset.yml</a><span class="file-desc">3-Node Mongo Replica Set</span></li>
+            <li class="file-item"><a href="./reference_cards/01_apache_parquet_and_columnar_architecture.md">reference_cards/01_apache_parquet_and_columnar_architecture.md</a><span class="file-desc">Parquet &amp; Columnar Physics</span></li>
+            <li class="file-item"><a href="./reference_cards/02_duckdb_vectorized_olap_vs_sqlite.md">reference_cards/02_duckdb_vectorized_olap_vs_sqlite.md</a><span class="file-desc">DuckDB SIMD vs SQLite</span></li>
+            <li class="file-item"><a href="./reference_cards/03_hive_partitioning_and_lakehouse_compaction.md">reference_cards/03_hive_partitioning_and_lakehouse_compaction.md</a><span class="file-desc">Hive Pruning &amp; Small Files</span></li>
+            <li class="file-item"><a href="./reference_cards/04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md">reference_cards/04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md</a><span class="file-desc">COG, Zarr, NetCDF4, GRIB2, BUFR</span></li>
+            <li class="file-item"><a href="./reference_cards/05_ceph_distributed_storage_and_proxmox_ve_architecture.md">reference_cards/05_ceph_distributed_storage_and_proxmox_ve_architecture.md</a><span class="file-desc">Ceph RGW S3 &amp; Proxmox VE</span></li>
+            <li class="file-item"><a href="./reference_cards/06_dbt_for_meteorological_telemetry_engineering.md">reference_cards/06_dbt_for_meteorological_telemetry_engineering.md</a><span class="file-desc">dbt Medallion ELT &amp; QC Tests</span></li>
+            <li class="file-item"><a href="./reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md">reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md</a><span class="file-desc">WAL Recovery Across Engines</span></li>
+            <li class="file-item"><a href="./reference_cards/08_postgresql_vacuum_vs_vacuum_full_and_bloat.md">reference_cards/08_postgresql_vacuum_vs_vacuum_full_and_bloat.md</a><span class="file-desc">VACUUM vs VACUUM FULL &amp; Bloat</span></li>
+            <li class="file-item"><a href="./reference_cards/09_acid_transactions_and_two_terminal_lock_debugging.md">reference_cards/09_acid_transactions_and_two_terminal_lock_debugging.md</a><span class="file-desc">ACID &amp; 2-Terminal Lock Lab</span></li>
+            <li class="file-item"><a href="./reference_cards/10_query_execution_plan_forensics_and_explain.md">reference_cards/10_query_execution_plan_forensics_and_explain.md</a><span class="file-desc">EXPLAIN (ANALYZE, BUFFERS)</span></li>
+            <li class="file-item"><a href="./reference_cards/11_python_database_drivers_for_weather_engineers.md">reference_cards/11_python_database_drivers_for_weather_engineers.md</a><span class="file-desc">psycopg2, PyMongo, DuckDB, Arrow</span></li>
+            <li class="file-item"><a href="./reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md">reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md</a><span class="file-desc">DBeaver PostGIS &amp; Compass GUI</span></li>
+            <li class="file-item"><a href="./reference_cards/13_database_observability_prometheus_grafana_and_alerts.md">reference_cards/13_database_observability_prometheus_grafana_and_alerts.md</a><span class="file-desc">Prometheus &amp; Grafana Alerts</span></li>
+          </ul>
+          <div class="code-box">
+            <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
+            <pre>cd docker &amp;&amp; docker compose -f docker-compose.polyglot-lakehouse.yml up -d</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 2: SIMULATOR 1 — POSTGRESQL "TUPLE TETRIS" ALIGNMENT           -->
+    <!-- ================================================================== -->
+    <section id="tab-tetris" class="tab-section">
+      <div class="section-header">
+        <div>
+          <h2>Simulator 1: PostgreSQL "Tuple Tetris" 8-Byte CPU Alignment Visualizer</h2>
+          <p>64-bit CPUs read memory in 8-byte words (<code>MAXALIGN = 8</code>). Interleaving <code>SMALLINT</code> (2B), <code>CHAR(2)</code> (2B), <code>BOOLEAN</code> (1B), or <code>INTEGER</code> (4B) before 8-byte types (<code>TIMESTAMPTZ</code>, <code>DOUBLE PRECISION</code>) forces PostgreSQL to inject alignment padding bytes.</p>
+        </div>
+        <div class="btn-group">
+          <button class="action-btn active" id="btn-preset-unaligned" onclick="loadTetrisPreset('unaligned')">
+            Naive Unaligned Schema (80 Bytes/Row)
+          </button>
+          <button class="action-btn" id="btn-preset-aligned" onclick="loadTetrisPreset('aligned')">
+            Packed Aligned Schema (64 Bytes/Row)
+          </button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Left Column: Controls, Column Reordering & Fleet Scale Impact -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Interactive Column Order &amp; Fleet Scale Calculator</div>
+            <span class="pill pill-cyan" id="tetris-badge-status">20% Wasted Padding</span>
+          </div>
+
+          <div class="control-group">
+            <div class="control-label">
+              <span>Total Synoptic Station Rows (<code>observations</code>):</span>
+              <span class="control-value" id="tetris-rows-label">1,000,000,000 (1.0B Rows)</span>
+            </div>
+            <input type="range" id="tetris-rows-slider" min="10" max="5000" step="10" value="1000" oninput="updateTetrisMetrics()" />
+            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.25rem;">
+              <span>10M Rows</span>
+              <span>1B Rows</span>
+              <span>2.5B Rows</span>
+              <span>5B Rows</span>
+            </div>
+          </div>
+
+          <div class="hero-metrics" style="margin-top: 0.75rem; margin-bottom: 1rem;">
+            <div class="metric-box">
+              <span class="m-label">Physical Tuple Size</span>
+              <span class="m-val" id="tetris-row-bytes">80 Bytes</span>
+              <span class="m-sub" id="tetris-padding-bytes" style="color: var(--accent-crimson);">17B Internal + 3B Tail = 20B Pad</span>
+            </div>
+            <div class="metric-box">
+              <span class="m-label">Total Heap Storage</span>
+              <span class="m-val" id="tetris-total-gb">80.0 GB</span>
+              <span class="m-sub" id="tetris-optimal-gb">Optimal Packed: 64.0 GB</span>
+            </div>
+            <div class="metric-box">
+              <span class="m-label">RAM / NVMe Saved</span>
+              <span class="m-val" id="tetris-saved-gb" style="color: var(--accent-emerald);">16.0 GB Saved</span>
+              <span class="m-sub" id="tetris-saved-pages">2,000,000 fewer 8KB pages!</span>
+            </div>
+          </div>
+
+          <div style="font-size: 0.84rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">
+            Reorder Columns Below (<code>&uarr;</code> / <code>&darr;</code>) to Test Byte Packing:
+          </div>
+          <div class="col-reorder-list" id="tetris-col-list"></div>
+
+          <div class="code-box" style="margin-top: 1rem;">
+            <button class="copy-btn" onclick="copyCode(this)">Copy DDL</button>
+            <pre id="tetris-ddl-code"></pre>
+          </div>
+        </div>
+
+        <!-- Right Column: 64-Bit CPU Word Map (Word 0 to Word 9) -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">64-Bit CPU Memory Words (<code>Word 0</code> &rarr; <code>Word N</code>, 8 Bytes/Word)</div>
+            <span class="pill pill-purple">MAXALIGN = 8 Bytes</span>
+          </div>
+          <p style="font-size: 0.83rem; color: var(--text-secondary); margin-bottom: 0.9rem;">
+            Every PostgreSQL tuple begins with a <strong>23-byte <code>HeapTupleHeaderData</code></strong> (<code>t_xmin</code>, <code>t_xmax</code>, <code>t_cid</code>, <code>t_ctid</code>, <code>t_infomask</code>) padded to <strong>24 bytes (<code>Words 0–2</code>)</strong>. Watch how user columns pack into <code>Word 3+</code>:
+          </p>
+
+          <div id="tetris-word-grid"></div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; font-family: var(--font-mono); font-size: 0.71rem;">
+            <span class="pill pill-purple">24B MVCC Header</span>
+            <span class="pill pill-cyan">8B (TIMESTAMPTZ / FLOAT8)</span>
+            <span class="pill pill-emerald">4B (INTEGER / REAL)</span>
+            <span class="pill pill-amber">2B (SMALLINT / CHAR(2))</span>
+            <span class="pill pill-crimson">Striped: Wasted Alignment Padding</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 3: SIMULATOR 2 — HARDWARE SENTINEL (-9999.0) & 3VL LAB         -->
+    <!-- ================================================================== -->
+    <section id="tab-sentinel" class="tab-section">
+      <div class="section-header">
+        <div>
+          <h2>Simulator 2: Hardware Sentinel (<code>-9999.0</code> / <code>-999.0</code>) &amp; 3VL Contamination Lab</h2>
+          <p>Legacy WMO, Fortran, and Campbell Scientific loggers emit <code>-9999.0</code> or <code>-999.0</code> when a probe drops out. Observe how a 0.5% dropout rate distorts naive SQL aggregations, and test Three-Valued Logic (<code>3VL</code>) truth tables.</p>
+        </div>
+        <div class="btn-group">
+          <button class="action-btn active" id="btn-sent-9999" onclick="setSentinelCode(-9999.0)">Sentinel: -9999.0 (Campbell/WMO)</button>
+          <button class="action-btn" id="btn-sent-999" onclick="setSentinelCode(-999.0)">Sentinel: -999.0 (ASOS/BUFR)</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Left: Sentinel Contamination Simulator -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Synoptic Window Contamination (10,000 Readings)</div>
+            <span class="pill pill-crimson" id="sentinel-alert-pill">CORRUPTION ACTIVE</span>
+          </div>
+
+          <div class="control-group">
+            <div class="control-label">
+              <span>Sensor Fault / Dropout Rate (<code>-9999.0</code> injected):</span>
+              <span class="control-value" id="sentinel-rate-label">0.5% (50 Faulty Rows / 10,000)</span>
+            </div>
+            <input type="range" id="sentinel-rate-slider" min="0" max="5.0" step="0.1" value="0.5" oninput="updateSentinelSim()" />
+            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.25rem;">
+              <span>0.0% (Clean)</span>
+              <span>0.5% (50 faults)</span>
+              <span>1.0% (100 faults)</span>
+              <span>2.5% (250 faults)</span>
+              <span>5.0% (500 faults)</span>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap: 0.85rem; margin-top: 0.75rem;">
+            <!-- Naive SQL Box -->
+            <div class="sim-compare-danger">
+              <div style="font-family: var(--font-mono); font-size: 0.74rem; color: var(--accent-crimson); font-weight: 700;">
+                NAIVE SQL: AVG(temp_c)
+              </div>
+              <div style="font-size: 1.65rem; font-weight: 800; font-family: var(--font-mono); margin: 0.35rem 0;" id="naive-mean-val">
+                -27.71 °C
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-secondary); font-family: var(--font-mono);">
+                <div>MIN: <strong id="naive-min-val" style="color: var(--accent-crimson);">-9999.0 °C</strong></div>
+                <div>MAX: <strong id="naive-max-val">28.1 °C</strong></div>
+                <div>STDDEV (&sigma;): <strong id="naive-std-val" style="color: var(--accent-crimson);">706.82 °C</strong></div>
+                <div>COUNT(temp_c): <strong id="naive-cnt-val">10,000</strong></div>
+              </div>
+            </div>
+
+            <!-- Sanitized SQL Box -->
+            <div class="sim-compare-success">
+              <div style="font-family: var(--font-mono); font-size: 0.74rem; color: var(--accent-emerald); font-weight: 700;">
+                SANITIZED: AVG(NULLIF(temp_c, -9999.0))
+              </div>
+              <div style="font-size: 1.65rem; font-weight: 800; font-family: var(--font-mono); margin: 0.35rem 0; color: var(--accent-emerald);" id="clean-mean-val">
+                +22.40 °C
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-secondary); font-family: var(--font-mono);">
+                <div>MIN: <strong id="clean-min-val" style="color: var(--accent-emerald);">16.2 °C</strong></div>
+                <div>MAX: <strong id="clean-max-val">28.1 °C</strong></div>
+                <div>STDDEV (&sigma;): <strong id="clean-std-val" style="color: var(--accent-emerald);">3.10 °C</strong></div>
+                <div>COUNT(valid): <strong id="clean-cnt-val">9,950 (50 NULLs skipped)</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="code-box" style="margin-top: 1rem;">
+            <button class="copy-btn" onclick="copyCode(this)">Copy SQL</button>
+            <pre id="sentinel-sql-code">-- Defense-in-Depth Query Sanitization (Day 1 &amp; Day 2)
+SELECT
+    station_id,
+    COUNT(*) AS total_packets,
+    COUNT(NULLIF(NULLIF(temp_c, -9999.0), -999.0)) AS valid_readings,
+    ROUND(AVG(NULLIF(NULLIF(temp_c, -9999.0), -999.0))::numeric, 2) AS clean_mean_c,
+    ROUND(STDDEV(NULLIF(NULLIF(temp_c, -9999.0), -999.0))::numeric, 2) AS clean_sigma_c
+FROM synoptic.observations
+GROUP BY station_id;</pre>
+          </div>
+        </div>
+
+        <!-- Right: Interactive Three-Valued Logic (3VL) Truth Table Tester & NOT IN Trap -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Interactive Three-Valued Logic (<code>3VL</code>) &amp; <code>NOT IN</code> Tester</div>
+            <span class="pill pill-amber">TRUE / FALSE / UNKNOWN</span>
+          </div>
+          <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+            In SQL, <code>NULL</code> represents an unknown state, not a value. Select two operands below to see how PostgreSQL and SQLite evaluate boolean expressions under 3VL:
+          </p>
+
+          <div class="grid-2" style="gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div class="control-group" style="margin-bottom: 0;">
+              <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Predicate A (<code>temp_c &gt; 20</code>):</div>
+              <div class="btn-group">
+                <button class="action-btn active" onclick="set3VL('A', 'TRUE', this)">TRUE</button>
+                <button class="action-btn" onclick="set3VL('A', 'FALSE', this)">FALSE</button>
+                <button class="action-btn" onclick="set3VL('A', 'NULL', this)">NULL (UNKNOWN)</button>
+              </div>
+            </div>
+            <div class="control-group" style="margin-bottom: 0;">
+              <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Predicate B (<code>wind_kt &lt; 15</code>):</div>
+              <div class="btn-group">
+                <button class="action-btn" onclick="set3VL('B', 'TRUE', this)">TRUE</button>
+                <button class="action-btn" onclick="set3VL('B', 'FALSE', this)">FALSE</button>
+                <button class="action-btn active" onclick="set3VL('B', 'NULL', this)">NULL (UNKNOWN)</button>
+              </div>
+            </div>
+          </div>
+
+          <table class="truth-table">
+            <thead>
+              <tr>
+                <th>Expression</th>
+                <th>3VL Result</th>
+                <th><code>WHERE</code> Row Kept?</th>
+                <th>Meteorological Explanation</th>
+              </tr>
+            </thead>
+            <tbody id="truth-table-body"></tbody>
+          </table>
+
+          <div class="sim-callout-warn">
+            <strong>The Silent <code>NOT IN (SELECT ... NULL)</code> Trap:</strong><br/>
+            <code>WHERE station_id NOT IN (60390, NULL)</code> expands to <code>station_id &lt;&gt; 60390 AND station_id &lt;&gt; NULL</code> &rarr; <code>TRUE AND UNKNOWN</code> &rarr; <strong><code>UNKNOWN</code> (0 rows returned)</strong>. Always use <code>WHERE NOT EXISTS (...)</code> or <code>IS DISTINCT FROM</code>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 4: SIMULATOR 3 — MULTI-ENGINE STORAGE & INDEX SCALING          -->
+    <!-- ================================================================== -->
+    <section id="tab-scaling" class="tab-section">
+      <div class="section-header">
+        <div>
+          <h2>Simulator 3: Multi-Engine Storage, Index &amp; Analytical Scan Calculator</h2>
+          <p>Compare <code>B-Tree</code> vs <code>BRIN</code> index footprints, row-oriented vs columnar <code>Parquet ZSTD</code> compression, and <code>DuckDB</code> vectorized projection pushdown across 1 Million to 1 Billion synoptic rows.</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Sliders & Telemetry Summary -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Workload Parameters</div>
+            <span class="pill pill-cyan">25-Column Synoptic Table</span>
+          </div>
+
+          <div class="control-group">
+            <div class="control-label">
+              <span>Total Archived Synoptic Rows:</span>
+              <span class="control-value" id="scale-rows-label">100,000,000 (100M Rows)</span>
+            </div>
+            <input type="range" id="scale-rows-slider" min="1" max="1000" step="1" value="100" oninput="updateScalingSim()" />
+            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.25rem;">
+              <span>1M Rows</span>
+              <span>100M Rows</span>
+              <span>500M Rows</span>
+              <span>1,000M (1B) Rows</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <div class="control-label">
+              <span>Columns Referenced by Analytical Query (<code>SELECT ...</code>):</span>
+              <span class="control-value" id="scale-cols-label">2 of 25 Columns (8% Projection)</span>
+            </div>
+            <input type="range" id="scale-cols-slider" min="1" max="25" step="1" value="2" oninput="updateScalingSim()" />
+            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.25rem;">
+              <span>1 Col (<code>AVG(temp_c)</code>)</span>
+              <span>5 Cols</span>
+              <span>12 Cols</span>
+              <span>25 Cols (<code>SELECT *</code>)</span>
+            </div>
+          </div>
+
+          <div class="hero-metrics" style="margin-top: 1rem;">
+            <div class="metric-box">
+              <span class="m-label">B-Tree vs BRIN Index</span>
+              <span class="m-val" id="scale-brin-save" style="color: var(--accent-emerald);">2.80 GB &rarr; 3.2 MB</span>
+              <span class="m-sub">BRIN is 99.89% smaller on <code>obs_time</code></span>
+            </div>
+            <div class="metric-box">
+              <span class="m-label">CSV vs Parquet ZSTD</span>
+              <span class="m-val" id="scale-parquet-save" style="color: var(--accent-cyan);">18.0 GB &rarr; 1.4 GB</span>
+              <span class="m-sub">92.2% compression via Dict + RLE + ZSTD</span>
+            </div>
+            <div class="metric-box">
+              <span class="m-label">DuckDB Scan I/O</span>
+              <span class="m-val" id="scale-io-read" style="color: var(--accent-amber);">112 MB Read</span>
+              <span class="m-sub" id="scale-io-vs">vs 11.20 GB PG Full Heap Scan</span>
+            </div>
+          </div>
+
+          <div class="code-box" style="margin-top: 1rem;">
+            <button class="copy-btn" onclick="copyCode(this)">Copy SQL</button>
+            <pre>-- Create a 99.89% smaller Block Range Index (BRIN) on chronological obs_time
+CREATE INDEX idx_obs_time_brin ON synoptic.observations
+USING brin (obs_time) WITH (pages_per_range = 128);</pre>
+          </div>
+        </div>
+
+        <!-- Visual Comparison Bars -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Storage, Index &amp; Scan I/O Comparison</div>
+            <span class="pill pill-emerald">Physical Cost Model</span>
+          </div>
+
+          <h4 style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; text-transform: uppercase; font-family: var(--font-mono);">
+            1. Index Size on <code>obs_time</code> (B-Tree vs. BRIN <code>pages_per_range=128</code>)
+          </h4>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>PostgreSQL B-Tree Index (<code>28 MB / 1M rows</code>)</span>
+              <span id="bar-btree-txt" style="color: var(--accent-crimson);">2,800 MB (2.80 GB)</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-btree" style="width: 100%; background: var(--accent-crimson);">100%</div>
+            </div>
+          </div>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>PostgreSQL BRIN Index (<code>32 KB / 1M rows</code> — 99.89% Smaller)</span>
+              <span id="bar-brin-txt" style="color: var(--accent-emerald);">3.20 MB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-brin" style="width: 1.5%; background: var(--accent-emerald);"></div>
+            </div>
+          </div>
+
+          <h4 style="font-size: 0.8rem; color: var(--text-secondary); margin: 1.15rem 0 0.55rem; text-transform: uppercase; font-family: var(--font-mono);">
+            2. Table Storage Footprint Across Engines
+          </h4>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>Uncompressed WMO CSV (<code>180 MB / 1M rows</code>)</span>
+              <span id="bar-csv-txt">18.00 GB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-csv" style="width: 100%; background: #64748b;">CSV (100%)</div>
+            </div>
+          </div>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>PostgreSQL 8KB Row Heap (<code>112 MB / 1M rows</code>)</span>
+              <span id="bar-pg-txt">11.20 GB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-pg" style="width: 62%; background: var(--accent-cyan);">PG Heap (62%)</div>
+            </div>
+          </div>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>MongoDB WiredTiger <code>zstd</code> (<code>38 MB / 1M rows</code>)</span>
+              <span id="bar-mongo-txt">3.80 GB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-mongo" style="width: 21%; background: var(--accent-purple);">WiredTiger zstd (21%)</div>
+            </div>
+          </div>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>Apache Parquet Columnar <code>ZSTD</code> (<code>14 MB / 1M rows</code>)</span>
+              <span id="bar-parquet-txt" style="color: var(--accent-emerald);">1.40 GB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-parquet" style="width: 8%; background: var(--accent-emerald);">Parquet (7.8%)</div>
+            </div>
+          </div>
+
+          <h4 style="font-size: 0.8rem; color: var(--text-secondary); margin: 1.15rem 0 0.55rem; text-transform: uppercase; font-family: var(--font-mono);">
+            3. Analytical Query Bytes Read From Disk (Projection Pushdown)
+          </h4>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>PostgreSQL Row-Store Scan (Reads all 25 columns on every 8KB page)</span>
+              <span id="bar-scan-pg-txt" style="color: var(--accent-amber);">11.20 GB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-scan-pg" style="width: 100%; background: var(--accent-amber);">100% of Heap Read</div>
+            </div>
+          </div>
+          <div class="bar-group">
+            <div class="bar-header">
+              <span>DuckDB + Parquet Projection Pushdown (Reads only selected columns)</span>
+              <span id="bar-scan-duck-txt" style="color: var(--accent-emerald);">112 MB</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="bar-scan-duck" style="width: 4%; background: var(--accent-emerald);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 5: POLYGLOT ARCHITECTURE INTERACTIVE MAP                       -->
+    <!-- ================================================================== -->
+    <section id="tab-arch" class="tab-section">
+      <div class="section-header">
+        <div>
+          <h2>National Meteorological Data Center — Interactive Polyglot Architecture Map</h2>
+          <p>Select any stage in the Edge-to-Core pipeline below to inspect its SLA, hardware tuning parameters, failure modes, and operational CLI commands.</p>
+        </div>
+      </div>
+
+      <div class="arch-diagram" id="arch-nodes-container">
+        <div class="arch-node selected" onclick="selectArchNode(0, this)">
+          <div class="arch-node-step">Stage 01 • Edge Field Logger</div>
+          <div class="arch-node-title">AWS Station + SQLite WAL</div>
+          <div class="arch-node-tech">Campbell CR1000X / Vaisala + SQLite 3</div>
+        </div>
+        <div class="arch-node" onclick="selectArchNode(1, this)">
+          <div class="arch-node-step">Stage 02 • Telemetry Ingestion Bus</div>
+          <div class="arch-node-title">Mosquitto MQTT &amp; Kafka</div>
+          <div class="arch-node-tech">MQTT QoS 1 (2B Header) + Kafka Topics</div>
+        </div>
+        <div class="arch-node" onclick="selectArchNode(2, this)">
+          <div class="arch-node-step">Stage 03 • Stream Sanitizer</div>
+          <div class="arch-node-title">Polyglot Stream Router</div>
+          <div class="arch-node-tech">Python <code>stream_router.py</code> (<code>-9999.0</code> QC)</div>
+        </div>
+        <div class="arch-node" onclick="selectArchNode(3, this)">
+          <div class="arch-node-step">Stage 04A • Hot Relational &amp; Spatial</div>
+          <div class="arch-node-title">PostgreSQL 16 + PostGIS 3.4</div>
+          <div class="arch-node-tech">Patroni HA + Monthly Partitions + BRIN</div>
+        </div>
+        <div class="arch-node" onclick="selectArchNode(4, this)">
+          <div class="arch-node-step">Stage 04B • Hot Polymorphic Store</div>
+          <div class="arch-node-title">MongoDB 7.0 Replica Set</div>
+          <div class="arch-node-tech">WiredTiger <code>zstd</code> + 2dsphere + ESR</div>
+        </div>
+        <div class="arch-node" onclick="selectArchNode(5, this)">
+          <div class="arch-node-step">Stage 05 • Cold Lakehouse &amp; Grids</div>
+          <div class="arch-node-title">DuckDB + Parquet + Zarr on Ceph</div>
+          <div class="arch-node-tech">Hive Parquet + Zarr/COG on Ceph RGW S3</div>
+        </div>
+        <div class="arch-node" onclick="selectArchNode(6, this)">
+          <div class="arch-node-step">Stage 06 • Unified Serving API</div>
+          <div class="arch-node-title">Sub-10ms FastAPI Gateway</div>
+          <div class="arch-node-tech"><code>serving_api.py</code> (PG + Mongo + DuckDB)</div>
+        </div>
+      </div>
+
+      <div class="card" id="arch-inspector">
+        <div class="card-header">
+          <div class="card-title" id="arch-detail-title">Stage 01: Edge Automated Weather Station (AWS) + Local SQLite WAL Buffer</div>
+          <span class="pill pill-emerald" id="arch-detail-sla">SLA: Zero Data Loss over 72h Comms Blackout</span>
+        </div>
+        <div class="grid-2">
+          <div>
+            <h4 style="font-size: 0.8rem; color: var(--accent-cyan); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 0.4rem;">
+              Architectural Role &amp; Physics
+            </h4>
+            <p id="arch-detail-desc" style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1rem;"></p>
+
+            <h4 style="font-size: 0.8rem; color: var(--accent-amber); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 0.4rem;">
+              Failure Mode &amp; Engineering Mitigation
+            </h4>
+            <p id="arch-detail-failure" style="font-size: 0.88rem; color: var(--text-secondary);"></p>
+          </div>
+          <div>
+            <h4 style="font-size: 0.8rem; color: var(--accent-emerald); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 0.4rem;">
+              Production Tuning &amp; Verification Command
+            </h4>
+            <div class="code-box">
+              <button class="copy-btn" onclick="copyCode(this)">Copy Snippet</button>
+              <pre id="arch-detail-code"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- TAB 6: INTERACTIVE 15-QUESTION CERTIFICATION QUIZ                  -->
+    <!-- ================================================================== -->
+    <section id="tab-quiz" class="tab-section">
+      <div class="section-header">
+        <div>
+          <h2>15-Question Bootcamp Certification Quiz &amp; Troubleshooting Lab</h2>
+          <p>Select an option on each question for instant grading and architectural explanations.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div class="argon-badge" id="quiz-score-badge" style="font-size: 0.82rem;">
+            Score: 0 / 15 Answered (0 Correct)
+          </div>
+          <button class="action-btn" onclick="resetQuiz()">Reset Quiz</button>
+        </div>
+      </div>
+
+      <div id="quiz-container"></div>
+    </section>
+  </main>
+
+  <footer>
+    5-Day Weather Forecast &amp; Telemetry Database Engineering Bootcamp • Architected &amp; Synthesized with Gemini 4 Argon • Self-Contained Interactive Portal (<code>bootcamp_portal.html</code>)
+  </footer>
+
+  <!-- Mermaid.js v10 for Interactive SVG Diagram Rendering in the Built-In Reader -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+  <script>
+    // =========================================================================
+    // THEME SWITCHER (LIGHT DEFAULT + DARK MODE WITH LOCALSTORAGE)
+    // =========================================================================
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const iconEl = document.getElementById('theme-icon');
+      const labelEl = document.getElementById('theme-label');
+      if (iconEl && labelEl) {
+        if (theme === 'dark') {
+          iconEl.textContent = '☀️';
+          labelEl.textContent = 'Light Mode';
+        } else {
+          iconEl.textContent = '🌙';
+          labelEl.textContent = 'Dark Mode';
+        }
+      }
+      try { localStorage.setItem('bootcamp_theme', theme); } catch (e) {}
+      if (typeof renderActiveMermaidDiagrams === 'function') {
+        renderActiveMermaidDiagrams();
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      applyTheme(current === 'light' ? 'dark' : 'light');
+    }
+
+    (function initSavedTheme() {
+      try {
+        const saved = localStorage.getItem('bootcamp_theme');
+        if (saved === 'dark' || saved === 'light') {
+          applyTheme(saved);
+        }
+      } catch (e) {}
+    })();
+
+    // =========================================================================
+    // TAB NAVIGATION & COPY BUTTONS
+    // =========================================================================
+    function switchTab(tabId, btnEl) {
+      document.querySelectorAll('.tab-section').forEach(sec => sec.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      btnEl.classList.add('active');
+    }
+
+    function filterCurriculum(category, btnEl) {
+      btnEl.parentElement.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+      btnEl.classList.add('active');
+      document.querySelectorAll('.curr-card').forEach(card => {
+        if (category === 'all' || card.dataset.category.includes(category)) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    function copyCode(btn) {
+      const pre = btn.parentElement.querySelector('pre');
+      const text = pre ? pre.innerText : '';
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerText;
+        btn.innerText = 'Copied';
+        btn.style.background = 'var(--accent-emerald)';
+        btn.style.color = '#ffffff';
+        setTimeout(() => {
+          btn.innerText = orig;
+          btn.style.background = '';
+          btn.style.color = '';
+        }, 1400);
+      });
+    }
+
+    // =========================================================================
+    // SIMULATOR 1: POSTGRESQL "TUPLE TETRIS" 8-BYTE CPU ALIGNMENT VISUALIZER
+    // =========================================================================
+    // Note: In PostgreSQL, SMALLINT (2B), INTEGER (4B), REAL (4B), TIMESTAMPTZ (8B),
+    // DOUBLE PRECISION (8B), BOOLEAN (1B) have strict CPU alignment rules:
+    // - 8-byte types require offset % 8 == 0
+    // - 4-byte types require offset % 4 == 0
+    // - 2-byte types require offset % 2 == 0
+    // - 1-byte types require offset % 1 == 0
+    // Additionally, the entire tuple length is rounded up to MAXALIGN (8 bytes).
+    // Look at the Naive Unaligned Schema (80 bytes total = 24B Header + 56B Payload):
+    // 1. quality_flag BOOLEAN (1B) -> followed by 8B recorded_at TIMESTAMPTZ => 7 bytes padding!
+    // 2. recorded_at TIMESTAMPTZ (8B)
+    // 3. country_iso CHAR(2) / wind_dir SMALLINT (2B) -> followed by 8B latitude => 6 bytes padding!
+    // 4. latitude DOUBLE PRECISION (8B)
+    // 5. station_num INTEGER (4B) -> followed by 8B longitude => 4 bytes padding!
+    // 6. longitude DOUBLE PRECISION (8B)
+    // 7. temperature REAL (4B)
+    // 8. sensor_fault BOOLEAN (1B) -> followed by 3 bytes tail padding to reach 56B (Word 9 boundary)!
+    // Total padding in Unaligned: 7B + 6B + 4B + 3B = 20B wasted! Total row = 24B header + 56B = 80 bytes!
+    // When ordered 8B -> 4B -> 2B -> 1B (Packed Aligned Schema):
+    // recorded_at (8B), latitude (8B), longitude (8B), station_num (4B), temperature (4B),
+    // wind_dir (2B), quality_flag (1B), sensor_fault (1B) + 4B tail pad = 40B payload + 24B header = 64 bytes!
+    const TETRIS_PRESETS = {
+      unaligned: [
+        { name: 'quality_flag', sqlType: 'BOOLEAN', size: 1, align: 1, css: 'byte-1b' },
+        { name: 'recorded_at', sqlType: 'TIMESTAMPTZ', size: 8, align: 8, css: 'byte-8b' },
+        { name: 'wind_dir_deg', sqlType: 'SMALLINT', size: 2, align: 2, css: 'byte-2b' },
+        { name: 'latitude', sqlType: 'DOUBLE PRECISION', size: 8, align: 8, css: 'byte-8b' },
+        { name: 'station_num', sqlType: 'INTEGER', size: 4, align: 4, css: 'byte-4b' },
+        { name: 'longitude', sqlType: 'DOUBLE PRECISION', size: 8, align: 8, css: 'byte-8b' },
+        { name: 'temperature', sqlType: 'REAL', size: 4, align: 4, css: 'byte-4b' },
+        { name: 'sensor_fault', sqlType: 'BOOLEAN', size: 1, align: 1, css: 'byte-1b' }
+      ],
+      aligned: [
+        { name: 'recorded_at', sqlType: 'TIMESTAMPTZ', size: 8, align: 8, css: 'byte-8b' },
+        { name: 'latitude', sqlType: 'DOUBLE PRECISION', size: 8, align: 8, css: 'byte-8b' },
+        { name: 'longitude', sqlType: 'DOUBLE PRECISION', size: 8, align: 8, css: 'byte-8b' },
+        { name: 'station_num', sqlType: 'INTEGER', size: 4, align: 4, css: 'byte-4b' },
+        { name: 'temperature', sqlType: 'REAL', size: 4, align: 4, css: 'byte-4b' },
+        { name: 'wind_dir_deg', sqlType: 'SMALLINT', size: 2, align: 2, css: 'byte-2b' },
+        { name: 'quality_flag', sqlType: 'BOOLEAN', size: 1, align: 1, css: 'byte-1b' },
+        { name: 'sensor_fault', sqlType: 'BOOLEAN', size: 1, align: 1, css: 'byte-1b' }
+      ]
+    };
+
+    let currentColumns = JSON.parse(JSON.stringify(TETRIS_PRESETS.unaligned));
+
+    function loadTetrisPreset(presetKey) {
+      currentColumns = JSON.parse(JSON.stringify(TETRIS_PRESETS[presetKey]));
+      document.getElementById('btn-preset-unaligned').classList.toggle('active', presetKey === 'unaligned');
+      document.getElementById('btn-preset-aligned').classList.toggle('active', presetKey === 'aligned');
+      renderTetrisAll();
+    }
+
+    function moveColumn(idx, dir) {
+      const target = idx + dir;
+      if (target < 0 || target >= currentColumns.length) return;
+      const tmp = currentColumns[idx];
+      currentColumns[idx] = currentColumns[target];
+      currentColumns[target] = tmp;
+      document.getElementById('btn-preset-unaligned').classList.remove('active');
+      document.getElementById('btn-preset-aligned').classList.remove('active');
+      renderTetrisAll();
+    }
+
+    function computeTupleLayout(cols) {
+      const bytes = [];
+      // First 24 bytes: Words 0, 1, 2 = HeapTupleHeaderData (23B + 1B Hoff Pad)
+      const headerLabels = [
+        't_xmin', 't_xmin', 't_xmin', 't_xmin', 't_xmax', 't_xmax', 't_xmax', 't_xmax',
+        't_cid', 't_cid', 't_cid', 't_cid', 't_ctid', 't_ctid', 't_ctid', 't_ctid',
+        't_ctid', 't_ctid', 'infomsk2', 'infomsk2', 'infomask', 'infomask', 't_hoff', 'hdr_pad'
+      ];
+      for (let i = 0; i < 24; i++) {
+        bytes.push({
+          offset: i,
+          label: headerLabels[i],
+          sub: i === 23 ? '1B Pad' : 'Header',
+          css: 'byte-header',
+          isPad: false
+        });
+      }
+
+      let offset = 24;
+      let internalPad = 0;
+      const colOffsets = [];
+
+      for (const col of cols) {
+        const rem = offset % col.align;
+        const padNeeded = rem === 0 ? 0 : (col.align - rem);
+        for (let p = 0; p < padNeeded; p++) {
+          bytes.push({
+            offset: offset++,
+            label: 'PAD',
+            sub: `Align ${col.align}B`,
+            css: 'byte-pad',
+            isPad: true
+          });
+          internalPad++;
+        }
+        const startOff = offset;
+        for (let b = 0; b < col.size; b++) {
+          bytes.push({
+            offset: offset++,
+            label: col.name.slice(0, 8),
+            sub: `${col.size}B`,
+            css: col.css,
+            isPad: false
+          });
+        }
+        colOffsets.push({ ...col, startOff, padBefore: padNeeded });
+      }
+
+      // Tail padding to MAXALIGN (8 bytes)
+      let tailPad = 0;
+      while (offset % 8 !== 0) {
+        bytes.push({
+          offset: offset++,
+          label: 'TAIL PAD',
+          sub: 'MAXALIGN',
+          css: 'byte-pad',
+          isPad: true
+        });
+        tailPad++;
+      }
+
+      return {
+        bytes,
+        totalBytes: offset,
+        internalPad,
+        tailPad,
+        totalPad: internalPad + tailPad,
+        colOffsets
+      };
+    }
+
+    function renderTetrisAll() {
+      const layout = computeTupleLayout(currentColumns);
+
+      // Render column reorder list
+      const colListEl = document.getElementById('tetris-col-list');
+      colListEl.innerHTML = layout.colOffsets.map((c, idx) => `
+        <div class="col-reorder-item">
+          <div>
+            <strong style="color: var(--text-primary);">${idx + 1}. ${c.name}</strong>
+            <span style="color: var(--text-secondary);">(${c.sqlType}, ${c.size}B, align=${c.align}B)</span>
+            ${c.padBefore > 0 ? `<span class="pill pill-crimson" style="margin-left:6px;">+${c.padBefore}B PAD BEFORE</span>` : `<span class="pill pill-emerald" style="margin-left:6px;">0B PAD</span>`}
+          </div>
+          <div class="col-move-btns">
+            <span style="color: var(--text-muted); margin-right: 6px;">offset ${c.startOff}</span>
+            <button onclick="moveColumn(${idx}, -1)" title="Move Up">↑</button>
+            <button onclick="moveColumn(${idx}, 1)" title="Move Down">↓</button>
+          </div>
+        </div>
+      `).join('');
+
+      // Render DDL
+      const ddlLines = currentColumns.map((c, i) => {
+        const comma = i < currentColumns.length - 1 ? ',' : '';
+        return `    ${c.name.padEnd(14, ' ')} ${c.sqlType.padEnd(17, ' ')}${comma} -- ${c.size}B (align ${c.align}B)`;
+      }).join('\n');
+      document.getElementById('tetris-ddl-code').innerText =
+`CREATE TABLE synoptic.telemetry_custom (
+${ddlLines}
+); -- Physical Tuple Size: ${layout.totalBytes} bytes/row (${layout.internalPad}B internal pad + ${layout.tailPad}B tail pad)`;
+
+      // Render 8-byte CPU Words
+      const wordGridEl = document.getElementById('tetris-word-grid');
+      const numWords = layout.totalBytes / 8;
+      let html = '';
+      for (let w = 0; w < numWords; w++) {
+        const startByte = w * 8;
+        const endByte = startByte + 7;
+        const wordTag = w < 3 ? 'MVCC Hdr' : `Payload W${w - 3}`;
+        html += `<div class="word-row">
+          <div class="word-label">
+            <strong>Word ${w}</strong>
+            <span>Bytes ${startByte}–${endByte} (${wordTag})</span>
+          </div>`;
+        for (let b = 0; b < 8; b++) {
+          const cell = layout.bytes[startByte + b];
+          html += `<div class="byte-cell ${cell.css}" title="Byte Offset ${cell.offset}: ${cell.label} (${cell.sub})">
+            <strong>${cell.label}</strong>
+            <span style="font-size:0.6rem; opacity:0.85;">@${cell.offset} (${cell.sub})</span>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+      wordGridEl.innerHTML = html;
+
+      updateTetrisMetrics(layout);
+    }
+
+    function updateTetrisMetrics(cachedLayout) {
+      const layout = cachedLayout || computeTupleLayout(currentColumns);
+      const rowsMillions = parseInt(document.getElementById('tetris-rows-slider').value, 10);
+      const rows = rowsMillions * 1e6;
+
+      document.getElementById('tetris-rows-label').innerText =
+        rowsMillions >= 1000
+          ? `${(rowsMillions / 1000).toFixed(2)} Billion (${rowsMillions.toLocaleString()}M Rows)`
+          : `${rowsMillions.toLocaleString()},000,000 (${rowsMillions}M Rows)`;
+
+      document.getElementById('tetris-row-bytes').innerText = `${layout.totalBytes} Bytes / Row`;
+      const padEl = document.getElementById('tetris-padding-bytes');
+      padEl.innerText = `${layout.internalPad}B Internal + ${layout.tailPad}B Tail = ${layout.totalPad}B Pad`;
+      padEl.style.color = layout.internalPad > 0 ? 'var(--accent-crimson)' : 'var(--accent-emerald)';
+
+      const badgeEl = document.getElementById('tetris-badge-status');
+      if (layout.totalBytes === 64) {
+        badgeEl.className = 'pill pill-emerald';
+        badgeEl.innerText = 'OPTIMAL 64B PACKED (0B Internal Pad)';
+      } else {
+        badgeEl.className = 'pill pill-crimson';
+        badgeEl.innerText = `${layout.totalBytes}B/Row (${layout.totalBytes - 64}B Wasted vs Optimal)`;
+      }
+
+      const currentGB = (rows * layout.totalBytes) / 1e9;
+      const optimalGB = (rows * 64) / 1e9;
+      const savedBetweenUnalignedAndOptimalGB = (rows * (80 - 64)) / 1e9;
+      const savedPages = Math.round(((rows * (80 - 64)) / 8192));
+
+      document.getElementById('tetris-total-gb').innerText = `${currentGB.toFixed(1)} GB`;
+      document.getElementById('tetris-optimal-gb').innerText = `Packed 64B Schema: ${optimalGB.toFixed(1)} GB (Unaligned 80B: ${((rows * 80) / 1e9).toFixed(1)} GB)`;
+      document.getElementById('tetris-saved-gb').innerText = `${savedBetweenUnalignedAndOptimalGB.toFixed(1)} GB Saved`;
+      document.getElementById('tetris-saved-pages').innerText = `${savedPages.toLocaleString()} fewer 8KB pages in shared_buffers!`;
+    }
+
+    // =========================================================================
+    // SIMULATOR 2: HARDWARE SENTINEL (-9999.0) & 3VL LAB
+    // =========================================================================
+    let activeSentinelCode = -9999.0;
+    let state3VL = { A: 'TRUE', B: 'NULL' };
+
+    function setSentinelCode(code) {
+      activeSentinelCode = code;
+      document.getElementById('btn-sent-9999').classList.toggle('active', code === -9999.0);
+      document.getElementById('btn-sent-999').classList.toggle('active', code === -999.0);
+      updateSentinelSim();
+    }
+
+    function updateSentinelSim() {
+      const ratePct = parseFloat(document.getElementById('sentinel-rate-slider').value);
+      const totalRows = 10000;
+      const faultRows = Math.round(totalRows * (ratePct / 100));
+      const validRows = totalRows - faultRows;
+
+      const trueMean = 22.40;
+      const trueMin = 16.20;
+      const trueMax = 28.10;
+      const trueSigma = 3.10;
+
+      document.getElementById('sentinel-rate-label').innerText =
+        `${ratePct.toFixed(1)}% (${faultRows} Faulty '${activeSentinelCode.toFixed(1)}' Rows / 10,000)`;
+
+      const pill = document.getElementById('sentinel-alert-pill');
+      if (faultRows === 0) {
+        pill.className = 'pill pill-emerald';
+        pill.innerText = '0% DROPOUTS — DATA CLEAN';
+      } else {
+        pill.className = 'pill pill-crimson';
+        pill.innerText = `ALERT: ${faultRows} SENTINELS CORRUPTING AVG()`;
+      }
+
+      // Compute corrupted naive mean & standard deviation
+      const naiveMean = ((validRows * trueMean) + (faultRows * activeSentinelCode)) / totalRows;
+      const naiveMin = faultRows > 0 ? activeSentinelCode : trueMin;
+
+      // Exact mixture variance: E[X^2] - (E[X])^2
+      const validEx2 = (trueSigma * trueSigma) + (trueMean * trueMean);
+      const faultEx2 = activeSentinelCode * activeSentinelCode;
+      const mixEx2 = ((validRows * validEx2) + (faultRows * faultEx2)) / totalRows;
+      const naiveVar = Math.max(0, mixEx2 - (naiveMean * naiveMean));
+      const naiveSigma = Math.sqrt(naiveVar);
+
+      const naiveMeanEl = document.getElementById('naive-mean-val');
+      naiveMeanEl.innerText = `${naiveMean >= 0 ? '+' : ''}${naiveMean.toFixed(2)} °C`;
+      naiveMeanEl.style.color = faultRows > 0 ? 'var(--accent-crimson)' : 'var(--accent-emerald)';
+
+      document.getElementById('naive-min-val').innerText = `${naiveMin.toFixed(1)} °C`;
+      document.getElementById('naive-max-val').innerText = `${trueMax.toFixed(1)} °C`;
+      document.getElementById('naive-std-val').innerText = `${naiveSigma.toFixed(2)} °C`;
+      document.getElementById('naive-cnt-val').innerText = `10,000 (Includes ${faultRows} faults!)`;
+
+      document.getElementById('clean-mean-val').innerText = `+${trueMean.toFixed(2)} °C`;
+      document.getElementById('clean-min-val').innerText = `${trueMin.toFixed(1)} °C`;
+      document.getElementById('clean-max-val').innerText = `${trueMax.toFixed(1)} °C`;
+      document.getElementById('clean-std-val').innerText = `${trueSigma.toFixed(2)} °C`;
+      document.getElementById('clean-cnt-val').innerText = `${validRows.toLocaleString()} (${faultRows} NULLs ignored)`;
+    }
+
+    function set3VL(which, val, btnEl) {
+      state3VL[which] = val;
+      btnEl.parentElement.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+      btnEl.classList.add('active');
+      render3VLTable();
+    }
+
+    function eval3VLAnd(a, b) {
+      if (a === 'FALSE' || b === 'FALSE') return 'FALSE';
+      if (a === 'TRUE' && b === 'TRUE') return 'TRUE';
+      return 'UNKNOWN (NULL)';
+    }
+
+    function eval3VLOr(a, b) {
+      if (a === 'TRUE' || b === 'TRUE') return 'TRUE';
+      if (a === 'FALSE' && b === 'FALSE') return 'FALSE';
+      return 'UNKNOWN (NULL)';
+    }
+
+    function eval3VLNot(a) {
+      if (a === 'TRUE') return 'FALSE';
+      if (a === 'FALSE') return 'TRUE';
+      return 'UNKNOWN (NULL)';
+    }
+
+    function render3VLTable() {
+      const a = state3VL.A;
+      const b = state3VL.B;
+      const resAnd = eval3VLAnd(a, b);
+      const resOr = eval3VLOr(a, b);
+      const resNotA = eval3VLNot(a);
+      const resEq = (a === 'NULL' || b === 'NULL') ? 'UNKNOWN (NULL)' : (a === b ? 'TRUE' : 'FALSE');
+      const resDist = (a === b) ? 'FALSE' : 'TRUE';
+
+      const rows = [
+        {
+          expr: `${a} AND ${b}`,
+          res: resAnd,
+          kept: resAnd === 'TRUE' ? 'KEPT' : 'DROPPED',
+          note: 'AND only short-circuits to FALSE if one side is FALSE.'
+        },
+        {
+          expr: `${a} OR ${b}`,
+          res: resOr,
+          kept: resOr === 'TRUE' ? 'KEPT' : 'DROPPED',
+          note: 'OR short-circuits to TRUE if at least one side is TRUE!'
+        },
+        {
+          expr: `NOT (${a})`,
+          res: resNotA,
+          kept: resNotA === 'TRUE' ? 'KEPT' : 'DROPPED',
+          note: 'The negation of UNKNOWN is still UNKNOWN!'
+        },
+        {
+          expr: `A = B (${a} = ${b})`,
+          res: resEq,
+          kept: resEq === 'TRUE' ? 'KEPT' : 'DROPPED',
+          note: 'Standard = with NULL always yields UNKNOWN (never TRUE).'
+        },
+        {
+          expr: `${a} IS DISTINCT FROM ${b}`,
+          res: resDist,
+          kept: resDist === 'TRUE' ? 'KEPT' : 'DROPPED',
+          note: 'Null-safe comparison: treats NULL as a comparable state!'
+        }
+      ];
+
+      const badgeFor = (r) => {
+        if (r === 'TRUE') return '<span class="pill pill-emerald">TRUE</span>';
+        if (r === 'FALSE') return '<span class="pill pill-crimson">FALSE</span>';
+        return '<span class="pill pill-amber">UNKNOWN (NULL)</span>';
+      };
+
+      document.getElementById('truth-table-body').innerHTML = rows.map(r => `
+        <tr>
+          <td><strong>${r.expr}</strong></td>
+          <td>${badgeFor(r.res)}</td>
+          <td style="color: ${r.kept === 'KEPT' ? 'var(--accent-emerald)' : 'var(--accent-crimson)'}; font-weight:700;">${r.kept}</td>
+          <td style="text-align:left; font-family:var(--font-sans); font-size:0.78rem; color:var(--text-secondary);">${r.note}</td>
+        </tr>
+      `).join('');
+    }
+
+    // =========================================================================
+    // SIMULATOR 3: MULTI-ENGINE STORAGE & INDEX SCALING CALCULATOR
+    // =========================================================================
+    function formatStorage(mb) {
+      if (mb >= 1000) return `${(mb / 1000).toFixed(2)} GB`;
+      if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`;
+      return `${mb.toFixed(1)} MB`;
+    }
+
+    function updateScalingSim() {
+      const rowsM = parseInt(document.getElementById('scale-rows-slider').value, 10);
+      const colsQueried = parseInt(document.getElementById('scale-cols-slider').value, 10);
+      const totalCols = 25;
+      const colRatio = colsQueried / totalCols;
+
+      document.getElementById('scale-rows-label').innerText =
+        rowsM >= 1000 ? `1,000,000,000 (1.0B Rows)` : `${rowsM.toLocaleString()},000,000 (${rowsM}M Rows)`;
+      document.getElementById('scale-cols-label').innerText =
+        `${colsQueried} of ${totalCols} Columns (${Math.round(colRatio * 100)}% Projection)`;
+
+      // Per 1M rows benchmarks:
+      // B-Tree: ~28 MB / 1M rows; BRIN: ~0.032 MB (32 KB) / 1M rows
+      const btreeMB = rowsM * 28.0;
+      const brinMB = rowsM * 0.032;
+
+      // Storage footprints per 1M rows:
+      const csvMB = rowsM * 180.0;
+      const pgHeapMB = rowsM * 112.0;
+      const mongoMB = rowsM * 38.0;
+      const parquetMB = rowsM * 14.0;
+
+      // Scan I/O:
+      // PostgreSQL row store must fetch entire 8KB pages containing all 25 columns:
+      const pgScanMB = pgHeapMB;
+      // DuckDB + Parquet reads only the projected column chunks:
+      const duckScanMB = parquetMB * colRatio;
+
+      document.getElementById('scale-brin-save').innerText = `${formatStorage(btreeMB)} → ${formatStorage(brinMB)}`;
+      document.getElementById('scale-parquet-save').innerText = `${formatStorage(csvMB)} → ${formatStorage(parquetMB)}`;
+      document.getElementById('scale-io-read').innerText = `${formatStorage(duckScanMB)} Read`;
+      document.getElementById('scale-io-vs').innerText = `vs ${formatStorage(pgScanMB)} PG Full Heap Scan (${(pgScanMB / Math.max(0.01, duckScanMB)).toFixed(0)}x less I/O!)`;
+
+      document.getElementById('bar-btree-txt').innerText = formatStorage(btreeMB);
+      document.getElementById('bar-brin-txt').innerText = `${formatStorage(brinMB)} (99.89% smaller)`;
+
+      document.getElementById('bar-csv-txt').innerText = formatStorage(csvMB);
+      document.getElementById('bar-pg-txt').innerText = formatStorage(pgHeapMB);
+      document.getElementById('bar-mongo-txt').innerText = formatStorage(mongoMB);
+      document.getElementById('bar-parquet-txt').innerText = formatStorage(parquetMB);
+
+      document.getElementById('bar-scan-pg-txt').innerText = formatStorage(pgScanMB);
+      document.getElementById('bar-scan-duck-txt').innerText = `${formatStorage(duckScanMB)} (${(pgScanMB / Math.max(0.01, duckScanMB)).toFixed(0)}x less I/O)`;
+      const duckWidthPct = Math.max(2, (duckScanMB / pgScanMB) * 100);
+      document.getElementById('bar-scan-duck').style.width = `${duckWidthPct}%`;
+    }
+
+    // =========================================================================
+    // SIMULATOR 5: POLYGLOT ARCHITECTURE INTERACTIVE MAP
+    // =========================================================================
+    const ARCH_NODES = [
+      {
+        title: 'Stage 01: Edge Automated Weather Station (AWS) + Local SQLite WAL Buffer',
+        sla: 'SLA: Zero Data Loss Over 72h Satellite/2G Comms Dropouts',
+        desc: 'Solar-powered Campbell Scientific CR1000X and Vaisala AWS310 stations sample synoptic sensors every 60s and 3D ultrasonic wind probes at 20Hz. Instead of fragile raw CSV files or direct remote TCP database connections, readings are first committed into a local embedded SQLite 3 database running in WAL (Write-Ahead Logging) mode.',
+        failure: 'If a Saharan sandstorm knocks out the 2G/satellite uplink, direct SQL connections hang and crash central PostgreSQL connection pools. With local SQLite WAL + MQTT QoS 1 buffering, the station queues days of readings on industrial SD flash and replays them automatically once link state recovers.',
+        code: `-- Local Edge Station SQLite Initialization (simulate_edge_sensors.py)
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS local_ring_buffer (
+    packet_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    station_id  INTEGER NOT NULL,
+    obs_time    TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    synced_mqtt INTEGER DEFAULT 0
+);`
+      },
+      {
+        title: 'Stage 02: Telemetry Ingestion Bus (Eclipse Mosquitto MQTT & Apache Kafka)',
+        sla: 'SLA: 50,000+ msg/sec Ingest Throughput | 2-Byte MQTT Packet Overhead',
+        desc: 'Edge loggers publish compact JSON/Binary payloads over MQTT (QoS 1: At Least Once Delivery) to topic hierarchies like weather/algeria/{station_id}/{sensor_type}. High-volume national centers bridge MQTT into Apache Kafka partitioned by station_id to decouple field bursts from database maintenance windows.',
+        failure: 'Broker disk exhaustion if downstream consumers halt. Mitigated via Kafka log retention policies (retention.ms=604800000 / 7 days) and Prometheus consumer-lag alerts.',
+        code: `# Subscribe to live WMO & Ultrasonic MQTT telemetry stream
+mosquitto_sub -h localhost -p 1883 -t "weather/algeria/#" -v`
+      },
+      {
+        title: 'Stage 03: Polyglot Stream Router & Sentinel Sanitizer (stream_router.py)',
+        sla: 'SLA: < 5ms Routing Latency | 100% Hardware Sentinel Neutralization',
+        desc: 'The Python Polyglot Stream Router consumes packets from MQTT/Kafka, scrubs legacy hardware fault sentinels (-9999.0, -999.0) into SQL NULL / BSON null on the fly, and routes each packet by structure: fixed-schema METAR_STANDARD packets go to PostgreSQL 16, while polymorphic ULTRASONIC_3D and RADIOSONDE_PROFILE packets go to MongoDB 7.0.',
+        failure: 'Single-row INSERT bottleneck. Mitigated by micro-batching 500–2,000 packets per transaction using psycopg2.extras.execute_values() for PostgreSQL and collection.bulk_write() for MongoDB.',
+        code: `# Launch the Day 5 Polyglot Stream Router + Edge Simulator
+cd day5
+python3 stream_router.py --batch-size 500`
+      },
+      {
+        title: 'Stage 04A: Hot Relational & Spatial Core (PostgreSQL 16 + PostGIS 3.4)',
+        sla: 'SLA: 99.99% Availability (Patroni HA, RPO=0) | < 15ms Spatial Joins',
+        desc: 'Stores strict WMO synoptic observations, station metadata, and hydro-basin/wilaya polygons. Uses Tuple Tetris column ordering (64B/row), Declarative Monthly Range Partitioning (PARTITION BY RANGE (obs_time)), BRIN indexes on obs_time, and PostGIS GiST indexes on GEOGRAPHY(Point, 4326).',
+        failure: 'MVCC Dead Tuple bloat after frequent QC updates or checkpoint I/O spikes during 00Z/12Z NWP loads. Mitigated via per-table autovacuum_vacuum_scale_factor = 0.01 and max_wal_size = 16GB.',
+        code: `ALTER TABLE synoptic.observations SET (
+    autovacuum_vacuum_scale_factor = 0.01,
+    autovacuum_analyze_scale_factor = 0.005
+);
+CREATE INDEX idx_obs_brin ON synoptic.observations USING brin(obs_time) WITH (pages_per_range = 128);`
+      },
+      {
+        title: 'Stage 04B: Hot Polymorphic & Upper-Air Store (MongoDB 7.0 3-Node Replica Set)',
+        sla: 'SLA: < 10ms Write Acknowledgment (w: "majority") | 70% WiredTiger zstd Savings',
+        desc: 'Ingests variable-depth upper-air radiosonde soundings (vertical_levels arrays with 40–150 pressure levels), 20Hz 3D ultrasonic turbulence vectors, and CAP severe weather polygons. Uses native Time-Series collections, 2dsphere GeoJSON indexes ([lon, lat]), and ESR (Equality -> Sort -> Range) compound indexes.',
+        failure: 'Monotonic Shard Key hotspot if sharded purely on { obs_time: 1 }. Mitigated by prefixing the shard key with high-cardinality station ID: { "station_meta.station_id": 1, obs_time: 1 }.',
+        code: `// ESR Compound Index (Equality -> Sort -> Range) + $elemMatch
+db.radiosonde_soundings.createIndex({ station_id: 1, launch_time: -1, cape_j_kg: 1 });
+db.radiosonde_soundings.find({
+  vertical_levels: { $elemMatch: { pressure_hpa: 850, wind_speed_kt: { $gte: 50 } } }
+});`
+      },
+      {
+        title: 'Stage 05: Cold Analytical Lakehouse & 4D Grids (DuckDB + Parquet + Zarr on Ceph S3)',
+        sla: 'SLA: 50M+ Row Climatology Scans in < 0.4s | 90% ZSTD Storage Compression',
+        desc: 'Nightly compaction jobs (compact_hot_to_cold.py & export_pg_to_parquet.py) stream aged partitions via zero-OOM server-side cursors into Hive-partitioned Apache Parquet files (year=YYYY/month=MM/*.parquet, 128MB–512MB target size) on On-Premises Ceph RGW S3. 4D NWP model grids and satellite rasters are stored as Cloud-Native Zarr and Cloud-Optimized GeoTIFFs (COG).',
+        failure: 'The "Small Files Problem" (writing thousands of 4KB Parquet files every 10 seconds). Mitigated by compacting into 128MB–512MB ZSTD Parquet blocks with 100k–250k rows per Row Group.',
+        code: `SELECT station_id, AVG(NULLIF(temp_c, -9999.0)) AS mean_summer_temp_c
+FROM read_parquet('s3://meteo-cold-lake/synoptic/year=2026/month=07/*.parquet', hive_partitioning = true)
+GROUP BY station_id ORDER BY mean_summer_temp_c DESC;`
+      },
+      {
+        title: 'Stage 06: Unified Sub-10ms Weather Serving Gateway (FastAPI serving_api.py)',
+        sla: 'SLA: p99 < 10ms Live Station Lookup | Unified Polyglot JSON Response',
+        desc: 'Exposes a single REST/OpenAPI endpoint (/stations/{station_id}/telemetry-summary) for forecaster workstations and aviation dashboards. Queries PostgreSQL for the latest QC-validated synoptic observation, MongoDB for 3D sonic turbulence gusts, and DuckDB over Parquet for the 30-year climatological normal.',
+        failure: 'Connection pool exhaustion under flash-flood alert traffic spikes. Mitigated via PgBouncer transaction pooling, PyMongo connection pooling, and read-only DuckDB cursor clones.',
+        code: `# Start the Unified Polyglot FastAPI Weather Service
+cd day5
+uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
+      }
+    ];
+
+    function selectArchNode(idx, el) {
+      document.querySelectorAll('.arch-node').forEach(n => n.classList.remove('selected'));
+      el.classList.add('selected');
+      const d = ARCH_NODES[idx];
+      document.getElementById('arch-detail-title').innerText = d.title;
+      document.getElementById('arch-detail-sla').innerText = d.sla;
+      document.getElementById('arch-detail-desc').innerText = d.desc;
+      document.getElementById('arch-detail-failure').innerText = d.failure;
+      document.getElementById('arch-detail-code').innerText = d.code;
+    }
+
+    // =========================================================================
+    // TAB 6: 15-QUESTION INTERACTIVE CERTIFICATION QUIZ
+    // =========================================================================
+    const QUIZ_DATA = [
+      {
+        q: "1. In SQLite, which command must you run on every new connection to enforce Foreign Key constraints?",
+        opts: [
+          "A) SET foreign_keys = TRUE;",
+          "B) PRAGMA foreign_keys = ON;",
+          "C) ALTER DATABASE ENABLE FOREIGN KEYS;"
+        ],
+        ans: 1,
+        exp: "For backwards compatibility, SQLite disables foreign key enforcement by default on every new connection. You must execute PRAGMA foreign_keys = ON; immediately after connecting."
+      },
+      {
+        q: "2. Which file format stores data column-by-column with Row Group min/max zone-map statistics in its footer?",
+        opts: [
+          "A) CSV (Comma-Separated Values)",
+          "B) Apache Parquet",
+          "C) JSON Lines (NDJSON)"
+        ],
+        ans: 1,
+        exp: "Apache Parquet is a hybrid columnar storage format that divides rows into Row Groups and stores contiguous Column Chunks with min/max/null_count metadata in the file footer for Predicate & Projection Pushdown."
+      },
+      {
+        q: "3. Why is DuckDB 20–50x faster than SQLite or PostgreSQL when calculating AVG(temp_c) over 50 million synoptic rows?",
+        opts: [
+          "A) DuckDB uses columnar storage and multi-core vectorized SIMD execution (processing 2,048-value vectors in CPU AVX registers), reading only the temp_c column",
+          "B) DuckDB skips ACID transactions and checksums",
+          "C) SQLite cannot store IEEE-754 floating-point numbers"
+        ],
+        ans: 0,
+        exp: "Row stores like SQLite and PostgreSQL must read every column in an 8KB page and call a tuple-at-a-time Volcano iterator. DuckDB reads only the compressed temp_c column chunk and processes 2,048-element vectors in L1 CPU cache using SIMD instructions."
+      },
+      {
+        q: "4. In PostgreSQL physical storage (pageinspect), what does ctid = (4, 12) represent?",
+        opts: [
+          "A) CPU Core 4, Worker Thread 12",
+          "B) Physical 8KB Heap Block (Page) 4, Line Pointer (Tuple Slot) 12",
+          "C) Schema ID 4, Table ID 12"
+        ],
+        ans: 1,
+        exp: "In PostgreSQL heap tables, ctid is the physical tuple address: (block_number, line_pointer_index). Every UPDATE writes a new tuple version and changes its ctid!"
+      },
+      {
+        q: "5. In PostgreSQL MVCC, which hidden tuple header field records the Transaction ID that deleted or updated a row?",
+        opts: [
+          "A) xmin",
+          "B) xmax",
+          "C) cmin"
+        ],
+        ans: 1,
+        exp: "xmin stores the inserting transaction ID, while xmax is 0 for a live tuple and is populated with the deleting/updating transaction ID when a row is deleted or superseded by an UPDATE."
+      },
+      {
+        q: "6. How many bytes is the fixed PostgreSQL MVCC tuple header (HeapTupleHeaderData) before column data begins?",
+        opts: [
+          "A) 8 bytes",
+          "B) 23 bytes (padded to 24 bytes / 3 CPU words)",
+          "C) 64 bytes"
+        ],
+        ans: 1,
+        exp: "HeapTupleHeaderData is 23 bytes (t_xmin, t_xmax, t_cid, t_ctid, t_infomask2, t_infomask, t_hoff) and is padded to an 8-byte boundary (24 bytes) before the first user column."
+      },
+      {
+        q: "7. Which PostgreSQL index type is ~99.8% smaller than a B-Tree index for chronological append-only obs_time columns?",
+        opts: [
+          "A) GIN (Generalized Inverted Index)",
+          "B) BRIN (Block Range Index)",
+          "C) Hash Index"
+        ],
+        ans: 1,
+        exp: "Instead of indexing every single row (28 MB per 1M rows in a B-Tree), a BRIN index stores only the minimum and maximum obs_time across ranges of 128 contiguous 8KB pages (~32 KB per 1M rows)."
+      },
+      {
+        q: "8. Which PostgreSQL Window Function computes the 3-hour barometric pressure tendency (Pt - Pt-3h) without a self-join?",
+        opts: [
+          "A) RANK() OVER (ORDER BY pressure_hpa)",
+          "B) pressure_hpa - LAG(pressure_hpa, 3) OVER (PARTITION BY station_id ORDER BY obs_time)",
+          "C) GROUP BY CUBE(station_id, pressure_hpa)"
+        ],
+        ans: 1,
+        exp: "LAG(pressure_hpa, 3) OVER (PARTITION BY station_id ORDER BY obs_time) accesses the row 3 hourly steps prior within the same station partition in a single sort pass."
+      },
+      {
+        q: "9. Why can't MySQL's 4-byte TIMESTAMP data type store historical 1955 WMO synoptic observations?",
+        opts: [
+          "A) MySQL TIMESTAMP is a 32-bit signed Unix epoch counter limited to 1970-01-01 00:00:01 UTC through 2038-01-19 03:14:07 UTC",
+          "B) MySQL does not support hours, minutes, or seconds",
+          "C) MySQL stores timestamps as ASCII text"
+        ],
+        ans: 0,
+        exp: "PostgreSQL TIMESTAMPTZ is an 8-byte (64-bit) microsecond counter spanning 4713 BC to 294276 AD, whereas MySQL's 4-byte TIMESTAMP suffers from the 1970–2038 32-bit Unix epoch bounds."
+      },
+      {
+        q: "10. In MongoDB, which update operator updates max_observed_gust_kt ONLY if the newly arrived wind gust is higher than the current value?",
+        opts: [
+          "A) $inc",
+          "B) $max",
+          "C) $push"
+        ],
+        ans: 1,
+        exp: "The $max atomic update operator compares the stored field against the incoming value and overwrites it only when the new value is strictly greater."
+      },
+      {
+        q: "11. In MongoDB Aggregation Pipelines, which stage flattens an array of upper-air radiosonde vertical_levels into one document per pressure level?",
+        opts: [
+          "A) $unwind",
+          "B) $lookup",
+          "C) $bucket"
+        ],
+        ans: 0,
+        exp: "$unwind deconstructs an array field (such as vertical_levels) from the input document to output a separate document for each pressure level element."
+      },
+      {
+        q: "12. What is the optimal key order according to MongoDB's ESR Compound Indexing Rule?",
+        opts: [
+          "A) Range -> Sort -> Equality",
+          "B) Equality -> Sort -> Range",
+          "C) Sort -> Equality -> Range"
+        ],
+        ans: 1,
+        exp: "Equality fields pin exact index branches first, Sort fields traverse keys in pre-sorted order without an in-memory blocking SORT stage, and Range fields scan the leaf subset last."
+      },
+      {
+        q: "13. Which 4D meteorological gridded format breaks multidimensional arrays into independent chunk objects ideal for parallel S3 / Ceph RGW storage?",
+        opts: [
+          "A) Legacy WMO BUFR",
+          "B) ASCII SYNOP bulletins",
+          "C) Cloud-Native Zarr"
+        ],
+        ans: 2,
+        exp: "Zarr stores metadata in lightweight JSON and breaks 4D (time, level, lat, lon) arrays into independent compressed chunk objects (e.g. temp/0.1.4), allowing massive parallel reads/writes on S3 object storage."
+      },
+      {
+        q: "14. When streaming 50 million rows from PostgreSQL to Apache Parquet in Python, how do you prevent an OutOfMemory (OOM) crash?",
+        opts: [
+          "A) Use pandas.read_sql('SELECT * FROM observations')",
+          "B) Use a PostgreSQL named server-side cursor (itersize = 50000) piped into pyarrow.parquet.ParquetWriter.write_batch()",
+          "C) Cast all floating-point columns to VARCHAR"
+        ],
+        ans: 1,
+        exp: "By default, psycopg2 buffers the entire result set in client RAM. A named server-side cursor streams fixed 50,000-row batches over TCP into PyArrow ParquetWriter with a flat ~80 MB memory footprint."
+      },
+      {
+        q: "15. In the Day 5 Polyglot Architecture, why do we route METAR_STANDARD packets to PostgreSQL and ULTRASONIC_3D turbulence vectors to MongoDB?",
+        opts: [
+          "A) METAR_STANDARD has a strict relational schema joined with PostGIS stations, while ULTRASONIC_3D emits high-frequency polymorphic vector payloads suited for MongoDB native time-series bucketing",
+          "B) PostgreSQL cannot store floating-point numbers",
+          "C) MongoDB does not support timestamps"
+        ],
+        ans: 0,
+        exp: "Polyglot Persistence matches each data structure to its ideal engine: strict relational + spatial station joins in PostgreSQL/PostGIS, polymorphic high-frequency documents in MongoDB, and historical analytical scans in DuckDB/Parquet."
+      }
+    ];
+
+    let quizState = {};
+
+    function renderQuiz() {
+      const container = document.getElementById('quiz-container');
+      container.innerHTML = QUIZ_DATA.map((item, qIdx) => `
+        <div class="quiz-card">
+          <div class="quiz-q">${item.q}</div>
+          <div class="quiz-options" id="quiz-opts-${qIdx}">
+            ${item.opts.map((optText, oIdx) => `
+              <button class="quiz-opt" onclick="answerQuiz(${qIdx}, ${oIdx})">${optText}</button>
+            `).join('')}
+          </div>
+          <div class="quiz-explain" id="quiz-exp-${qIdx}">
+            <strong>Architectural Explanation:</strong> ${item.exp}
+          </div>
+        </div>
+      `).join('');
+      updateQuizScore();
+    }
+
+    function answerQuiz(qIdx, selectedIdx) {
+      if (quizState[qIdx] !== undefined) return;
+      const item = QUIZ_DATA[qIdx];
+      quizState[qIdx] = selectedIdx === item.ans;
+
+      const btns = document.querySelectorAll(`#quiz-opts-${qIdx} .quiz-opt`);
+      btns.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === item.ans) btn.classList.add('correct');
+        if (idx === selectedIdx && selectedIdx !== item.ans) btn.classList.add('wrong');
+      });
+
+      document.getElementById(`quiz-exp-${qIdx}`).style.display = 'block';
+      updateQuizScore();
+    }
+
+    function updateQuizScore() {
+      const answered = Object.keys(quizState).length;
+      const correct = Object.values(quizState).filter(Boolean).length;
+      document.getElementById('quiz-score-badge').innerText =
+        `Score: ${answered} / 15 Answered (${correct} Correct)`;
+    }
+
+    function resetQuiz() {
+      quizState = {};
+      renderQuiz();
+    }
+
+    // ========================================================================
+    // BUILT-IN COURSEBOOK & CODE READER MODAL (Markdown + SQL/Python/JS/YAML)
+    // ========================================================================
+    let currentDocPath = '';
+    let currentRawText = '';
+
+    function resolveRelativePath(baseFile, relTarget) {
+      if (!relTarget || relTarget.startsWith('http://') || relTarget.startsWith('https://') || relTarget.startsWith('#')) {
+        return relTarget;
+      }
+      const cleanBase = baseFile.replace(/^\.\//, '');
+      const baseParts = cleanBase.split('/');
+      baseParts.pop(); // directory of current file
+      const targetParts = relTarget.split('#')[0].split('/');
+      for (const part of targetParts) {
+        if (!part || part === '.') continue;
+        if (part === '..') {
+          baseParts.pop();
+        } else {
+          baseParts.push(part);
+        }
+      }
+      return './' + baseParts.join('/');
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatInlineMarkdown(text, docPath) {
+      let out = escapeHtml(text);
+      // Inline code `...`
+      const codeTokens = [];
+      out = out.replace(/`([^`]+)`/g, (_, code) => {
+        const idx = codeTokens.length;
+        codeTokens.push(`<code class="md-inline-code">${code}</code>`);
+        return `@@CODE_${idx}@@`;
+      });
+      // Links [label](url)
+      out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
+        const cleanHref = href.trim();
+        if (/\.(md|sql|py|js|yml|yaml|sh)(#.*)?$/i.test(cleanHref) && !cleanHref.startsWith('http')) {
+          const resolved = resolveRelativePath(docPath, cleanHref);
+          return `<a href="${resolved}" class="md-doc-link" onclick="event.preventDefault(); openDocModal('${resolved}')">${label}</a>`;
+        }
+        return `<a href="${cleanHref}" target="_blank" rel="noopener" class="md-ext-link">${label}</a>`;
+      });
+      // Bold & Italic
+      out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      // Restore inline code
+      out = out.replace(/@@CODE_(\d+)@@/g, (_, idx) => codeTokens[Number(idx)]);
+      return out;
+    }
+
+    let mermaidBlockCounter = 0;
+
+    function renderMarkdownToHtml(md, docPath) {
+      const lines = md.replace(/\r\n/g, '\n').split('\n');
+      let html = '';
+      let i = 0;
+
+      while (i < lines.length) {
+        const line = lines[i];
+
+        // Fenced Code Block ```lang
+        if (line.trim().startsWith('```')) {
+          const lang = line.trim().slice(3).trim() || 'text';
+          const codeLines = [];
+          i++;
+          while (i < lines.length && !lines[i].trim().startsWith('```')) {
+            codeLines.push(lines[i]);
+            i++;
+          }
+          i++; // skip closing ```
+          const rawCode = codeLines.join('\n');
+
+          if (lang.toLowerCase() === 'mermaid') {
+            mermaidBlockCounter++;
+            const mId = `mermaid-block-${mermaidBlockCounter}`;
+            html += `
+              <div class="md-code-block mermaid-block-wrapper" id="${mId}">
+                <div class="md-code-header">
+                  <span class="md-code-lang">MERMAID ARCHITECTURAL DIAGRAM</span>
+                  <div style="display:flex; gap:0.45rem;">
+                    <button class="copy-btn" onclick="toggleMermaidSource('${mId}', this)">View Source</button>
+                    <button class="copy-btn" onclick="copyModalCode(this)">Copy Mermaid</button>
+                  </div>
+                </div>
+                <div class="mermaid-svg-output" data-mermaid-src="${escapeHtml(rawCode)}" style="padding: 1.25rem; background: var(--bg-panel); overflow-x: auto; text-align: center;">
+                  <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">Rendering Mermaid diagram...</div>
+                </div>
+                <pre class="mermaid-raw-source" style="display: none; border-top: 1px solid var(--border-subtle);"><code>${escapeHtml(rawCode)}</code></pre>
+              </div>
+            `;
+          } else {
+            html += `
+              <div class="md-code-block">
+                <div class="md-code-header">
+                  <span class="md-code-lang">${escapeHtml(lang.toUpperCase())}</span>
+                  <button class="copy-btn" onclick="copyModalCode(this)">Copy Code</button>
+                </div>
+                <pre><code>${escapeHtml(rawCode)}</code></pre>
+              </div>
+            `;
+          }
+          continue;
+        }
+
+        // Horizontal Rule
+        if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line.trim())) {
+          html += '<hr class="md-hr" />';
+          i++;
+          continue;
+        }
+
+        // Headings # .. ####
+        const hMatch = line.match(/^(#{1,5})\s+(.*)$/);
+        if (hMatch) {
+          const level = hMatch[1].length;
+          html += `<h${level} class="md-h${level}">${formatInlineMarkdown(hMatch[2], docPath)}</h${level}>`;
+          i++;
+          continue;
+        }
+
+        // Blockquote or GitHub Alert (> [!IMPORTANT], > [!TIP], > [!WARNING], > [!NOTE], > [!CAUTION])
+        if (line.trim().startsWith('>')) {
+          const quoteLines = [];
+          while (i < lines.length && lines[i].trim().startsWith('>')) {
+            quoteLines.push(lines[i].replace(/^\s*>\s?/, ''));
+            i++;
+          }
+          const firstLine = (quoteLines[0] || '').trim();
+          const alertMatch = firstLine.match(/^\[!(IMPORTANT|TIP|WARNING|NOTE|CAUTION)\]\s*(.*)$/i);
+          if (alertMatch) {
+            const alertType = alertMatch[1].toUpperCase();
+            const restFirst = alertMatch[2];
+            const bodyLines = restFirst ? [restFirst, ...quoteLines.slice(1)] : quoteLines.slice(1);
+            html += `
+              <div class="md-alert md-alert-${alertType.toLowerCase()}">
+                <div class="md-alert-title">${alertType}</div>
+                <div class="md-alert-body">${bodyLines.map(l => formatInlineMarkdown(l, docPath)).join('<br/>')}</div>
+              </div>
+            `;
+          } else {
+            html += `<blockquote class="md-quote">${quoteLines.map(l => formatInlineMarkdown(l, docPath)).join('<br/>')}</blockquote>`;
+          }
+          continue;
+        }
+
+        // Markdown Table
+        if (line.includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+          const parseRow = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+          const headers = parseRow(lines[i]);
+          i += 2; // skip header + separator
+          const rows = [];
+          while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
+            rows.push(parseRow(lines[i]));
+            i++;
+          }
+          html += '<div class="md-table-wrap"><table class="md-table"><thead><tr>';
+          headers.forEach(h => { html += `<th>${formatInlineMarkdown(h, docPath)}</th>`; });
+          html += '</tr></thead><tbody>';
+          rows.forEach(r => {
+            html += '<tr>';
+            r.forEach(c => { html += `<td>${formatInlineMarkdown(c, docPath)}</td>`; });
+            html += '</tr>';
+          });
+          html += '</tbody></table></div>';
+          continue;
+        }
+
+        // Unordered or Ordered Lists
+        if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+          const isOrdered = /^\s*\d+\.\s+/.test(line);
+          const tag = isOrdered ? 'ol' : 'ul';
+          html += `<${tag} class="md-list">`;
+          while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
+            const itemText = lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, '');
+            html += `<li>${formatInlineMarkdown(itemText, docPath)}</li>`;
+            i++;
+          }
+          html += `</${tag}>`;
+          continue;
+        }
+
+        // Blank Line
+        if (line.trim() === '') {
+          i++;
+          continue;
+        }
+
+        // Paragraph
+        const pLines = [];
+        while (
+          i < lines.length &&
+          lines[i].trim() !== '' &&
+          !lines[i].trim().startsWith('```') &&
+          !lines[i].trim().startsWith('#') &&
+          !lines[i].trim().startsWith('>') &&
+          !/^\s*([-*+]|\d+\.)\s+/.test(lines[i]) &&
+          !/^(\*{3,}|-{3,}|_{3,})\s*$/.test(lines[i].trim())
+        ) {
+          pLines.push(lines[i]);
+          i++;
+        }
+        html += `<p class="md-p">${pLines.map(l => formatInlineMarkdown(l, docPath)).join(' ')}</p>`;
+      }
+
+      return html;
+    }
+
+    function toggleMermaidSource(wrapperId, btn) {
+      const wrap = document.getElementById(wrapperId);
+      if (!wrap) return;
+      const pre = wrap.querySelector('.mermaid-raw-source');
+      if (!pre) return;
+      if (pre.style.display === 'none') {
+        pre.style.display = 'block';
+        btn.innerText = 'Hide Source';
+      } else {
+        pre.style.display = 'none';
+        btn.innerText = 'View Source';
+      }
+    }
+
+    async function renderActiveMermaidDiagrams() {
+      const containers = document.querySelectorAll('#doc-modal-body .mermaid-svg-output');
+      if (!containers.length) return;
+
+      if (typeof window.mermaid === 'undefined') {
+        containers.forEach(c => {
+          const wrap = c.closest('.mermaid-block-wrapper');
+          if (wrap) {
+            const pre = wrap.querySelector('.mermaid-raw-source');
+            if (pre) pre.style.display = 'block';
+          }
+          c.style.display = 'none';
+        });
+        return;
+      }
+
+      const currentTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+      window.mermaid.initialize({
+        startOnLoad: false,
+        theme: currentTheme,
+        securityLevel: 'loose',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+      });
+
+      let idx = 0;
+      for (const container of containers) {
+        idx++;
+        const rawSrc = container.getAttribute('data-mermaid-src');
+        if (!rawSrc) continue;
+        try {
+          const svgId = `mermaid-svg-${Date.now()}-${idx}`;
+          const { svg } = await window.mermaid.render(svgId, rawSrc);
+          container.innerHTML = svg;
+          container.style.display = 'block';
+        } catch (err) {
+          // Fallback to displaying the clean Mermaid code block if syntax or offline error
+          const wrap = container.closest('.mermaid-block-wrapper');
+          if (wrap) {
+            const pre = wrap.querySelector('.mermaid-raw-source');
+            if (pre) pre.style.display = 'block';
+          }
+          container.style.display = 'none';
+        }
+      }
+    }
+
+    function renderSourceCodeToHtml(raw, ext) {
+      const lines = raw.replace(/\r\n/g, '\n').split('\n');
+      const numbered = lines.map((ln, idx) =>
+        `<div class="code-line"><span class="ln-num">${idx + 1}</span><span class="ln-txt">${escapeHtml(ln)}</span></div>`
+      ).join('');
+      return `
+        <div class="md-code-block">
+          <div class="md-code-header">
+            <span class="md-code-lang">${escapeHtml(ext.toUpperCase())} SOURCE FILE (${lines.length} LINES)</span>
+            <button class="copy-btn" onclick="copyRawDocument(this)">Copy Entire File</button>
+          </div>
+          <div class="source-code-viewer">${numbered}</div>
+        </div>
+      `;
+    }
+
+    function copyModalCode(btn) {
+      const codeEl = btn.closest('.md-code-block').querySelector('pre code');
+      if (!codeEl) return;
+      navigator.clipboard.writeText(codeEl.innerText).then(() => {
+        const orig = btn.innerText;
+        btn.innerText = 'Copied';
+        setTimeout(() => { btn.innerText = orig; }, 1400);
+      });
+    }
+
+    function copyRawDocument(btn) {
+      if (!currentRawText) return;
+      navigator.clipboard.writeText(currentRawText).then(() => {
+        const orig = btn.innerText;
+        btn.innerText = 'Copied Full File';
+        setTimeout(() => { btn.innerText = orig; }, 1500);
+      });
+    }
+
+    async function openDocModal(relPath) {
+      const modal = document.getElementById('doc-reader-modal');
+      const titleEl = document.getElementById('doc-modal-title');
+      const bodyEl = document.getElementById('doc-modal-body');
+      const rawLinkEl = document.getElementById('doc-modal-raw-link');
+
+      currentDocPath = relPath;
+      titleEl.innerText = relPath.replace(/^\.\//, '');
+      rawLinkEl.href = relPath;
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+
+      if (/\.db$/i.test(relPath)) {
+        bodyEl.innerHTML = `
+          <div class="md-alert md-alert-important">
+            <div class="md-alert-title">BINARY SQLITE 3 DATABASE FILE (${escapeHtml(relPath)})</div>
+            <div class="md-alert-body">
+              This is a binary SQLite 3 database file. Open it using the <code>sqlite3</code> CLI or <strong>DBeaver Community Edition</strong>:<br/><br/>
+              <code>sqlite3 -header -box ${escapeHtml(relPath.replace(/^\.\//, ''))}</code>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      bodyEl.innerHTML = `<div style="padding: 2rem; font-family: var(--font-mono); color: var(--accent-cyan);">Loading ${escapeHtml(relPath)}...</div>`;
+
+      try {
+        const resp = await fetch(relPath, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        currentRawText = text;
+        const ext = (relPath.split('.').pop() || '').toLowerCase();
+
+        if (ext === 'md') {
+          bodyEl.innerHTML = `<div class="md-rendered-container">${renderMarkdownToHtml(text, relPath)}</div>`;
+          await renderActiveMermaidDiagrams();
+        } else {
+          bodyEl.innerHTML = renderSourceCodeToHtml(text, ext);
+        }
+        bodyEl.scrollTop = 0;
+      } catch (err) {
+        bodyEl.innerHTML = `
+          <div class="md-alert md-alert-warning">
+            <div class="md-alert-title">LOCAL BROWSER FILE SECURITY NOTICE (RUN start_bootcamp.py)</div>
+            <div class="md-alert-body">
+              Your browser blocked reading <code>${escapeHtml(relPath)}</code> directly over the <code>file://</code> protocol.<br/><br/>
+              <strong>Recommended (Zero-Install Built-In Portal Server):</strong> Run this 1 command in your terminal inside the bootcamp folder:<br/>
+              <div class="md-code-block" style="margin-top:0.75rem;">
+                <div class="md-code-header">
+                  <span class="md-code-lang">TERMINAL</span>
+                  <button class="copy-btn" onclick="copyModalCode(this)">Copy Command</button>
+                </div>
+                <pre><code>python3 start_bootcamp.py</code></pre>
+              </div>
+              Then open <strong><a href="http://127.0.0.1:8088/bootcamp_portal.html" style="color:var(--accent-cyan);">http://127.0.0.1:8088/bootcamp_portal.html</a></strong> — or click <strong>"Open Raw File"</strong> in the top-right header!
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function closeDocModal() {
+      const modal = document.getElementById('doc-reader-modal');
+      if (modal) modal.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    // Initialize all simulators & intercept Curriculum file links on load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderTetrisAll();
+      updateSentinelSim();
+      render3VLTable();
+      updateScalingSim();
+      selectArchNode(0, document.querySelector('.arch-node'));
+      renderQuiz();
+
+      // Intercept clicks on any file link in #curriculum-grid
+      document.querySelectorAll('#curriculum-grid a[href]').forEach(link => {
+        link.addEventListener('click', (e) => {
+          const href = link.getAttribute('href');
+          if (href && /\.(md|sql|py|js|yml|yaml|sh|db)$/i.test(href)) {
+            e.preventDefault();
+            openDocModal(href);
+          }
+        });
+      });
+
+      // Close modal on Escape key
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeDocModal();
+      });
+
+      // Auto-open document if ?doc=... query param is present
+      const params = new URLSearchParams(window.location.search);
+      const docParam = params.get('doc');
+      if (docParam) {
+        openDocModal(docParam.startsWith('.') ? docParam : './' + docParam);
+      }
+    });
+  </script>
+
+  <!-- Built-In Coursebook & Source Code Reader Modal -->
+  <style>
+    .doc-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(15, 23, 42, 0.65);
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+    }
+    .doc-modal-window {
+      width: min(1220px, 96vw);
+      height: 90vh;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .doc-modal-header {
+      background: var(--bg-deep);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .doc-modal-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-family: var(--font-mono);
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .doc-modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .doc-modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.75rem 2.25rem;
+      color: var(--text-primary);
+      background: var(--bg-panel);
+      line-height: 1.72;
+    }
+    .md-rendered-container h1, .md-h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.55rem;
+      margin: 0.5rem 0 1.1rem;
+    }
+    .md-rendered-container h2, .md-h2 {
+      font-size: 1.28rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.35rem;
+      margin: 1.65rem 0 0.85rem;
+    }
+    .md-rendered-container h3, .md-h3 {
+      font-size: 1.08rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 1.35rem 0 0.65rem;
+    }
+    .md-rendered-container h4, .md-h4, .md-h5 {
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin: 1.1rem 0 0.5rem;
+    }
+    .md-p {
+      margin: 0.65rem 0;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+    }
+    .md-list {
+      margin: 0.6rem 0 0.85rem 1.5rem;
+      color: var(--text-primary);
+      font-size: 0.94rem;
+    }
+    .md-list li {
+      margin-bottom: 0.35rem;
+    }
+    .md-inline-code {
+      font-family: var(--font-mono);
+      font-size: 0.84em;
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      color: var(--accent-cyan);
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+    }
+    .md-doc-link, .md-ext-link {
+      color: var(--accent-cyan);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      font-weight: 600;
+    }
+    .md-hr {
+      border: none;
+      border-top: 1px solid var(--border-subtle);
+      margin: 1.5rem 0;
+    }
+    .md-quote {
+      border-left: 3px solid var(--accent-cyan);
+      background: var(--bg-deep);
+      padding: 0.75rem 1.1rem;
+      border-radius: 0 6px 6px 0;
+      margin: 0.9rem 0;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
+    .md-alert {
+      border-left: 4px solid var(--accent-cyan);
+      background: var(--bg-deep);
+      padding: 0.9rem 1.2rem;
+      border-radius: 0 8px 8px 0;
+      margin: 1rem 0;
+      border-top: 1px solid var(--border-subtle);
+      border-right: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .md-alert-important { border-left-color: var(--accent-purple); }
+    .md-alert-tip { border-left-color: var(--accent-emerald); }
+    .md-alert-warning, .md-alert-caution { border-left-color: var(--accent-amber); }
+    .md-alert-title {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+      color: var(--text-primary);
+    }
+    .md-alert-body {
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+    }
+    .md-table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+    }
+    .md-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.87rem;
+    }
+    .md-table th {
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      text-align: left;
+      padding: 0.6rem 0.85rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .md-table td {
+      padding: 0.55rem 0.85rem;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      vertical-align: top;
+    }
+    .md-code-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      margin: 0.95rem 0;
+      overflow: hidden;
+    }
+    .md-code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.45rem 0.85rem;
+      background: var(--bg-deep);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .md-code-lang {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+    .md-code-block pre {
+      padding: 0.95rem 1.1rem;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.83rem;
+      line-height: 1.55;
+      color: var(--text-code);
+    }
+    .source-code-viewer {
+      padding: 0.75rem 0;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      line-height: 1.55;
+    }
+    .code-line {
+      display: flex;
+      padding: 0 1rem;
+    }
+    .code-line:hover {
+      background: rgba(14, 165, 233, 0.08);
+    }
+    .ln-num {
+      width: 48px;
+      flex-shrink: 0;
+      color: var(--text-muted);
+      user-select: none;
+      text-align: right;
+      padding-right: 1rem;
+    }
+    .ln-txt {
+      white-space: pre;
+      color: var(--text-code);
+    }
+  </style>
+
+  <div id="doc-reader-modal" class="doc-modal-backdrop" onclick="if(event.target === this) closeDocModal()">
+    <div class="doc-modal-window">
+      <div class="doc-modal-header">
+        <div class="doc-modal-title-wrap">
+          <span style="color: var(--text-secondary);">Built-In Bootcamp Reader:</span>
+          <span id="doc-modal-title" style="color: var(--accent-cyan);">README.md</span>
+        </div>
+        <div class="doc-modal-actions">
+          <button class="action-btn" onclick="copyRawDocument(this)">Copy Full File</button>
+          <a id="doc-modal-raw-link" href="./README.md" target="_blank" rel="noopener" class="action-btn" style="text-decoration: none;">Open Raw File</a>
+          <button class="action-btn" onclick="closeDocModal()" style="border-color: var(--accent-crimson); color: var(--accent-crimson);">Close (Esc)</button>
+        </div>
+      </div>
+      <div id="doc-modal-body" class="doc-modal-body"></div>
+    </div>
+  </div>
+</body>
+</html>

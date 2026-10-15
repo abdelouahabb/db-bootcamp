@@ -1,0 +1,138 @@
+version: "3.9"
+
+# ============================================================================
+# 5-DAY WEATHER BOOTCAMP: POLYGLOT STREAMING & LAKEHOUSE STACK (DAY 5)
+# Launches:
+#   1. Eclipse Mosquitto 2.0 (Edge MQTT Broker on Port 1883)
+#   2. Redpanda / Kafka-API Compatible Broker (Ports 9092, 9644)
+#   3. PostgreSQL 16 + PostGIS 3.4 (Port 5432)
+#   4. MongoDB 7.0 (Port 27017)
+#   5. MinIO S3-Compatible Object Storage (Ports 9000 API, 9001 Console)
+#   6. Adminer Web SQL UI (Port 8080)
+# Usage:
+#   docker compose -f docker-compose.polyglot-lakehouse.yml up -d
+# ============================================================================
+
+networks:
+  weather_net:
+    driver: bridge
+
+services:
+  # --------------------------------------------------------------------------
+  # 1. Edge Ingestion: Eclipse Mosquitto MQTT Broker
+  # --------------------------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: weather_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    environment:
+      - mosquitto_allow_anonymous=true
+    command: mosquitto -c /mosquitto-no-auth.conf
+    networks:
+      - weather_net
+
+  # --------------------------------------------------------------------------
+  # 2. Distributed Message Broker: Redpanda (Kafka-API Compatible, Zero-JVM)
+  # --------------------------------------------------------------------------
+  kafka:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.10
+    container_name: weather_kafka
+    restart: unless-stopped
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://kafka:29092,OUTSIDE://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    networks:
+      - weather_net
+
+  # --------------------------------------------------------------------------
+  # 3. Operational Relational & Spatial Store: PostgreSQL 16 + PostGIS 3.4
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: weather_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=weather_ops_db
+      - TZ=UTC
+      - PGTZ=UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../:/workspace
+    command: >
+      postgres
+      -c timezone=UTC
+      -c log_timezone=UTC
+      -c shared_buffers=512MB
+      -c work_mem=32MB
+      -c checkpoint_completion_target=0.9
+      -c max_wal_size=4GB
+      -c synchronous_commit=off
+    networks:
+      - weather_net
+
+  # --------------------------------------------------------------------------
+  # 4. Polymorphic Sensor Store: MongoDB 7.0
+  # --------------------------------------------------------------------------
+  mongodb:
+    image: mongo:7.0
+    container_name: weather_mongodb
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+      - ../:/workspace
+    networks:
+      - weather_net
+
+  # --------------------------------------------------------------------------
+  # 5. Cloud Object Storage: MinIO (S3-Compatible Lakehouse Storage)
+  # --------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-01-18T22-51-28Z
+    container_name: weather_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    networks:
+      - weather_net
+
+  # --------------------------------------------------------------------------
+  # 6. Adminer: Lightweight Web Database Explorer
+  # --------------------------------------------------------------------------
+  adminer:
+    image: adminer:4.8.1
+    container_name: weather_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - weather_net
+
+volumes:
+  pgdata:
+  mongodata:
+  miniodata:

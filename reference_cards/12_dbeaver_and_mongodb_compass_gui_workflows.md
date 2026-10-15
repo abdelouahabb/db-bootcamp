@@ -1,0 +1,105 @@
+# DBeaver & MongoDB Compass GUI Workflows Cheatsheet for Weather Engineers
+
+**Target Audience:** Weather Forecast & Meteorological Data Engineers  
+**Bootcamp Context:** Mastering the visual tools (**DBeaver** for Day 1 SQLite/DuckDB & Days 2–3 PostgreSQL/PostGIS; **MongoDB Compass** for Days 4–5 MongoDB) alongside the CLI
+
+---
+
+> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅️ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 13** | [Next Card ➡️](./13_database_observability_prometheus_grafana_and_alerts.md)
+
+## 🧭 Quick-Jump Table of Contents
+
+- [1. Connecting DBeaver to All Bootcamp Databases](#1-connecting-dbeaver-to-all-bootcamp-databases)
+- [2. Top 6 DBeaver Superpowers for Weather Engineers](#2-top-6-dbeaver-superpowers-for-weather-engineers)
+  - [1. Interactive Spatial / GIS Map Viewer (For `PostGIS` on Days 2–3!)](#1-interactive-spatial--gis-map-viewer-for-postgis-on-days-23)
+  - [2. Visual ER Diagrams (Inspecting Foreign Keys & Normalization)](#2-visual-er-diagrams-inspecting-foreign-keys--normalization)
+  - [3. Visual `EXPLAIN` Execution Plan (`Ctrl + Shift + E`)](#3-visual-explain-execution-plan-ctrl--shift--e)
+  - [4. Viewing Hidden PostgreSQL System Columns (`ctid`, `xmin`, `xmax`) & Partitions](#4-viewing-hidden-postgresql-system-columns-ctid-xmin-xmax--partitions)
+  - [5. Enforce UTC Display in DBeaver (Critical Gotcha!)](#5-enforce-utc-display-in-dbeaver-critical-gotcha)
+  - [6. Essential DBeaver Keyboard Shortcuts](#6-essential-dbeaver-keyboard-shortcuts)
+- [3. MongoDB Compass Visual Workflows (Days 4 & 5)](#3-mongodb-compass-visual-workflows-days-4--5)
+  - [1. Visual Schema & Geospatial Map Analyzer (`Schema` Tab)](#1-visual-schema--geospatial-map-analyzer-schema-tab)
+  - [2. Interactive Aggregation Pipeline Builder (`Aggregations` Tab)](#2-interactive-aggregation-pipeline-builder-aggregations-tab)
+  - [3. Visual Performance & Index Advisor (`Explain Plan` & `Indexes` Tabs)](#3-visual-performance--index-advisor-explain-plan--indexes-tabs)
+
+---
+
+## 1. Connecting DBeaver to All Bootcamp Databases
+
+| Engine | Driver to Select in DBeaver (`Database -> New Database Connection`) | Connection Settings |
+| :--- | :--- | :--- |
+| **Day 1: SQLite** | **SQLite** | **Path:** Browse to `./day1/weather_ops.db`<br>*(Pro Tip: Under `Connection Settings -> Initialization`, add `PRAGMA foreign_keys = ON;` so DBeaver always enforces Foreign Keys!)* |
+| **Day 1: DuckDB** | **DuckDB** | **Path:** Enter `:memory:` (for fast Parquet/CSV queries) or `./day5/weather.duckdb` |
+| **Days 2–3: PostgreSQL + PostGIS** | **PostgreSQL** | **Host:** `localhost` | **Port:** `5432` | **Database:** `weather_ops` | **Username:** `postgres`<br>*(Check **"Show all databases"** and **"Show template databases"** under the `PostgreSQL` tab!)* |
+
+---
+
+## 2. Top 6 DBeaver Superpowers for Weather Engineers
+
+### 1. Interactive Spatial / GIS Map Viewer (For `PostGIS` on Days 2–3!)
+Whenever a query in DBeaver returns a `PostGIS` `GEOGRAPHY` or `GEOMETRY` column (such as `synoptic.stations.geog` or storm polygons):
+1. Run:
+   ```sql
+   SELECT station_id, station_name, climate_zone, geog FROM synoptic.stations;
+   ```
+2. In the **Results Grid**, click the **`Spatial` (Globe/Map)** tab on the right-hand panel (or click the cell value under `geog`).
+3. DBeaver automatically plots all WMO weather stations and storm polygons on an interactive **OpenStreetMap / Leaflet** map!
+4. **Coordinate CRS Check:** If stations appear in the wrong place, click the bottom-right **`SRID`** button in the Spatial viewer and ensure **`EPSG:4326`** (`WGS 84`) is selected.
+
+### 2. Visual ER Diagrams (Inspecting Foreign Keys & Normalization)
+- Double-click either a database schema (`synoptic`) or a table (`stations`) in the left Database Navigator $\rightarrow$ click the **`ER Diagram`** tab at the bottom.
+- Right-click inside the diagram $\rightarrow$ **`Save diagram as image (PNG/SVG)`** to export architecture diagrams for documentation.
+
+### 3. Visual `EXPLAIN` Execution Plan (`Ctrl + Shift + E`)
+- Instead of manually typing `EXPLAIN (ANALYZE, BUFFERS)`, highlight any SQL query in DBeaver and press **`Ctrl + Shift + E`** (or click the **Explain Execution Plan** tree icon on the left of the SQL Editor).
+- Check **"ANALYZE"** and **"BUFFERS"** in the prompt: DBeaver highlights the slowest plan node (e.g., a slow `Seq Scan`) in **bright red/orange**!
+
+### 4. Viewing Hidden PostgreSQL System Columns (`ctid`, `xmin`, `xmax`) & Partitions
+- To see **monthly child partitions** (`obs_y2026m06` .. `obs_y2026m10`) under `synoptic.observations_part` in DBeaver:
+  - Expand `synoptic` $\rightarrow$ `Tables` $\rightarrow$ `observations_part` $\rightarrow$ **`Partitions`**.
+- To inspect table disk size and dead tuples visually:
+  - Double-click `synoptic` $\rightarrow$ open the **`Tables`** tab $\rightarrow$ press **`Ctrl + F5`** to refresh statistics and see live disk usage bars!
+
+### 5. Enforce UTC Display in DBeaver (Critical Gotcha!)
+By default, DBeaver's Java JVM sometimes converts PostgreSQL `TIMESTAMPTZ` values into your laptop's local timezone when rendering the grid!
+- **Fix in DBeaver:** Go to `Window` $\rightarrow$ `Preferences` $\rightarrow$ `Editors` $\rightarrow$ `Data Editor` $\rightarrow$ `Data Formats` $\rightarrow$ check **"Use native date/time format"** (or run `SET TIME ZONE 'UTC';` at the top of your SQL script).
+
+### 6. Essential DBeaver Keyboard Shortcuts
+| Shortcut | Action |
+| :--- | :--- |
+| **`Ctrl + Enter`** | Execute the current SQL statement under cursor |
+| **`Alt + X`** | Execute the entire SQL script from top to bottom |
+| **`Ctrl + Shift + E`** | Visual `EXPLAIN` Execution Plan |
+| **`Ctrl + Shift + F`** | Auto-format / pretty-print messy SQL query |
+| **`Ctrl + /`** | Toggle `--` SQL line comment |
+| **`Ctrl + ]`** | Open a fresh SQL Editor tab for the active connection |
+
+---
+
+## 3. MongoDB Compass Visual Workflows (Days 4 & 5)
+
+Connect **MongoDB Compass** to `mongodb://localhost:27017` (or `mongodb://localhost:27017,localhost:27018,localhost:27019/?replicaSet=rs_meteo`):
+
+### 1. Visual Schema & Geospatial Map Analyzer (`Schema` Tab)
+1. Click the `weather_nosql.stations` collection $\rightarrow$ click the **`Schema`** tab $\rightarrow$ click **`Analyze Schema`**.
+2. Because `location` is a valid GeoJSON `{ type: "Point", coordinates: [lon, lat] }` field, Compass automatically renders an **interactive world map** of your weather stations and marine buoys!
+3. You can **draw a circle or polygon directly on the map with your mouse**, and Compass automatically generates the exact `$geoWithin` filter for you!
+
+### 2. Interactive Aggregation Pipeline Builder (`Aggregations` Tab)
+- Click `weather_nosql.radiosonde_soundings` $\rightarrow$ open the **`Aggregations`** tab.
+- Add stages step-by-step (`$unwind` $\rightarrow$ `$group` $\rightarrow$ `$project`): Compass shows a **live preview of 20 output documents beside each stage** so you can immediately see how `$unwind: "$vertical_levels"` flattens the balloon pressure levels before grouping!
+- Click the **`Export to Language`** button at the top to automatically convert your pipeline into ready-to-run **Python (`PyMongo`)** code!
+
+### 3. Visual Performance & Index Advisor (`Explain Plan` & `Indexes` Tabs)
+- Paste any filter into the **`Explain Plan`** tab and click **`Explain`**.
+- Compass displays a visual speedometer showing:
+  - **Documents Returned (`nReturned`)** vs. **Documents Examined (`totalDocsExamined`)**
+  - Whether an index (`IXSCAN`) was used or if a full collection scan (`COLLSCAN`) occurred.
+
+---
+
+### 🔗 Reference Library Navigation
+
+> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅️ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 13** | [Next Card ➡️](./13_database_observability_prometheus_grafana_and_alerts.md) | [⬆️ Back to Top](#dbeaver--mongodb-compass-gui-workflows-cheatsheet-for-weather-engineers)

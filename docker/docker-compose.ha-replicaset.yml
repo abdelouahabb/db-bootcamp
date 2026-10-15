@@ -1,0 +1,94 @@
+version: "3.9"
+
+# ============================================================================
+# 5-DAY WEATHER BOOTCAMP: TURNKEY HA REPLICA SET DOCKER COMPOSE ENVIRONMENT
+# Launches:
+#   1. PostgreSQL 16 + PostGIS 3.4 (Port 5432, pre-tuned for UTC weather ops)
+#   2. 3-Node MongoDB 7.0 Replica Set 'rs_meteo' (Ports 27017, 27018, 27019)
+# Usage:
+#   docker compose -f docker-compose.ha-replicaset.yml up -d
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # 1. PostgreSQL 16 + PostGIS 3.4 (Days 2 & 3)
+  # --------------------------------------------------------------------------
+  postgres-weather:
+    image: postgis/postgis:16-3.4
+    container_name: weather-pg-primary
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: meteo_password
+      POSTGRES_DB: weather_ops
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_weather_data:/var/lib/postgresql/data
+      - ../:/workspace
+    command: >
+      postgres
+      -c timezone=UTC
+      -c log_timezone=UTC
+      -c shared_buffers=512MB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+      -c wal_level=replica
+      -c max_wal_size=4GB
+      -c checkpoint_timeout=15min
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c autovacuum_vacuum_scale_factor=0.05
+      -c track_io_timing=on
+      -c shared_preload_libraries='pg_stat_statements'
+
+  # --------------------------------------------------------------------------
+  # 2. 3-Node MongoDB 7.0 Replica Set 'rs_meteo' (Day 4 + HA Failover Lab)
+  # --------------------------------------------------------------------------
+  mongo-node1:
+    image: mongo:7.0
+    container_name: weather-mongo-node1
+    hostname: mongo-node1
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_node1_data:/data/db
+      - ../:/workspace
+    command: ["mongod", "--replSet", "rs_meteo", "--bind_ip_all", "--port", "27017"]
+
+  mongo-node2:
+    image: mongo:7.0
+    container_name: weather-mongo-node2
+    hostname: mongo-node2
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_node2_data:/data/db
+    command: ["mongod", "--replSet", "rs_meteo", "--bind_ip_all", "--port", "27017"]
+
+  mongo-node3:
+    image: mongo:7.0
+    container_name: weather-mongo-node3
+    hostname: mongo-node3
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo_node3_data:/data/db
+    command: ["mongod", "--replSet", "rs_meteo", "--bind_ip_all", "--port", "27017"]
+
+volumes:
+  pg_weather_data:
+  mongo_node1_data:
+  mongo_node2_data:
+  mongo_node3_data:

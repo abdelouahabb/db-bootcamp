@@ -26,7 +26,7 @@
 
 ---
 
-### Part 1 Schedule & Module Outline
+### Part 1 Module Outline
 
 ```
 ┌─────────────────┬─────────────────────────────────────────────────────────────────┐
@@ -307,8 +307,8 @@ flowchart LR
 ```
 
 > [!TIP]
-> **Instructor Live Demo Tip (Running `parquet_vs_csv_benchmark.py`):**  
-> Before diving into Parquet binary anatomy, run `./parquet_vs_csv_benchmark.py` live! Watching 1,000,000 weather rows shrink from `62 MB` (CSV) to `6.8 MB` (ZSTD Parquet) while DuckDB scan latency plummets from `~75 ms` down to `< 3 ms` immediately convinces every engineer in the room why CSV is obsolete for analytical archives.
+> **Hands-On Benchmark Tip (Running `parquet_vs_csv_benchmark.py`):**  
+> Run `./parquet_vs_csv_benchmark.py` to benchmark columnar compression and vectorized scanning directly: 1,000,000 weather rows shrink from `62 MB` (CSV) to `6.8 MB` (ZSTD Parquet) while DuckDB scan latency plummets from `~75 ms` down to `< 3 ms`, demonstrating why CSV is obsolete for analytical archives.
 
 ---
 
@@ -939,8 +939,8 @@ TELL_ATLAS_RIDGES                   710                9.98               5.84  
 ```
 
 > [!IMPORTANT]
-> **Instructor Live Demo Tip (Slashing Satellite Raster Storage by 50–75%):**  
-> Run `./satellite_cog_int16_quantization.py` with the class to demonstrate how quantizing 32-bit float Kelvin brightness temperatures (`200K–330K`) into scaled `UInt16` (`0.01K` scale factor + horizontal differencing predictor) inside a Cloud-Optimized GeoTIFF (COG) slashes storage footprint by $50\text{–}75\%$ with $\le 0.005\text{ K}$ precision loss and enables $< 5\text{ ms}$ sub-window byte-range reads!
+> **Production Raster Engineering Tip (Slashing Satellite Raster Storage by 50–75%):**  
+> Run `./satellite_cog_int16_quantization.py` to observe how quantizing 32-bit float Kelvin brightness temperatures (`200K–330K`) into scaled `UInt16` (`0.01K` scale factor + horizontal differencing predictor) inside a Cloud-Optimized GeoTIFF (COG) slashes storage footprint by $50\text{–}75\%$ with $\le 0.005\text{ K}$ precision loss and enables $< 5\text{ ms}$ sub-window byte-range reads!
 
 ---
 

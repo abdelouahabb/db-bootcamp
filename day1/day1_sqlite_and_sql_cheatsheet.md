@@ -3,7 +3,7 @@
 # Day 1 Authoritative Reference Card & Cheatsheet: SQLite CLI Directives, Core SQL & Time-Series Telemetry Wrangling
 
 **Companion to:**
-- `day1_master_coursebook.md` — Complete Day 1 Instructor Guide & Telemetry Coursebook
+- `day1_master_coursebook.md` — Complete Day 1 Master Coursebook & Telemetry Reference
 - `day1_hardware_sentinels_and_qc_guide.md` — Deep-Dive on `-9999` In-Band Signaling & 3VL
 - `weather_ops_seed.sql` / `weather_ops.db` — WMO Synoptic & NWP Verification Database
 - `generate_weather_db.py` / `weather_telemetry.db` — 250,000-Row High-Frequency AWS Telemetry Stream

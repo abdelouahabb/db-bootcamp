@@ -3,22 +3,24 @@
 # 5-Day Bootcamp Final Assessment Quiz & 15 Real-World Weather Database Troubleshooting Scenarios
 
 **Target Audience:** Weather Forecast & Meteorological Data Engineers  
-**Purpose:** End-of-day knowledge checks, group discussions, and final certification assessment (with full Instructor Answer Key)
+**Purpose:** Production incident diagnostics reference and final certification self-assessment
 
 > [!TIP]
-> **Instructor Live Demo Tip (War-Room Incident Drill):**  
-> Split the class into 3 "Meteorological Operations Teams" for the last 45 minutes of Day 5. Assign 5 scenarios from Part 1 to each team and give them 10 minutes to diagnose the root cause and write the exact SQL, MQL, or DuckDB remediation command on the whiteboard!
+> **Operational Incident Runbook:**  
+> Part 1 catalogs 15 high-frequency production failure modes across SQLite, PostgreSQL/PostGIS, MongoDB, Apache Parquet, DuckDB, and Ceph S3 object storage, pairing each symptom directly with its physical root cause and exact SQL, MQL, or Python remediation command.
 
 ---
 
 ## Part 1: 15 Real-World Meteorological Troubleshooting Scenarios ("What Went Wrong?")
 
-Present these 15 operational scenarios to the weather engineers and ask them to diagnose the root cause and engineer the fix:
+Each operational scenario below details the observed production symptom, the underlying database storage or query engine root cause, and the exact remediation pattern:
 
 ### Scenario 1: The `-1,648 mm` Monthly Rainfall Anomaly (Day 1 — SQLite / SQL Basics)
 - **Symptom:** A forecaster runs `SELECT station_id, AVG(precip_1h_mm) FROM observations GROUP BY station_id;` on raw WMO data and gets `-1665.2 mm` for Constantine (`60419`).
-- **Question:** Why did this happen, and what are two ways (one in `SELECT`, one via `UPDATE`) to fix it?
-- <details><summary><strong>Answer</strong></summary>Legacy WMO/Fortran loggers write <code>-9999.0</code> (or <code>-999.0</code>) for missing rain gauge readings. SQL treats <code>-9999.0</code> as a valid number unless converted to <code>NULL</code> (which <code>AVG()</code> ignores).<br><strong>Fix 1 (In Query):</strong> <code>AVG(NULLIF(precip_1h_mm, -9999.0))</code><br><strong>Fix 2 (Permanent):</strong> <code>UPDATE observations SET precip_1h_mm = NULL WHERE precip_1h_mm = -9999.0;</code></details>
+- **Diagnostic Question:** Why did this happen, and what are two ways (one in `SELECT`, one via `UPDATE`) to fix it?
+- **Root Cause & Fix:** Legacy WMO/Fortran loggers write `-9999.0` (or `-999.0`) for missing rain gauge readings. SQL treats `-9999.0` as a valid number unless converted to `NULL` (which `AVG()` ignores).
+  - **Fix 1 (In Query):** `AVG(NULLIF(precip_1h_mm, -9999.0))`
+  - **Fix 2 (Permanent):** `UPDATE observations SET precip_1h_mm = NULL WHERE precip_1h_mm = -9999.0;`
 
 ### Scenario 2: The Silent 3VL `NOT IN` Trap on Faulty Sensors (Day 1 — Three-Valued Logic & Sentinels)
 - **Symptom:** An engineer sanitizes `-9999.0` sentinels into `NULL` inside a temporary table `flagged_stations(station_id INT)`. One row in `flagged_stations` accidentally has `station_id = NULL`. When they run:
@@ -26,8 +28,9 @@ Present these 15 operational scenarios to the weather engineers and ask them to 
   SELECT * FROM stations WHERE station_id NOT IN (SELECT station_id FROM flagged_stations);
   ```
   The query returns **0 rows**, wiping out the entire national station map!
-- **Question:** Why did a single `NULL` inside `NOT IN (...)` cause 0 rows to return, and what SQL operator is immune to this 3VL trap?
-- <details><summary><strong>Answer</strong></summary>Under SQL <strong>Three-Valued Logic (3VL)</strong>, <code>x NOT IN (60390, NULL)</code> expands to <code>x &lt;&gt; 60390 AND x &lt;&gt; NULL</code>. Since <code>x &lt;&gt; NULL</code> evaluates to <code>UNKNOWN</code>, and <code>TRUE AND UNKNOWN</code> is <code>UNKNOWN</code>, the <code>WHERE</code> clause rejects every single row!<br><strong>Fix:</strong> Use <code>NOT EXISTS</code> (which uses two-valued boolean existence checks) or filter <code>WHERE station_id IS NOT NULL</code> inside the subquery.</details>
+- **Diagnostic Question:** Why did a single `NULL` inside `NOT IN (...)` cause 0 rows to return, and what SQL operator is immune to this 3VL trap?
+- **Root Cause & Fix:** Under SQL **Three-Valued Logic (3VL)**, `x NOT IN (60390, NULL)` expands to `x <> 60390 AND x <> NULL`. Since `x <> NULL` evaluates to `UNKNOWN`, and `TRUE AND UNKNOWN` is `UNKNOWN`, the `WHERE` clause rejects every single row!
+  - **Fix:** Use `NOT EXISTS` (which uses two-valued boolean existence checks) or filter `WHERE station_id IS NOT NULL` inside the subquery.
 
 ### Scenario 3: The Vanishing Silent Weather Station (Day 1 — `JOIN`s)
 - **Symptom:** An engineer wants a list of all stations and their observation counts, including stations under maintenance (`0` observations). They write:
@@ -39,35 +42,37 @@ Present these 15 operational scenarios to the weather engineers and ask them to 
   GROUP BY s.station_id;
   ```
   Station `60402` (`Bejaia`, which has `0` observations) completely disappears from the output!
-- **Question:** Why did `WHERE o.qc_flag = 'VALID'` turn the `LEFT JOIN` into an `INNER JOIN`, and how do you fix it?
-- <details><summary><strong>Answer</strong></summary>For a station with <code>0</code> observations, all <code>o.*</code> columns after the <code>LEFT JOIN</code> are <code>NULL</code>. Filtering <code>WHERE o.qc_flag = 'VALID'</code> eliminates those <code>NULL</code> rows! Move the condition into the <code>ON</code> clause: <code>LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'</code>.</details>
+- **Diagnostic Question:** Why did `WHERE o.qc_flag = 'VALID'` turn the `LEFT JOIN` into an `INNER JOIN`, and how do you fix it?
+- **Root Cause & Fix:** For a station with `0` observations, all `o.*` columns after the `LEFT JOIN` are `NULL`. Filtering `WHERE o.qc_flag = 'VALID'` eliminates those `NULL` rows! Move the condition into the `ON` clause: `LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'`.
 
 ### Scenario 4: The 24 GB "Tuple Tetris" Alignment Tax (Day 2 — PostgreSQL Physical Byte Alignment)
 - **Symptom:** A database architect designs a 1-billion-row telemetry table with columns ordered as:
   `(flag1 BOOLEAN, obs_time TIMESTAMPTZ, flag2 BOOLEAN, station_uuid UUID, flag3 BOOLEAN, pressure_pa BIGINT)`.
   Even before adding indexes, the table consumes **21 GB more disk space** than calculated from the raw column type sizes!
-- **Question:** Why did alternating 1-byte `BOOLEAN` columns with 8-byte/16-byte columns waste 21 bytes per row, and how should the columns be ordered?
-- <details><summary><strong>Answer</strong></summary>64-bit CPUs require 8-byte types (<code>TIMESTAMPTZ</code>, <code>BIGINT</code>) to sit at memory offsets divisible by 8. Placing a 1-byte <code>BOOLEAN</code> before an 8-byte column forces PostgreSQL to insert <strong>7 bytes of zero-padding</strong> after each boolean (3 &times; 7 = 21 wasted bytes/row = 21 GB across 1B rows!).<br><strong>Fix ("Tuple Tetris" Rule):</strong> Order columns from largest alignment requirement to smallest: <code>(station_uuid UUID, obs_time TIMESTAMPTZ, pressure_pa BIGINT, flag1 BOOLEAN, flag2 BOOLEAN, flag3 BOOLEAN)</code>.</details>
+- **Diagnostic Question:** Why did alternating 1-byte `BOOLEAN` columns with 8-byte/16-byte columns waste 21 bytes per row, and how should the columns be ordered?
+- **Root Cause & Fix:** 64-bit CPUs require 8-byte types (`TIMESTAMPTZ`, `BIGINT`) to sit at memory offsets divisible by 8. Placing a 1-byte `BOOLEAN` before an 8-byte column forces PostgreSQL to insert **7 bytes of zero-padding** after each boolean ($3 \times 7 = 21\text{ wasted bytes/row} = 21\text{ GB}$ across 1B rows!).
+  - **Fix ("Tuple Tetris" Rule):** Order columns from largest alignment requirement to smallest: `(station_uuid UUID, obs_time TIMESTAMPTZ, pressure_pa BIGINT, flag1 BOOLEAN, flag2 BOOLEAN, flag3 BOOLEAN)`.
 
 ### Scenario 5: The Bloated Synoptic Table After QC Scripts (Day 2 — PostgreSQL MVCC & Vacuum)
 - **Symptom:** Your `synoptic.observations` table has 40 million rows (~4 GB). A quality-control script runs 5 times a day updating `qc_flag` on millions of rows. Within two weeks, the table size on disk balloons to **28 GB** and queries slow down, even though `COUNT(*)` is still 40 million!
-- **Question:** Why did `UPDATE` cause the table to grow 7x on disk, and what `ALTER TABLE` setting prevents this?
-- <details><summary><strong>Answer</strong></summary>Under PostgreSQL <strong>MVCC</strong>, every <code>UPDATE</code> marks the old tuple's <code>xmax</code> (creating a <strong>Dead Tuple</strong>) and inserts a brand-new tuple version at a new <code>ctid</code>. Default <code>autovacuum_vacuum_scale_factor = 0.20</code> waits until 20% (8 million rows!) change before vacuuming.<br><strong>Fix:</strong> Run <code>VACUUM (ANALYZE) synoptic.observations;</code> and lower the table's scale factor: <code>ALTER TABLE synoptic.observations SET (autovacuum_vacuum_scale_factor = 0.01);</code>.</details>
+- **Diagnostic Question:** Why did `UPDATE` cause the table to grow 7x on disk, and what `ALTER TABLE` setting prevents this?
+- **Root Cause & Fix:** Under PostgreSQL **MVCC**, every `UPDATE` marks the old tuple's `xmax` (creating a **Dead Tuple**) and inserts a brand-new tuple version at a new `ctid`. Default `autovacuum_vacuum_scale_factor = 0.20` waits until 20% (8 million rows!) change before vacuuming.
+  - **Fix:** Run `VACUUM (ANALYZE) synoptic.observations;` and lower the table's scale factor: `ALTER TABLE synoptic.observations SET (autovacuum_vacuum_scale_factor = 0.01);`.
 
 ### Scenario 6: The 00Z ECMWF Ingestion I/O Freeze (Day 2 — PostgreSQL WAL & Checkpoints)
 - **Symptom:** Every night at `02:00 UTC` when your pipeline loads 5 million ECMWF forecast rows, PostgreSQL logs `checkpoints are occurring too frequently (18 seconds apart)` and forecaster dashboards stall.
-- **Question:** Which 4 `postgresql.conf` parameters should you tune, and how should the Python script load the rows?
-- <details><summary><strong>Answer</strong></summary>Default <code>max_wal_size = 1GB</code> is too small for bulk NWP loads. Set <code>max_wal_size = '16GB'</code>, <code>checkpoint_timeout = '15min'</code>, <code>checkpoint_completion_target = 0.9</code>, and <code>wal_compression = lz4</code>. In Python, use PostgreSQL's streaming <code>COPY</code> protocol instead of individual <code>INSERT</code> statements.</details>
+- **Diagnostic Question:** Which 4 `postgresql.conf` parameters should you tune, and how should the Python script load the rows?
+- **Root Cause & Fix:** Default `max_wal_size = 1GB` is too small for bulk NWP loads. Set `max_wal_size = '16GB'`, `checkpoint_timeout = '15min'`, `checkpoint_completion_target = 0.9`, and `wal_compression = lz4`. In Python, use PostgreSQL's streaming `COPY` protocol instead of individual `INSERT` statements.
 
 ### Scenario 7: Deleting 2024 Observations Locks Up Disk I/O (Day 3 — Partitioning & BRIN)
 - **Symptom:** To free disk space on the 1st of each month, an engineer runs `DELETE FROM synoptic.observations WHERE obs_time < NOW() - INTERVAL '1 year';`. The command runs for 45 minutes, generates 15 GB of WAL, and **does not shrink the file size on disk at all**!
-- **Question:** Why didn't `DELETE` free OS disk space, and how should time-series retention be architected in PostgreSQL?
-- <details><summary><strong>Answer</strong></summary><code>DELETE</code> only marks tuples as dead (<code>xmax</code> set) inside existing 8KB heap pages; it does not return file blocks to the OS. Instead, use <strong>Declarative Range Partitioning (<code>PARTITION BY RANGE (obs_time)</code>)</strong> with monthly child tables, detach old months via <code>ALTER TABLE ... DETACH PARTITION obs_y2025m06 CONCURRENTLY;</code>, archive to Parquet, and run <code>DROP TABLE obs_y2025m06;</code> (which frees 100% of disk space in milliseconds with zero dead tuples).</details>
+- **Diagnostic Question:** Why didn't `DELETE` free OS disk space, and how should time-series retention be architected in PostgreSQL?
+- **Root Cause & Fix:** `DELETE` only marks tuples as dead (`xmax` set) inside existing 8KB heap pages; it does not return file blocks to the OS. Instead, use **Declarative Range Partitioning (`PARTITION BY RANGE (obs_time)`)** with monthly child tables, detach old months via `ALTER TABLE ... DETACH PARTITION obs_y2025m06 CONCURRENTLY;`, archive to Parquet, and run `DROP TABLE obs_y2025m06;` (which frees 100% of disk space in milliseconds with zero dead tuples).
 
 ### Scenario 8: Station in the Indian Ocean! (Days 3–4 — PostGIS & MongoDB GeoJSON)
 - **Symptom:** A weather engineer inserts Algiers (`Lat 36.6910°N, Lon 3.2154°E`) into MongoDB as `location: { type: "Point", coordinates: [36.6910, 3.2154] }` (or in PostGIS as `ST_MakePoint(36.6910, 3.2154)`). When they search for stations near Algiers, `0` results come back!
-- **Question:** Why did the station end up off the coast of Somalia in the Indian Ocean?
-- <details><summary><strong>Answer</strong></summary>Both <strong>GeoJSON (MongoDB)</strong> and <strong>PostGIS (<code>ST_MakePoint</code>)</strong> strictly require <strong><code>[X, Y] = [longitude, latitude]</code></strong> order: <code>[3.2154, 36.6910]</code>!</details>
+- **Diagnostic Question:** Why did the station end up off the coast of Somalia in the Indian Ocean?
+- **Root Cause & Fix:** Both **GeoJSON (MongoDB)** and **PostGIS (`ST_MakePoint`)** strictly require **`[X, Y] = [longitude, latitude]`** order: `[3.2154, 36.6910]`!
 
 ### Scenario 9: The False-Positive 500 hPa Jet Stream Alert (Day 4 — MongoDB `$elemMatch`)
 - **Symptom:** Each document in `db.radiosonde_soundings` has an array `vertical_levels: [ { pressure_hpa: 1000, wind_speed_kt: ... }, ..., { pressure_hpa: 300, wind_speed_kt: 95 } ]`. An engineer runs:
@@ -78,38 +83,41 @@ Present these 15 operational scenarios to the weather engineers and ask them to 
   })
   ```
   It returns almost every balloon launch, even when the `850 hPa` wind was only `15 kt`!
-- **Question:** Why did this happen, and how do you fix the query?
-- <details><summary><strong>Answer</strong></summary>Dot-notation conditions on an array match if <em>any</em> element has <code>pressure_hpa: 850</code> and <em>any other</em> element (such as <code>300 hPa</code>!) has <code>wind_speed_kt >= 80</code>. Use <strong><code>$elemMatch</code></strong> so both conditions must match the <strong>same</strong> array element: <code>vertical_levels: { $elemMatch: { pressure_hpa: 850, wind_speed_kt: { $gte: 80 } } }</code>.</details>
+- **Diagnostic Question:** Why did this happen, and how do you fix the query?
+- **Root Cause & Fix:** Dot-notation conditions on an array match if *any* element has `pressure_hpa: 850` and *any other* element (such as `300 hPa`!) has `wind_speed_kt >= 80`. Use **`$elemMatch`** so both conditions must match the **same** array element: `vertical_levels: { $elemMatch: { pressure_hpa: 850, wind_speed_kt: { $gte: 80 } } }`.
 
 ### Scenario 10: The 100 MB Blocking Sort Error in MongoDB (Day 4 — Indexing & ESR Rule)
 - **Symptom:** A query `db.radiosonde_soundings.find({ station_id: 60390, cape_j_kg: { $gte: 500 } }).sort({ launch_time: -1 })` is slow and shows a `SORT` stage in `.explain("executionStats")`, even though an index exists on `{ station_id: 1, cape_j_kg: 1, launch_time: -1 }`.
-- **Question:** Why couldn't MongoDB use the index to avoid sorting in memory, and how should the index keys be reordered?
-- <details><summary><strong>Answer</strong></summary>Because the range field (<code>cape_j_kg</code>) was placed <em>before</em> the sort field (<code>launch_time</code>)! Follow the <strong>ESR Rule (Equality &rarr; Sort &rarr; Range)</strong>: <code>{ station_id: 1, launch_time: -1, cape_j_kg: 1 }</code>.</details>
+- **Diagnostic Question:** Why couldn't MongoDB use the index to avoid sorting in memory, and how should the index keys be reordered?
+- **Root Cause & Fix:** Because the range field (`cape_j_kg`) was placed *before* the sort field (`launch_time`)! Follow the **ESR Rule (Equality $\rightarrow$ Sort $\rightarrow$ Range)**: `{ station_id: 1, launch_time: -1, cape_j_kg: 1 }`.
 
 ### Scenario 11: The 10-Shard MongoDB Cluster Where Only 1 Shard Works (Day 4 — Sharding)
 - **Symptom:** To scale writes for 5,000 automated weather stations, an administrator deploys a 10-shard MongoDB cluster and shards the `observations` collection on `{ obs_time: 1 }`. CPU utilization on Shard 10 hits 100%, while Shards 1–9 sit at 0% CPU during live ingestion!
-- **Question:** Why did `{ obs_time: 1 }` create a hotspot on Shard 10, and what is the proper Shard Key?
-- <details><summary><strong>Answer</strong></summary><code>obs_time</code> is monotonically increasing, so 100% of live observations fall into the newest <code>maxKey</code> chunk on a single shard. Prefix the shard key with a high-cardinality station identifier: <strong><code>{ "station_meta.station_id": 1, obs_time: 1 }</code></strong>.</details>
+- **Diagnostic Question:** Why did `{ obs_time: 1 }` create a hotspot on Shard 10, and what is the proper Shard Key?
+- **Root Cause & Fix:** `obs_time` is monotonically increasing, so 100% of live observations fall into the newest `maxKey` chunk on a single shard. Prefix the shard key with a high-cardinality station identifier: **`{ "station_meta.station_id": 1, obs_time: 1 }`**.
 
 ### Scenario 12: The 12 GB CSV Laptop Freeze (Day 5 — Columnar Parquet & DuckDB)
 - **Symptom:** A climate scientist has a 12 GB CSV file (`synoptic_2020_2026.csv`) with 55 columns. Every morning their Python script runs `pd.read_csv('synoptic_2020_2026.csv')` just to calculate daily mean `temp_c` for 3 desert stations, crashing their 16 GB RAM laptop.
-- **Question:** How should they convert this file and run the query in < 0.3 seconds using < 200 MB of RAM?
-- <details><summary><strong>Answer</strong></summary>Convert the row-oriented CSV into a column-oriented ZSTD-compressed <strong>Apache Parquet</strong> file using <strong>DuckDB</strong>: <code>COPY (SELECT * FROM read_csv_auto('synoptic_2020_2026.csv')) TO 'synoptic.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);</code> and query <code>'synoptic.parquet'</code> directly in DuckDB (which uses Projection Pushdown to read only <code>station_id</code>, <code>obs_time</code>, and <code>temp_c</code>, plus Predicate Pushdown to skip irrelevant Row Groups).</details>
+- **Diagnostic Question:** How should they convert this file and run the query in < 0.3 seconds using < 200 MB of RAM?
+- **Root Cause & Fix:** Convert the row-oriented CSV into a column-oriented ZSTD-compressed **Apache Parquet** file using **DuckDB**: `COPY (SELECT * FROM read_csv_auto('synoptic_2020_2026.csv')) TO 'synoptic.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);` and query `'synoptic.parquet'` directly in DuckDB (which uses Projection Pushdown to read only `station_id`, `obs_time`, and `temp_c`, plus Predicate Pushdown to skip irrelevant Row Groups).
 
 ### Scenario 13: The 450,000 Tiny Parquet Files Disaster (Day 5 — Hive Partitioning & Small Files Problem)
 - **Symptom:** An engineer modifies the MQTT stream router to write a brand-new Parquet file every 10 seconds partitioned by `year/month/day/hour/minute`. Within 2 months, querying `read_parquet('lake/**/*.parquet')` in DuckDB takes **4 minutes** just to scan 2 GB of data!
-- **Question:** Why did writing 10-second Parquet files ruin DuckDB's performance, and what is the target file size and compaction strategy?
-- <details><summary><strong>Answer</strong></summary>This is the <strong>"Small Files Problem"</strong>: opening 450,000 tiny 4 KB files spends 99% of wall-clock time on OS inode lookups / S3 HTTP `GET` handshakes and Thrift footer parsing rather than vectorized SIMD execution.<br><strong>Fix:</strong> Partition strictly by coarse temporal boundaries (<code>year=YYYY/month=MM</code>) and run a scheduled compaction job to merge files into <strong>128 MB – 512 MB</strong> Parquet blocks with 100k–250k rows per Row Group.</details>
+- **Diagnostic Question:** Why did writing 10-second Parquet files ruin DuckDB's performance, and what is the target file size and compaction strategy?
+- **Root Cause & Fix:** This is the **"Small Files Problem"**: opening 450,000 tiny 4 KB files spends 99% of wall-clock time on OS inode lookups / S3 HTTP `GET` handshakes and Thrift footer parsing rather than vectorized SIMD execution.
+  - **Fix:** Partition strictly by coarse temporal boundaries (`year=YYYY/month=MM`) and run a scheduled compaction job to merge files into **128 MB – 512 MB** Parquet blocks with 100k–250k rows per Row Group.
 
 ### Scenario 14: The S3 / Ceph RGW `GRIB2` Cloud Bottleneck (Day 5 — Gridded Data: `GRIB2` vs. `NetCDF4` vs. `Zarr`)
 - **Symptom:** A machine learning team stores 50 TB of global NWP model grids on an on-premises **Ceph RGW (S3)** cluster as monolithic `NetCDF4` (`.nc`) and `GRIB2` files. When 64 Dask/PyTorch workers try to slice a 30-year time-series for a single grid cell over Algiers, network throughput maxes out while CPU sits idle.
-- **Question:** Why do monolithic `NetCDF4` / `GRIB2` files struggle on S3 object storage, and how should the 4D arrays be stored and chunked?
-- <details><summary><strong>Answer</strong></summary><code>NetCDF4</code> (HDF5) requires multiple sequential pointer seeks across internal B-trees, and <code>GRIB2</code> is a sequential message stream optimized for 2D horizontal maps—forcing workers to pull entire multi-megabyte horizontal slices just to read 1 coordinate.<br><strong>Fix:</strong> Convert the archive to <strong>Cloud-Native `Zarr`</strong> stored on Ceph RGW S3, where each 4D chunk is an independent S3 object (`s3://bucket/temp/0.1.4`), and re-chunk along the time dimension for time-series training (or use `.idx` byte-range index sidecars for operational GRIB2).</details>
+- **Diagnostic Question:** Why do monolithic `NetCDF4` / `GRIB2` files struggle on S3 object storage, and how should the 4D arrays be stored and chunked?
+- **Root Cause & Fix:** `NetCDF4` (HDF5) requires multiple sequential pointer seeks across internal B-trees, and `GRIB2` is a sequential message stream optimized for 2D horizontal maps—forcing workers to pull entire multi-megabyte horizontal slices just to read 1 coordinate.
+  - **Fix:** Convert the archive to **Cloud-Native `Zarr`** stored on Ceph RGW S3, where each 4D chunk is an independent S3 object (`s3://bucket/temp/0.1.4`), and re-chunk along the time dimension for time-series training (or use `.idx` byte-range index sidecars for operational GRIB2).
 
 ### Scenario 15: Remote Saharan Stations Exhausting PostgreSQL Connections (Day 5 — Edge MQTT & Polyglot Routing)
 - **Symptom:** 1,200 remote solar-powered weather stations over 2G/satellite modems are configured to connect directly to the central PostgreSQL server (`port 5432`) every minute to run `INSERT INTO observations...`. Whenever a sandstorm causes intermittent packet loss, PostgreSQL hits `FATAL: sorry, too many clients already` and crashes!
-- **Question:** Why is direct SQL over unstable field links an architectural antipattern, and how does the Day 5 Edge-to-Core pipeline solve it?
-- <details><summary><strong>Answer</strong></summary>Each direct PostgreSQL connection requires a heavy TCP + TLS + auth handshake and spawns an OS backend process that hangs in `idle in transaction` when a satellite link drops.<br><strong>Fix:</strong> Buffer observations locally in <strong>SQLite (`WAL` mode)</strong> on the station logger, publish lightweight 2-byte-header <strong>MQTT (`QoS 1`)</strong> packets to an edge <strong>Mosquitto / Kafka</strong> broker, and use a central <strong>Polyglot Stream Router</strong> to batch-insert (`execute_values` / `COPY` / `bulk_write`) into PostgreSQL and MongoDB using a fixed connection pool.</details>
+- **Diagnostic Question:** Why is direct SQL over unstable field links an architectural antipattern, and how does the Day 5 Edge-to-Core pipeline solve it?
+- **Root Cause & Fix:** Each direct PostgreSQL connection requires a heavy TCP + TLS + auth handshake and spawns an OS backend process that hangs in `idle in transaction` when a satellite link drops.
+  - **Fix:** Buffer observations locally in **SQLite (`WAL` mode)** on the station logger, publish lightweight 2-byte-header **MQTT (`QoS 1`)** packets to an edge **Mosquitto / Kafka** broker, and use a central **Polyglot Stream Router** to batch-insert (`execute_values` / `COPY` / `bulk_write`) into PostgreSQL and MongoDB using a fixed connection pool.
 
 ---
 

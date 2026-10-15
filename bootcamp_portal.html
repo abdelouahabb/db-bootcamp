@@ -1063,10 +1063,14 @@
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
             Declarative execution order; SQLite B-Tree pages &amp; WAL mode; Three-Valued Logic (<code>3VL</code>), the <code>NOT IN (... NULL)</code> trap, and neutralizing <code>-9999.0</code> / <code>-999.0</code> hardware sentinels with <code>NULLIF()</code>.
           </p>
-          <ul class="file-list">
+          <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day1/day1_master_coursebook.md" title="./day1/day1_master_coursebook.md">day1/day1_master_coursebook.md</a>
               <span class="file-desc">Full Day 1 Coursebook</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/weather_ops_seed_sql_course_walkthrough.md" title="./day1/weather_ops_seed_sql_course_walkthrough.md">day1/weather_ops_seed_sql_course_walkthrough.md</a>
+              <span class="file-desc">📖 SQL Seed Walkthrough Course</span>
             </li>
             <li class="file-item">
               <a href="./day1/day1_hardware_sentinels_and_qc_guide.md" title="./day1/day1_hardware_sentinels_and_qc_guide.md">day1/day1_hardware_sentinels_and_qc_guide.md</a>
@@ -1078,7 +1082,7 @@
             </li>
             <li class="file-item">
               <a href="./day1/weather_ops_seed.sql" title="./day1/weather_ops_seed.sql">day1/weather_ops_seed.sql</a>
-              <span class="file-desc">WMO Seed &amp; Lab Queries</span>
+              <span class="file-desc">WMO Seed &amp; Lab SQL Script</span>
             </li>
             <li class="file-item">
               <a href="./day1/generate_weather_db.py" title="./day1/generate_weather_db.py">day1/generate_weather_db.py</a>
@@ -1104,18 +1108,30 @@
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
             Process &amp; memory architecture (<code>shared_buffers</code>, <code>work_mem</code>, WAL); 8KB Heap Page anatomy (<code>PageHeaderData</code>, <code>lp_off</code>, 23-byte <code>HeapTupleHeaderData</code>); CPU 8-byte alignment; MVCC <code>xmin</code>/<code>xmax</code> vs MySQL InnoDB.
           </p>
-          <ul class="file-list">
+          <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day2/day2_master_coursebook.md">day2/day2_master_coursebook.md</a>
               <span class="file-desc">Full Day 2 Coursebook</span>
             </li>
             <li class="file-item">
+              <a href="./day2/weather_ops_pg_sql_course_walkthrough.md">day2/weather_ops_pg_sql_course_walkthrough.md</a>
+              <span class="file-desc">📖 Multi-Schema SQL Course</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/day2_pageinspect_and_storage_lab_course_walkthrough.md">day2/day2_pageinspect_and_storage_lab_course_walkthrough.md</a>
+              <span class="file-desc">📖 pageinspect &amp; MVCC Course</span>
+            </li>
+            <li class="file-item">
+              <a href="./day2/day2_two_terminal_acid_lab_course_walkthrough.md">day2/day2_two_terminal_acid_lab_course_walkthrough.md</a>
+              <span class="file-desc">📖 2-Terminal ACID Course</span>
+            </li>
+            <li class="file-item">
               <a href="./day2/day2_pageinspect_and_storage_lab.sql">day2/day2_pageinspect_and_storage_lab.sql</a>
-              <span class="file-desc">pageinspect &amp; Alignment Lab</span>
+              <span class="file-desc">pageinspect &amp; Alignment SQL</span>
             </li>
             <li class="file-item">
               <a href="./day2/day2_two_terminal_acid_lab.sql">day2/day2_two_terminal_acid_lab.sql</a>
-              <span class="file-desc">2-Terminal ACID &amp; Deadlock Lab</span>
+              <span class="file-desc">2-Terminal ACID &amp; Deadlock SQL</span>
             </li>
             <li class="file-item">
               <a href="./day2/day2_postgres_vs_mysql_mvcc_guide.md">day2/day2_postgres_vs_mysql_mvcc_guide.md</a>
@@ -1127,7 +1143,7 @@
             </li>
             <li class="file-item">
               <a href="./day2/weather_ops_pg.sql">day2/weather_ops_pg.sql</a>
-              <span class="file-desc">Multi-Schema Synoptic/NWP Lab</span>
+              <span class="file-desc">Multi-Schema Synoptic/NWP SQL</span>
             </li>
           </ul>
           <div class="code-box">
@@ -1145,18 +1161,26 @@
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
             Window Functions (<code>LAG</code> 3h pressure tendency, 24h rolling thermal frames); Declarative Range Partitioning; <code>BRIN</code> vs <code>B-Tree</code> vs <code>GIN</code>; PostGIS <code>GEOGRAPHY(Point, 4326)</code>, <code>ST_DWithin</code>, and 5M-row benchmark.
           </p>
-          <ul class="file-list">
+          <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day3/day3_master_coursebook.md">day3/day3_master_coursebook.md</a>
               <span class="file-desc">Full Day 3 Coursebook</span>
             </li>
             <li class="file-item">
+              <a href="./day3/day3_weather_advanced_pg_sql_course_walkthrough.md">day3/day3_weather_advanced_pg_sql_course_walkthrough.md</a>
+              <span class="file-desc">📖 Partitioning &amp; Index Course</span>
+            </li>
+            <li class="file-item">
+              <a href="./day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md">day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md</a>
+              <span class="file-desc">📖 5M-Row PostGIS &amp; BRIN Course</span>
+            </li>
+            <li class="file-item">
               <a href="./day3/day3_weather_advanced_pg.sql">day3/day3_weather_advanced_pg.sql</a>
-              <span class="file-desc">Partitioning, BRIN &amp; PostGIS Lab</span>
+              <span class="file-desc">Partitioning, BRIN &amp; PostGIS SQL</span>
             </li>
             <li class="file-item">
               <a href="./day3/day3_postgis_5m_benchmark.sql">day3/day3_postgis_5m_benchmark.sql</a>
-              <span class="file-desc">5-Million-Row BRIN + GiST Lab</span>
+              <span class="file-desc">5-Million-Row BRIN + GiST SQL</span>
             </li>
             <li class="file-item">
               <a href="./day3/day3_postgres_extensions_guide.md">day3/day3_postgres_extensions_guide.md</a>
@@ -1186,22 +1210,34 @@
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
             Polymorphic radiosonde soundings (<code>vertical_levels</code> arrays) &amp; 3D ultrasonic anemometers; WiredTiger BSON &amp; <code>zstd</code> compression; <code>$elemMatch</code>, <code>$unwind</code>, <code>2dsphere</code> GeoJSON (<code>[lon, lat]</code>), and the <strong>ESR Rule</strong>.
           </p>
-          <ul class="file-list">
+          <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day4/day4_master_coursebook.md">day4/day4_master_coursebook.md</a>
               <span class="file-desc">Full Day 4 Coursebook</span>
             </li>
             <li class="file-item">
+              <a href="./day4/day4_weather_ops_mongo_js_course_walkthrough.md">day4/day4_weather_ops_mongo_js_course_walkthrough.md</a>
+              <span class="file-desc">📖 Core MongoDB Seed Course</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md">day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md</a>
+              <span class="file-desc">📖 2dsphere &amp; ESR Rule Course</span>
+            </li>
+            <li class="file-item">
+              <a href="./day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md">day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md</a>
+              <span class="file-desc">📖 50k Polymorphic Benchmark Course</span>
+            </li>
+            <li class="file-item">
               <a href="./day4/day4_weather_ops_mongo.js">day4/day4_weather_ops_mongo.js</a>
-              <span class="file-desc">Core Time-Series &amp; 2dsphere Lab</span>
+              <span class="file-desc">Core Time-Series &amp; 2dsphere JS</span>
             </li>
             <li class="file-item">
               <a href="./day4/day4_weather_ops_mongo_advanced.js">day4/day4_weather_ops_mongo_advanced.js</a>
-              <span class="file-desc">ESR Rule, $facet &amp; Schema Lab</span>
+              <span class="file-desc">ESR Rule, $unwind &amp; Polygons JS</span>
             </li>
             <li class="file-item">
               <a href="./day4/day4_mongo_50k_polymorphic_benchmark.js">day4/day4_mongo_50k_polymorphic_benchmark.js</a>
-              <span class="file-desc">50,000-Doc Polymorphic Benchmark</span>
+              <span class="file-desc">50,000-Doc Polymorphic JS</span>
             </li>
             <li class="file-item">
               <a href="./day4/day4_mongodb_architecture_ha_and_sharding_guide.md">day4/day4_mongodb_architecture_ha_and_sharding_guide.md</a>
@@ -2934,17 +2970,48 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
       });
     }
 
+    const companionCourseMap = {
+      'day1/weather_ops_seed.sql': './day1/weather_ops_seed_sql_course_walkthrough.md',
+      'day2/weather_ops_pg.sql': './day2/weather_ops_pg_sql_course_walkthrough.md',
+      'day2/day2_pageinspect_and_storage_lab.sql': './day2/day2_pageinspect_and_storage_lab_course_walkthrough.md',
+      'day2/day2_two_terminal_acid_lab.sql': './day2/day2_two_terminal_acid_lab_course_walkthrough.md',
+      'day3/day3_weather_advanced_pg.sql': './day3/day3_weather_advanced_pg_sql_course_walkthrough.md',
+      'day3/day3_postgis_5m_benchmark.sql': './day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md',
+      'day4/day4_weather_ops_mongo.js': './day4/day4_weather_ops_mongo_js_course_walkthrough.md',
+      'day4/day4_weather_ops_mongo_advanced.js': './day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md',
+      'day4/day4_mongo_50k_polymorphic_benchmark.js': './day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md'
+    };
+    const reverseCompanionMap = Object.fromEntries(
+      Object.entries(companionCourseMap).map(([k, v]) => [v.replace(/^\.\//, ''), './' + k])
+    );
+
     async function openDocModal(relPath) {
       const modal = document.getElementById('doc-reader-modal');
       const titleEl = document.getElementById('doc-modal-title');
       const bodyEl = document.getElementById('doc-modal-body');
       const rawLinkEl = document.getElementById('doc-modal-raw-link');
+      const compBtn = document.getElementById('doc-modal-companion-btn');
 
+      const cleanKey = relPath.replace(/^\.\//, '');
       currentDocPath = relPath;
-      titleEl.innerText = relPath.replace(/^\.\//, '');
+      titleEl.innerText = cleanKey;
       rawLinkEl.href = relPath;
       modal.style.display = 'flex';
       document.body.style.overflow = 'hidden';
+
+      if (compBtn) {
+        if (companionCourseMap[cleanKey]) {
+          compBtn.style.display = 'inline-block';
+          compBtn.innerText = '📖 Open Detailed Course Walkthrough (.md)';
+          compBtn.onclick = () => openDocModal(companionCourseMap[cleanKey]);
+        } else if (reverseCompanionMap[cleanKey]) {
+          compBtn.style.display = 'inline-block';
+          compBtn.innerText = '💻 View Executable Script (' + reverseCompanionMap[cleanKey].replace(/^\.\//, '') + ')';
+          compBtn.onclick = () => openDocModal(reverseCompanionMap[cleanKey]);
+        } else {
+          compBtn.style.display = 'none';
+        }
+      }
 
       if (/\.db$/i.test(relPath)) {
         bodyEl.innerHTML = `
@@ -2972,7 +3039,16 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           bodyEl.innerHTML = `<div class="md-rendered-container">${renderMarkdownToHtml(text, relPath)}</div>`;
           await renderActiveMermaidDiagrams();
         } else {
-          bodyEl.innerHTML = renderSourceCodeToHtml(text, ext);
+          const walkthroughBanner = companionCourseMap[cleanKey] ? `
+            <div class="md-alert md-alert-tip" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+              <div>
+                <div class="md-alert-title">📖 LINE-BY-LINE MARKDOWN COURSE WALKTHROUGH AVAILABLE</div>
+                <div class="md-alert-body">Every statement, constraint, formula, and comment in <code>${escapeHtml(cleanKey)}</code> is explained in full detail in its companion Markdown Course Walkthrough.</div>
+              </div>
+              <button class="action-btn active" onclick="openDocModal('${companionCourseMap[cleanKey]}')">📖 Read Detailed Markdown Course</button>
+            </div>
+          ` : '';
+          bodyEl.innerHTML = walkthroughBanner + renderSourceCodeToHtml(text, ext);
         }
         bodyEl.scrollTop = 0;
       } catch (err) {
@@ -3276,6 +3352,7 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           <span id="doc-modal-title" style="color: var(--accent-cyan);">README.md</span>
         </div>
         <div class="doc-modal-actions">
+          <button id="doc-modal-companion-btn" class="action-btn active" style="display: none;">📖 Open Detailed Course Walkthrough (.md)</button>
           <button class="action-btn" onclick="copyRawDocument(this)">Copy Full File</button>
           <a id="doc-modal-raw-link" href="./README.md" target="_blank" rel="noopener" class="action-btn" style="text-decoration: none;">Open Raw File</a>
           <button class="action-btn" onclick="closeDocModal()" style="border-color: var(--accent-crimson); color: var(--accent-crimson);">Close (Esc)</button>

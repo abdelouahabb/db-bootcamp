@@ -187,13 +187,13 @@ $$
 
 ---
 
-## 5. Classroom Live Demonstration Script
+## 5. Hands-On Verification Walkthrough
 
-Use this sequence to demonstrate sentinel contamination and remediation in SQLite during the Day 1 training session.
+Execute this sequence in SQLite (`weather_telemetry.db`) to observe sentinel contamination and verify column-level remediation.
 
 ### Step 1: Execute the Naive Query (The Trap)
 
-Instruct attendees to run a standard summary across the entire network:
+Running a standard summary query across the raw 250,000-row network without sentinel filtering produces the following result:
 
 ```sql
 SELECT 
@@ -214,15 +214,15 @@ FROM raw_telemetry;
 └───────────────┴──────────────────┴──────────────────┴──────────────────┘
 ```
 
-#### Trainer Talking Points:
+#### Architectural Analysis:
 
-> *"Notice the output. The average temperature across our warm Mediterranean stations is $-1.42^\circ\text{C}$, and the minimum temperature recorded is $-999^\circ\text{C}$—far below absolute zero ($-273.15^\circ\text{C}$).*
+> The average temperature across these warm Mediterranean stations reports as $-1.42^\circ\text{C}$, and the minimum temperature recorded is $-999^\circ\text{C}$—far below physical absolute zero ($-273.15^\circ\text{C}$).
 >
-> *Did the SQLite query engine make an arithmetic error? No. SQLite did exactly what we told it to do. It treated `-999.0` as a legitimate physical observation. The system failed because we treated an operational database as if it understood atmospheric physics."*
+> The SQLite query engine did not make an arithmetic error: it treated `-999.0` as a legitimate numerical floating-point observation because relational engines do not inherently understand atmospheric physics unless physical boundaries and sentinel translations are explicitly declared.
 
-### Step 2: The Forensic Inspection (Unmasking the Rows)
+### Step 2: Forensic Inspection (Unmasking the Damaged Rows)
 
-Instruct attendees to inspect the damaged observations:
+Inspect the specific observations emitting sentinel values:
 
 ```sql
 SELECT station_id, recorded_at, temperature, pressure, wind_speed 
@@ -245,13 +245,13 @@ LIMIT 5;
 └────────────┴─────────────────────┴─────────────┴──────────┴────────────┘
 ```
 
-#### Trainer Talking Points (The Critical Rule):
+#### The Golden Rule of Multi-Sensor Telemetry Cleaning:
 
-> *"Look at Row 1 (`AWS-013` at 14:10). The temperature probe failed and emitted `-999.0`. But look at the adjacent columns: barometric pressure is $1012.4\text{ hPa}$ and wind speed is $3.2\text{ m/s}$. Both are valid physical measurements!*
+> In Row 1 (`AWS-013` at `14:10`), the temperature probe failed and emitted `-999.0`. However, the adjacent columns—barometric pressure ($1012.4\text{ hPa}$) and wind speed ($3.2\text{ m/s}$)—are completely valid physical measurements!
 >
-> *If an analyst writes `DELETE FROM raw_telemetry WHERE temperature <= -900.0`, or filters the entire row out with `WHERE temperature > -900.0`, they permanently delete valid pressure and wind data.*
+> If an engineer executes `DELETE FROM raw_telemetry WHERE temperature <= -900.0`, or filters the entire row out in the `WHERE` clause (`WHERE temperature > -900.0`), valid barometric pressure and wind observations are permanently discarded.
 >
-> ***Rule of Telemetry Engineering:** Data cleaning must happen at the **column expression level**, never by casually dropping multi-sensor rows."*
+> **Rule of Telemetry Engineering:** Data cleaning must happen at the **column expression level** (`NULLIF` / `CASE WHEN`), never by indiscriminately dropping multi-sensor rows.
 
 ---
 

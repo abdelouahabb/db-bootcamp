@@ -5,14 +5,14 @@
 
 **Bootcamp:** Database & NoSQL Engineering (5-Day Intensive)  
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Systems Administrators, Environmental Data Scientists  
-**Day 2 Duration:** Full-Day Intensive (5 Core Architectural Modules + 7 Hands-On Forensics Labs)  
+**Curriculum Scope:** 5 Core Architectural Modules + 7 Hands-On Forensics Labs  
 **Execution Environment:** PostgreSQL 16+ running on Linux/macOS or Docker (`postgres:16`), `psql` CLI + DBeaver  
 **Companion Files in `day2/`:**
 - [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md) — Complete Installation, `postgresql.conf` Weather Tuning, WAL, Vacuum, Lock Debugging & `EXPLAIN` Reference Card
 - [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) — Definitive Comparative Guide: PostgreSQL Heap/MVCC vs. MySQL InnoDB Clustered B+Tree/Undo Logs
-- [weather_ops_pg.sql](./weather_ops_pg.sql) — Multi-schema PostgreSQL DDL (`synoptic`, `nwp`, `alerts`) + `generate_series()` synthetic time-series generator (18,000+ synoptic observations & 9,000+ NWP forecasts) + table-level autovacuum tuning
-- [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) — Standalone Runnable Forensics Lab: Tuple Tetris (`pg_column_size`), `pageinspect` 8KB Block & MVCC Header Inspection, `pgstattuple` Vacuum Lab, and 1,000,000-Row `EXPLAIN (ANALYZE, BUFFERS)` Row-Store Penalty Lab
-- [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) — Standalone Two-Terminal ACID Concurrency, Snapshot Isolation, Row Lock Contention, Deadlock Circular Wait & `pg_blocking_pids()` Lab
+- [weather_ops_pg.sql](./weather_ops_pg.sql) ([📖 Course Walkthrough](./weather_ops_pg_sql_course_walkthrough.md)) — Multi-schema PostgreSQL DDL (`synoptic`, `nwp`, `alerts`) + `generate_series()` synthetic time-series generator (18,000+ synoptic observations & 9,000+ NWP forecasts) + table-level autovacuum tuning
+- [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) ([📖 Course Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md)) — Standalone Runnable Forensics Lab: Tuple Tetris (`pg_column_size`), `pageinspect` 8KB Block & MVCC Header Inspection, `pgstattuple` Vacuum Lab, and 1,000,000-Row `EXPLAIN (ANALYZE, BUFFERS)` Row-Store Penalty Lab
+- [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) ([📖 Course Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md)) — Standalone Two-Terminal ACID Concurrency, Snapshot Isolation, Row Lock Contention, Deadlock Circular Wait & `pg_blocking_pids()` Lab
 
 ---
 
@@ -30,21 +30,21 @@ On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today 
 
 ---
 
-## 2. Daily Schedule & Five-Module Timetable
+## 2. Five-Module Architectural Outline
 
 ```
 ┌─────────────────┬────────────────────────────────────────────────────────────────────────────┐
-│ Time / Duration │ Module & Architectural Focus                                               │
+│ Module          │ Architectural Focus & Hands-On Forensics Labs                              │
 ├─────────────────┼────────────────────────────────────────────────────────────────────────────┤
-│ 09:00 – 10:15   │ Module 1: Enterprise Deployment, Process Model, Host Topology & Dual Cache │
-│ (75 min)        │ • Desktop Default Trap, NVMe Decoupling (/data/pgdata vs /data/pgwal)      │
+│ Module 1        │ Enterprise Deployment, Process Model, Host Topology & Dual Cache           │
+│                 │ • Desktop Default Trap, NVMe Decoupling (/data/pgdata vs /data/pgwal)      │
 │                 │ • Linux fstab (noatime) & sysctl.conf (vm.swappiness=1, overcommit=2)      │
 │                 │ • postmaster Process Model, PgBouncer, Mandatory UTC Rule                  │
 │                 │ • Dual-Tier Memory: shared_buffers (25%) vs Linux OS Page Cache (75%)      │
 │                 │ • Lab 1: Verifying Installation, Live Processes, UTC & Memory Hit Ratio    │
 ├─────────────────┼────────────────────────────────────────────────────────────────────────────┤
-│ 10:15 – 12:15   │ Module 2: Storage Engine Internals — Schemas, Types, 8KB Pages & Padding   │
-│ (120 min)       │ • Logical vs Physical Hierarchy ($PGDATA/base, relfilenode)                │
+│ Module 2        │ Storage Engine Internals — Schemas, Types, 8KB Pages & Padding             │
+│                 │ • Logical vs Physical Hierarchy ($PGDATA/base, relfilenode)                │
 │                 │ • Multi-Schema Isolation (synoptic, nwp, alerts)                           │
 │                 │ • Strict Weather Types: TIMESTAMPTZ vs TIMESTAMP, NUMERIC vs REAL/FLOAT8   │
 │                 │ • Unclustered Heap vs Clustered B+Tree, 8KB Page Layout & Line Pointers    │
@@ -52,24 +52,22 @@ On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today 
 │                 │ • TOAST (The Oversized-Attribute Storage Technique)                        │
 │                 │ • Lab 2A & 2B: Disk Footprints, ctid, TOAST & pageinspect Tuple Tetris     │
 ├─────────────────┼────────────────────────────────────────────────────────────────────────────┤
-│ 12:15 – 13:15   │ Lunch Break                                                                │
-├─────────────────┼────────────────────────────────────────────────────────────────────────────┤
-│ 13:15 – 14:30   │ Module 3: MVCC Internals, Two-Terminal Locking, Dead Tuples & VACUUM       │
-│ (75 min)        │ • Out-of-Place Tuple Versioning (t_xmin, t_xmax, t_ctid, HOT updates)      │
+│ Module 3        │ MVCC Internals, Two-Terminal Locking, Dead Tuples & VACUUM                 │
+│                 │ • Out-of-Place Tuple Versioning (t_xmin, t_xmax, t_ctid, HOT updates)      │
 │                 │ • Snapshot Visibility Formula, Hint Bits & XID Wraparound (2^31)           │
 │                 │ • Standard VACUUM (_fsm, _vm) vs VACUUM FULL vs pg_repack                  │
 │                 │ • Global & Table-Level Autovacuum Tuning for High-Churn Synoptic Tables    │
 │                 │ • Lab 3A & 3B: Two-Terminal Isolation/Locks, pageinspect MVCC & Bloat Lab  │
 ├─────────────────┼────────────────────────────────────────────────────────────────────────────┤
-│ 14:30 – 15:45   │ Module 4: Write-Ahead Logging (WAL), Checkpoint Smoothing & Bulk COPY      │
-│ (75 min)        │ • ARIES Steal/No-Force Matrix, 64-bit LSN & Torn-Page Defense              │
+│ Module 4        │ Write-Ahead Logging (WAL), Checkpoint Smoothing & Bulk COPY                │
+│                 │ • ARIES Steal/No-Force Matrix, 64-bit LSN & Torn-Page Defense              │
 │                 │ • Surviving 00Z/12Z NWP Spikes: Checkpoint Smoothing & WAL Compression     │
 │                 │ • High-Throughput Ingestion: Individual INSERT vs Batched vs COPY Protocol │
 │                 │ • Escape Hatches: UNLOGGED Tables & SET LOCAL synchronous_commit = off     │
 │                 │ • Lab 4: Tuning Checkpoints, Tracking WAL LSN Diff & Benchmarking \copy    │
 ├─────────────────┼────────────────────────────────────────────────────────────────────────────┤
-│ 15:45 – 17:00   │ Module 5: Query Optimizer, Cost Math, EXPLAIN BUFFERS & Row-Store Penalty  │
-│ (75 min)        │ • Query Pipeline, Cost Units & NVMe Tuning (random_page_cost = 1.1)        │
+│ Module 5        │ Query Optimizer, Cost Math, EXPLAIN BUFFERS & Row-Store Penalty            │
+│                 │ • Query Pipeline, Cost Units & NVMe Tuning (random_page_cost = 1.1)        │
 │                 │ • 5 Scan Paths, 3 Join Algorithms, Cardinality Skew & 7 Deadly Plan Sins   │
 │                 │ • Lab 5A: NWP Forecast Verification Optimization & Covering Index INCLUDE  │
 │                 │ • Lab 5B: Mathematical Proof of the 9.48x Row-Store I/O Amplification      │
@@ -78,7 +76,7 @@ On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today 
 
 ---
 
-## 3. Module 1: Enterprise Deployment, Process Architecture, Host Storage Topology & Dual-Tier Memory (09:00 – 10:15)
+## 3. Module 1: Enterprise Deployment, Process Architecture, Host Storage Topology & Dual-Tier Memory
 
 ### 3.1 The Desktop Default Trap
 Standard installations via package managers (`apt install postgresql`) deploy PostgreSQL with conservative desktop defaults designed to coexist alongside a web browser on a small laptop:
@@ -215,11 +213,10 @@ Setting `shared_buffers` to $80\%$ of RAM (an InnoDB habit) harms PostgreSQL per
 * **`maintenance_work_mem = 1GB` to `2GB` (Default `64MB`):** Accelerates `CREATE INDEX`, `VACUUM`, and `ALTER TABLE`.
 
 > [!WARNING]
-> **Common Student Pitfall — Setting `work_mem = 2GB` Globally in `postgresql.conf`:**  
-> Students often think `work_mem` is a global pool like `shared_buffers`. Emphasize that **`work_mem` is allocated per sort or hash node, per query, per parallel worker!** If a single complex NWP verification query has 4 Hash Joins and runs across 4 parallel workers with `max_connections = 100`, setting `work_mem = 2GB` globally allows a sudden burst of queries to request $4 \times 4 \times 2\text{ GB} = 32\text{ GB}$ per connection, immediately invoking the Linux OOM-Killer! Keep global `work_mem` at `32MB–64MB` and boost it selectively inside heavy analytical sessions using `SET LOCAL work_mem = '256MB';`.
+> **Production Engineering Pitfall — Setting `work_mem = 2GB` Globally in `postgresql.conf`:**  
+> Unlike `shared_buffers` (which is a single global pool), **`work_mem` is allocated per sort or hash node, per query, per parallel worker!** If a single complex NWP verification query contains 4 Hash Joins and runs across 4 parallel workers with `max_connections = 100`, setting `work_mem = 2GB` globally allows a burst of queries to request $4 \times 4 \times 2\text{ GB} = 32\text{ GB}$ per connection, immediately invoking the Linux OOM-Killer! Keep global `work_mem` at `32MB–64MB` and boost it selectively inside heavy analytical sessions using `SET LOCAL work_mem = '256MB';`.
 
-### Lab 1: Verifying Installation, Live Processes, UTC & Memory Tuning (20 min)
-
+### Lab 1 Walkthrough: Verifying Installation, Live Processes, UTC & Memory Tuning
 Initialize the `weather_ops` database and load [weather_ops_pg.sql](./weather_ops_pg.sql):
 
 ```bash
@@ -228,14 +225,7 @@ createdb weather_ops
 psql -d weather_ops -f weather_ops_pg.sql
 ```
 
-**Tasks for Attendees:**
-1. Open **both** `psql -d weather_ops` and **DBeaver** connected to `weather_ops`.
-2. Run `SHOW data_directory;`, `SHOW config_file;`, `SHOW hba_file;`, and `SHOW timezone;` to inspect the server layout.
-3. Query `pg_stat_activity` to see your live `psql` and DBeaver backend OS PIDs alongside background workers (`checkpointer`, `background writer`, `walwriter`, `autovacuum launcher`).
-4. Apply the weather engineering memory & UTC settings dynamically using `ALTER SYSTEM` + `SELECT pg_reload_conf();`, and check your database's **Buffer Cache Hit Ratio** in `pg_stat_database` (target: **> 99%**).
-
-<details>
-<summary><strong>Lab 1 — Instructor Solution Key</strong></summary>
+Connect via `psql -d weather_ops` (or **DBeaver**) to inspect physical cluster paths, verify active background daemons (`checkpointer`, `background writer`, `walwriter`, `autovacuum launcher`) in `pg_stat_activity`, apply non-restart UTC and memory tuning via `ALTER SYSTEM`, and measure the database's **Buffer Cache Hit Ratio** in `pg_stat_database` (target: **> 99%**):
 
 ```sql
 -- 1. Locate physical cluster and configuration files
@@ -275,11 +265,10 @@ SELECT
 FROM pg_stat_database
 WHERE datname = current_database();
 ```
-</details>
 
 ---
 
-## 4. Module 2: Storage Engine Internals — Schemas, Strict Meteorological Types, 8 KB Pages, Tuples & Padding (10:15 – 12:15)
+## 4. Module 2: Storage Engine Internals — Schemas, Strict Meteorological Types, 8 KB Pages, Tuples & Padding
 
 ### 4.1 Logical vs. Physical Storage Hierarchy & Multi-Schema Isolation
 * **Logical Hierarchy:** **Cluster** $\rightarrow$ **Database** (`weather_ops`) $\rightarrow$ **Schemas** (`synoptic`, `nwp`, `alerts`) $\rightarrow$ **Relations** (Tables, Indexes, Sequences, Views).
@@ -421,8 +410,7 @@ PostgreSQL does not allow a single tuple to span across two 8 KB heap pages. Wha
 
 ---
 
-### Lab 2A & 2B: Inspecting Disk Files, `ctid`, TOAST & `pageinspect` Byte Alignment (30 min)
-
+### Lab 2A & 2B: Inspecting Disk Files, `ctid`, TOAST & `pageinspect` Byte Alignment
 #### Lab 2A: Inspecting `weather_ops` Physical Files, 8 KB Pages, `ctid` & TOAST
 Run these queries in `psql -d weather_ops`:
 
@@ -535,15 +523,15 @@ FROM heap_page_items(get_raw_page('layout_packed', 0)) LIMIT 3;
 │ layout_packed │ 3  │ 8072   │ 1        │ 40                     │ 843    │ (0,3)  │
 └───────────────┴────┴────────┴──────────┴────────────────────────┴────────┴────────┘
 ```
-* **Teaching Takeaway:** Observe `lp_off`: tuples grow **backward** from byte `8192` (`8152`, `8112`, `8072`), while line pointers (`lp = 1, 2, 3`) grow **forward** from byte `24`!
+* **Key Takeaway:** Observe `lp_off`: tuples grow **backward** from byte `8192` (`8152`, `8112`, `8072`), while line pointers (`lp = 1, 2, 3`) grow **forward** from byte `24`!
 
 > [!TIP]
-> **Instructor Live Demo Tip — The `8192 - 40 = 8152` Byte Math:**  
-> Point to row 1 of `layout_packed` in the `pageinspect` output above (`lp_off = 8152`, `physical_bytes_on_disk = 40`). Ask the class: *"What is `8152 + 40`?"* When they answer **`8192`** (the exact end of the 8 KB page!), the entire room immediately grasps how PostgreSQL stacks tuples backward from the bottom of the 8 KB page while line pointers grow downward from byte 24!
+> **Physical Page Math Verification (`8192 - 40 = 8152`):**  
+> In row 1 of `layout_packed` in the `pageinspect` output above (`lp_off = 8152`, `physical_bytes_on_disk = 40`), notice that `8152 + 40 = 8192`—the exact final byte of the 8 KB (`8,192-byte`) page! PostgreSQL stacks physical tuples backward from byte `8192` toward the top of the page, while the 4-byte line pointers (`ItemIdData`) grow forward starting immediately after the 24-byte `PageHeaderData` at byte `24`.
 
 ---
 
-## 5. Module 3: Concurrency Control (MVCC), Two-Terminal Locking, Dead Tuples & Vacuum Mechanics (13:15 – 14:30)
+## 5. Module 3: Concurrency Control (MVCC), Two-Terminal Locking, Dead Tuples & Vacuum Mechanics
 
 ### 5.1 How PostgreSQL MVCC Works Physically (`INSERT`, `DELETE`, `UPDATE`)
 In PostgreSQL, **readers never block writers, and writers never block readers**. Instead of overwriting rows in-place, PostgreSQL maintains multiple physical tuple versions inside the 8 KB heap pages:
@@ -654,16 +642,15 @@ $$
   3. Set **`idle_in_transaction_session_timeout = 60000`** (60 seconds) so a forecaster leaving DBeaver open with an uncommitted transaction cannot pin the global `xmin` horizon and block `VACUUM` across the entire database!
 
 > [!WARNING]
-> **Common Student Pitfall — Running `VACUUM FULL` on a Full Disk or Live Ingest Table:**  
-> Students seeing dead tuple bloat often reach for `VACUUM FULL synoptic.observations;`. Warn them that `VACUUM FULL` acquires an **`AccessExclusiveLock`** (blocking even plain `SELECT` queries!) and writes a complete duplicate copy of the table plus all indexes before unlinking the old `relfilenode`. If a 400 GB NVMe volume has 250 GB used (`62% full`) and you run `VACUUM FULL` on a 200 GB table, the disk hits `100% full` mid-rewrite and crashes the database! Always use standard `VACUUM` + partitioned table `DROP`s (Day 3) or online `pg_repack`.
+> **Production Engineering Pitfall — Running `VACUUM FULL` on a Full Disk or Live Ingest Table:**  
+> Never run `VACUUM FULL synoptic.observations;` on an active operational table to clear dead tuple bloat. `VACUUM FULL` acquires an **`AccessExclusiveLock`** (blocking even plain `SELECT` queries) and writes a complete duplicate copy of the table plus all indexes before unlinking the old `relfilenode`. If a 400 GB NVMe volume has 250 GB used (`62% full`) and you execute `VACUUM FULL` on a 200 GB table, the disk hits `100% full` mid-rewrite and crashes the database! Instead, use standard `VACUUM` + partitioned table `DROP`s (Day 3) or online `pg_repack`.
 
 ---
 
-### Lab 3A & 3B: Two-Terminal MVCC/Locking, `pageinspect` Tuple Chains & Bloat Reclamation (35 min)
-
+### Lab 3A & 3B Walkthrough: Two-Terminal MVCC/Locking, `pageinspect` Tuple Chains & Bloat Reclamation
 > [!TIP]
-> **Instructor Live Demo Tip — Using the Standalone Two-Terminal ACID Lab Script:**  
-> Open [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) side-by-side in two terminal windows (`Terminal A` and `Terminal B`). Walk the class live through the 4 chronological experiments: (1) Invisible Uncommitted Updates (`ctid` & `xmin`), (2) Exclusive Row Lock Waits + live `pg_blocking_pids()` inspection, (3) Circular Deadlock (`ERROR: 40P01 deadlock detected` after `1000ms`), and (4) `READ COMMITTED` vs. `REPEATABLE READ` snapshot pinning!
+> **Hands-On Verification Tip — Standalone Two-Terminal ACID Lab Script:**  
+> You can also open [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) side-by-side in two terminal windows (`Terminal A` and `Terminal B`) to run 4 additional concurrency experiments: (1) Invisible Uncommitted Updates (`ctid` & `xmin`), (2) Exclusive Row Lock Waits + live `pg_blocking_pids()` inspection, (3) Circular Deadlock (`ERROR: 40P01 deadlock detected` after `1000ms`), and (4) `READ COMMITTED` vs. `REPEATABLE READ` snapshot pinning.
 
 ```
                       The Two-Terminal Concurrency Mental Model
@@ -686,9 +673,6 @@ $$
  t4  │ COMMIT; (or ROLLBACK;)             │       │ ──► Instantly unblocks & completes!│
      └────────────────────────────────────┘       └────────────────────────────────────┘
 ```
-
-<details>
-<summary><strong>Lab 3A & 3B — Complete Instructor Solution Key</strong></summary>
 
 ```sql
 -- ============================================================================
@@ -752,11 +736,10 @@ SELECT relname, reloptions
 FROM pg_class
 WHERE relname IN ('observations', 'forecasts');
 ```
-</details>
 
 ---
 
-## 6. Module 4: Write-Ahead Logging (`pg_wal`), Checkpoint Smoothing & High-Speed Bulk Ingestion (`COPY`) (14:30 – 15:45)
+## 6. Module 4: Write-Ahead Logging (`pg_wal`), Checkpoint Smoothing & High-Speed Bulk Ingestion (`COPY`)
 
 ### 6.1 The ARIES Recovery Matrix (`Steal / No-Force`) & The WAL Invariant
 Why don't databases just write modified 8 KB pages directly to the table files on every `COMMIT`? Because random 8 KB disk seeks across millions of rows would drop throughput to $< 100\text{ commits/sec}$ and leave corrupted pages on power loss.
@@ -836,8 +819,8 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
 | **PostgreSQL `COPY` (`\copy`) Protocol** | Direct binary/CSV tuple stream into 8 KB heap blocks | Streaming block transfer (1 commit) | **$\approx 120,000+\text{ rows/sec}$** |
 
 > [!IMPORTANT]
-> **Common Student Pitfall — Server-Side `COPY` vs. Client-Side `\copy` Permission Errors:**  
-> Students running `COPY synoptic.observations FROM '/home/student/obs.csv'` often get `ERROR: must be superuser or have privileges of the pg_read_server_files role` or `No such file or directory`. Explain that SQL `COPY` runs inside the **PostgreSQL server process** looking at the database server's filesystem, whereas `psql`'s **`\copy`** meta-command streams the file from the **client laptop** over the TCP connection!
+> **Production Engineering Pitfall — Server-Side `COPY` vs. Client-Side `\copy` Permission Errors:**  
+> Running SQL `COPY synoptic.observations FROM '/path/to/obs.csv'` often triggers `ERROR: must be superuser or have privileges of the pg_read_server_files role` or `No such file or directory`. This happens because SQL `COPY` executes inside the **PostgreSQL server process** looking at the database server's local filesystem, whereas `psql`'s **`\copy`** meta-command streams the file from the **client workstation** over the TCP connection!
 
 ### 6.4 Engineering Escape Hatches: `UNLOGGED` Tables & `synchronous_commit = off`
 
@@ -858,10 +841,7 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
 
 ---
 
-### Lab 4: Tuning Checkpoints, Tracking WAL Volume (`LSN`) & Benchmarking `\copy` (30 min)
-
-<details>
-<summary><strong>Lab 4 — Instructor Solution Key</strong></summary>
+### Lab 4 Walkthrough: Tuning Checkpoints, Tracking WAL Volume (`LSN`) & Benchmarking `\copy`
 
 ```sql
 \timing on
@@ -910,11 +890,10 @@ CREATE UNLOGGED TABLE synoptic.observations_staging (LIKE synoptic.observations 
 \copy synoptic.observations_staging FROM 'observations_export.csv' WITH (FORMAT csv, HEADER true);
 DROP TABLE synoptic.observations_staging;
 ```
-</details>
 
 ---
 
-## 7. Module 5: Query Optimizer Pipeline, Cost Math, `EXPLAIN (ANALYZE, BUFFERS)` & The Row-Store Bottleneck (15:45 – 17:00)
+## 7. Module 5: Query Optimizer Pipeline, Cost Math, `EXPLAIN (ANALYZE, BUFFERS)` & The Row-Store Bottleneck
 
 ### 7.1 The Query Optimizer Pipeline & Mathematical Cost Model
 
@@ -974,13 +953,12 @@ $$
 * **Correlated Columns & Extended Statistics (`CREATE STATISTICS`):** By default, PostgreSQL assumes columns are independent ($P(A \land B) = P(A) \times P(B)$). In meteorology, `climate_zone = 'Arid'` and `temp_c > 38.0` are strongly correlated; use `CREATE STATISTICS` + `ANALYZE` so the planner doesn't underestimate row counts by $100\times$!
 
 > [!WARNING]
-> **Common Student Pitfall — Running `EXPLAIN ANALYZE` on Destructive `UPDATE` / `DELETE` Queries:**  
-> Unlike bare `EXPLAIN` (which only estimates the plan), **`EXPLAIN ANALYZE` physically executes the SQL statement!** If a student runs `EXPLAIN ANALYZE DELETE FROM synoptic.observations;`, it will actually delete all rows! Teach the golden habit: when profiling `INSERT`, `UPDATE`, or `DELETE` with `EXPLAIN (ANALYZE, BUFFERS)`, always wrap it in `BEGIN; EXPLAIN (ANALYZE, BUFFERS) UPDATE ...; ROLLBACK;`.
+> **Production Engineering Pitfall — Running `EXPLAIN ANALYZE` on Destructive `UPDATE` / `DELETE` Queries:**  
+> Unlike bare `EXPLAIN` (which only estimates the plan), **`EXPLAIN ANALYZE` physically executes the SQL statement!** Running `EXPLAIN ANALYZE DELETE FROM synoptic.observations;` will actually delete all rows! Whenever profiling `INSERT`, `UPDATE`, or `DELETE` with `EXPLAIN (ANALYZE, BUFFERS)`, always wrap the statement in a transaction block that rolls back: `BEGIN; EXPLAIN (ANALYZE, BUFFERS) UPDATE ...; ROLLBACK;`.
 
 ---
 
-### Lab 5A & 5B (Capstone): Accelerating NWP Forecast Verification & Proving the Row-Store Scan Penalty (35 min)
-
+### Lab 5A & 5B Walkthrough (Capstone): Accelerating NWP Forecast Verification & Proving the Row-Store Scan Penalty
 #### Lab 5A: NWP Forecast Verification (`weather_ops` Database)
 Run in `psql -d weather_ops`:
 
@@ -1070,8 +1048,8 @@ Execution Time: 242.410 ms
 4. **The Row-Store I/O Amplification Factor:**
    $$\text{I/O Waste Factor} = \frac{144.69\text{ MB}}{15.25\text{ MB}} = \mathbf{9.48\times}$$
 
-> **Instructor Closing Script:**  
-> *"Look at the numbers on your screen. To calculate the mean temperature across 2 million rows, PostgreSQL was forced to read **144.7 MB** of 8 KB heap blocks, even though the calculation mathematically required only **15.25 MB** of numbers ($9.48\times$ I/O amplification!). Why? Because PostgreSQL is a row-store engine: it cannot fetch just the `temperature` column; it must pull the entire 8 KB page containing timestamps, pressure, wind vectors, rainfall, and 24-byte MVCC headers for every row. On 500 million rows, that single scan pulls **36 GB** through your buffer pool!"*
+> **Architectural Synthesis:**  
+> To calculate the mean temperature across 2 million rows, PostgreSQL is forced to read **144.7 MB** of 8 KB heap blocks, even though the calculation mathematically requires only **15.25 MB** of numbers ($9.48\times$ I/O amplification!). Because PostgreSQL is a row-store engine, it cannot fetch only the `temperature` column; it must pull the entire 8 KB page containing timestamps, pressure, wind vectors, rainfall, and 23-byte MVCC headers for every row. On 500 million rows, that single scan pulls **36 GB** through the buffer pool!
 
 ---
 

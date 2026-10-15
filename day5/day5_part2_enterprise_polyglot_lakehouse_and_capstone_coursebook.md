@@ -35,7 +35,7 @@
 
 ---
 
-### Part 2 Schedule & Module Outline
+### Part 2 Module Outline
 
 ```
 ┌─────────────────┬─────────────────────────────────────────────────────────────────┐
@@ -784,8 +784,8 @@ if __name__ == "__main__":
 ```
 
 > [!TIP]
-> **Instructor Live Demo Tip (Interactive Swagger UI at `:8000/docs`):**  
-> During the Capstone Lab, open `http://localhost:8000/docs` in the browser! Letting attendees trigger the PostGIS geodesic search, the MongoDB turbulence anomaly query, and the DuckDB Parquet lakehouse scan from one unified OpenAPI interface brings all 5 days of the bootcamp together visually.
+> **Interactive API Verification Tip (Swagger UI at `:8000/docs`):**  
+> With `serving_api.py` running, open `http://localhost:8000/docs` in your browser to trigger the PostGIS geodesic search, the MongoDB turbulence anomaly query, and the DuckDB Parquet lakehouse scan from one unified OpenAPI interface.
 
 ---
 
@@ -938,9 +938,9 @@ Over the past five days, we deconstructed and rebuilt the complete data architec
 ================================================================================
 ```
 
-### Final Instructor Closing Address
+### Architectural Synthesis & Engineering Mandate
 
-> *"Congratulations, engineers. You have transitioned from viewing databases as generic storage boxes to understanding their physical reality: disk blocks, CPU vector registers, memory caches, and network consensus.*
+> *"By mastering these five days of meteorological data engineering, you have transitioned from viewing databases as generic storage boxes to understanding their physical reality: disk blocks, CPU vector registers, memory caches, and network consensus.*
 >
 > *You know why a row-store fails at 100 million rows, why a B-Tree thrashes your memory, why `DELETE` never returns bytes to Linux, why hardware transmits `-9999.0`, and why DuckDB can scan an entire year of data in the time PostgreSQL takes to parse a query plan.*
 >

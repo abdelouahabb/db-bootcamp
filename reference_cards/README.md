@@ -1,6 +1,6 @@
 # 📚 Master Reference Cards Library & Symptom-Based Diagnostic Directory
 
-> **Navigation:** [🏠 Master Bootcamp README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📖 Instructor Guide](../INSTRUCTOR_GUIDE.md) | [⚡ Commands Cheatsheet](../ALL_COMMANDS_CHEATSHEET.md)
+> **Navigation:** [🏠 Master Bootcamp README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [🛠️ Setup & Tooling Guide](../ATTENDEE_SETUP_GUIDE.md) | [⚡ Commands Cheatsheet](../ALL_COMMANDS_CHEATSHEET.md)
 
 ---
 
@@ -104,4 +104,4 @@ Welcome to the **Master Reference Cards Library** for the **5-Day Weather Foreca
 
 ---
 
-> **Navigation:** [🏠 Master Bootcamp README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📖 Instructor Guide](../INSTRUCTOR_GUIDE.md) | [⚡ Commands Cheatsheet](../ALL_COMMANDS_CHEATSHEET.md)
+> **Navigation:** [🏠 Master Bootcamp README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [🛠️ Setup & Tooling Guide](../ATTENDEE_SETUP_GUIDE.md) | [⚡ Commands Cheatsheet](../ALL_COMMANDS_CHEATSHEET.md)

@@ -1,7 +1,7 @@
 > **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
 
 # Weather Forecast Engineering Database Bootcamp
-## Day 1 Master Coursebook & Instructor Guide: SQL Foundations, WMO Relational Modeling & Telemetry Wrangling with SQLite
+## Day 1 Master Coursebook: SQL Foundations, WMO Relational Modeling & Telemetry Wrangling with SQLite
 
 **Bootcamp:** Database & NoSQL Engineering (5-Day Intensive)  
 **Target Audience:** Weather Forecast Engineers, Meteorological Software Engineers, Weather Systems Administrators & Environmental Data Scientists  
@@ -11,24 +11,25 @@
 2. **`weather_telemetry.db` (`generate_weather_db.py`):** 250,000 synthetic high-frequency observations across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) with injected hardware sentinels (`-999.0`), barometric plunges, thermal spikes, and a 6-hour communications blackout.
 
 **Companion Reference Files in `day1/`:**
-- `day1_sqlite_and_sql_cheatsheet.md` — Authoritative CLI Directives, 3VL Truth Tables, WMO Queries & Window Recipes
-- `day1_hardware_sentinels_and_qc_guide.md` — Deep-Dive on `-9999` / `-999` In-Band Signaling, ADC Physics, WMO QC Flags & Contamination Math
-- `weather_ops_seed.sql` & `weather_ops.db` — WMO Synoptic & NWP Verification Relational Seed
-- `generate_weather_db.py` — Standalone 250,000-row Python SQLite Telemetry Generator
+- [day1_sqlite_and_sql_cheatsheet.md](./day1_sqlite_and_sql_cheatsheet.md) — Authoritative CLI Directives, 3VL Truth Tables, WMO Queries & Window Recipes
+- [day1_hardware_sentinels_and_qc_guide.md](./day1_hardware_sentinels_and_qc_guide.md) — Deep-Dive on `-9999` / `-999` In-Band Signaling, ADC Physics, WMO QC Flags & Contamination Math
+- [weather_ops_seed_sql_course_walkthrough.md](./weather_ops_seed_sql_course_walkthrough.md) — **Detailed Markdown Course Walkthrough** explaining every SQL statement, constraint, and telemetry anomaly in `weather_ops_seed.sql`
+- [weather_ops_seed.sql](./weather_ops_seed.sql) & `weather_ops.db` — WMO Synoptic & NWP Verification Relational Seed
+- [generate_weather_db.py](./generate_weather_db.py) — Standalone 250,000-row Python SQLite Telemetry Generator
 - *(Cross-Day OLAP Previews)*: Columnar Parquet formats and DuckDB (OLAP) vs. SQLite (OLTP) architectural comparisons
 
 ---
 
-## 1. The 5-Day Arc & Pedagogical Philosophy
+## 1. The 5-Day Arc & Architectural Overview
 
-### 1.1 Core Philosophy
-Shift attendees from procedural programming habits (loops, fragile CSV/NetCDF file scripts, ad-hoc array filtering) to **set-based declarative thinking**, enforce physical meteorological integrity at the schema layer, master time-series telemetry anomalies (`NULL` vs. `-9999.0`/`-999.0`), verify Numerical Weather Prediction (NWP) models with relational joins, and establish a rock-solid ANSI SQL baseline before tearing down PostgreSQL storage internals on Day 2.
+### 1.1 Core Engineering Objective
+Move beyond ad-hoc procedural file scripts (nested loops over fragile CSV/ASCII files) to **set-based declarative SQL**, enforce physical meteorological integrity directly at the database schema layer, sanitize time-series telemetry anomalies (`NULL` vs. `-9999.0`/`-999.0`), verify Numerical Weather Prediction (NWP) models with relational joins, and establish a rigorous ANSI SQL foundation before examining PostgreSQL storage engine internals on Day 2.
 
 ### 1.2 The 5-Day Journey: Why Start with Local SQLite?
 1. **Day 1 — SQLite (Core Relational Modeling, Declarative SQL & Telemetry Wrangling):**
-   - **Zero Infrastructure Failure at 09:05 AM:** A complete relational database lives inside a single disk file (`weather_ops.db` and `weather_telemetry.db`). Eliminates Docker port conflicts, permission issues, or authentication firewalls on attendee laptops.
-   - **Pedagogical Isolation:** Separates SQL logic and set theory from multi-process server internals. Attendees spend 100% of Day 1 mastering **DDL constraints, declarative execution order, Three-Valued Logic (3VL), hardware sentinel hygiene (`NULLIF`), climatological aggregations (`GROUP BY`/`HAVING`), NWP forecast verification (`JOIN`s), recursive gap-filling CTEs (`WITH RECURSIVE`), and sliding window functions (`OVER`, `PARTITION BY`, `LAG`)**.
-   - **Real-World Meteorological Role:** Widely used in edge weather stations, autonomous ocean buoys, mobile field loggers, and local data-science prototyping.
+   - **Zero Infrastructure Friction:** A complete relational database resides inside a single cross-platform disk file (`weather_ops.db` and `weather_telemetry.db`), requiring zero background daemons or network sockets.
+   - **Architectural Focus:** Isolates relational set theory and query execution from multi-process server administration. Day 1 covers **DDL constraints, declarative execution order, Three-Valued Logic (3VL), hardware sentinel hygiene (`NULLIF`), climatological aggregations (`GROUP BY`/`HAVING`), NWP forecast verification (`JOIN`s), recursive gap-filling CTEs (`WITH RECURSIVE`), and sliding window functions (`OVER`, `PARTITION BY`, `LAG`)**.
+   - **Real-World Meteorological Role:** Widely deployed inside edge weather stations, autonomous ocean buoys, mobile field loggers, and local data-science pipelines.
 2. **Days 2 & 3 — PostgreSQL (Production Relational & Spatial Engine):**
    - Moving from a single-file embedded library to a concurrent multi-process client-server architecture (`postgres`).
    - Physical 8 KB heap pages (`pageinspect`), 23-byte MVCC tuple headers, CPU byte-alignment padding, strict data types (`TIMESTAMPTZ`, `NUMERIC`), declarative table partitioning for billions of synoptic rows, indexing (`B-Tree`, `BRIN`, `GIN`), and geospatial meteorology (`PostGIS`).
@@ -37,52 +38,49 @@ Shift attendees from procedural programming habits (loops, fragile CSV/NetCDF fi
 
 ---
 
-## 2. Daily Schedule & Comprehensive Module Timetable
+## 2. Comprehensive Module Outline
 
 ```
 ┌─────────────────┬──────────────────────────────────────────────────────────────────────────┐
-│ 09:00 – 09:45   │ Module 1: Why Databases? Architecture, CLI Directives & Dual Datasets    │
+│ Module 1        │ Why Databases? Architecture, CLI Directives & Dual Datasets              │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 09:45 – 10:45   │ Module 2: Relational Schema Design, WMO Constraints, CRUD & Lab 1        │
+│ Module 2        │ Relational Schema Design, WMO Constraints, CRUD & Lab 1                  │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 10:45 – 11:00   │ Morning Coffee Break                                                     │
+│ Module 3        │ The Declarative Engine, Execution Order & 3VL Truth Tables               │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 11:00 – 12:00   │ Module 3: The Declarative Engine, Execution Order & 3VL Truth Tables     │
+│ Module 4        │ Hardware Sentinels (-9999/-999), QC Hygiene & Lab 2                      │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 12:00 – 13:00   │ Module 4: Hardware Sentinels (-9999/-999), QC Hygiene & Lab 2            │
+│ Module 5        │ Climatological Aggregations, Rollups & NWP Verification (Lab 3)          │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 13:00 – 14:00   │ Lunch Break                                                              │
+│ Module 6        │ CTE Pipelines, Recursive Outage Grids & Window Functions                 │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 14:00 – 15:00   │ Module 5: Climatological Aggregations, Rollups & NWP Verification (Lab 3)│
-├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 15:00 – 16:00   │ Module 6: CTE Pipelines, Recursive Outage Grids & Window Functions       │
-├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 16:00 – 17:00   │ Module 7: Capstone Labs (NWP Leaderboard + AWS Production Challenges)    │
+│ Module 7        │ Capstone Walkthroughs (NWP Leaderboard + AWS Production Diagnostics)     │
 └─────────────────┴──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Module 1: Why Databases? Architecture, Tooling & Dual Dataset Setup (09:00 – 09:45)
+## 3. Module 1: Why Databases? Architecture, Tooling & Dual Dataset Setup
 
-### 3.1 Instructor Talking Points: Flat Files vs. Relational DBMS
-- **The Pain of Flat Files in Weather Engineering:**
-  - Ask the room: *"How many of you have a folder of 10,000 CSV or ASCII synoptic files where one station changed its column order or wrote `-9999.0` for a broken rain gauge?"*
-  - Contrast **File-processing scripts** (fragile, no concurrent locking, no enforced data validation, slow filtering across years) with a **Relational DBMS** (declarative SQL, ACID transactions, schema enforcement, composite indexes).
+### 3.1 Flat Files vs. Relational DBMS in Meteorological Engineering
+- **The Fragility of Flat Files in Weather Operations:**
+  - When a meteorological center stores observations across tens of thousands of loose CSV or ASCII synoptic files, a single firmware update that reorders two columns or emits `-9999.0` for a broken rain gauge silently corrupts downstream scripts.
+  - **File-Processing Scripts vs. Relational DBMS:** Ad-hoc file scripts lack concurrent write locking, atomic crash recovery, physical schema constraints, and indexed time-range lookups. A **Relational DBMS** enforces physical domain boundaries via `CHECK` constraints, guarantees ACID transactions, and uses B-Tree/BRIN indexes to slice multi-year time windows in milliseconds rather than scanning every file on disk.
 - **How SQLite Works vs. PostgreSQL & DuckDB:**
-  - **SQLite (Embedded Row-Oriented OLTP):** An *embedded* SQL engine (`libsqlite3`). Your application or CLI reads/writes directly to a single disk file (`weather_ops.db`). Great for local analysis, embedded data loggers on weather buoys/stations, and transactional lookups.
-  - **Concurrency Limitation (Bridge to Day 2):** SQLite locks the database file during writes (even with WAL mode, only one writer at a time). When 500 automated weather stations push data simultaneously while forecasters query dashboards, you need **PostgreSQL**.
-  - **Row Store vs. Columnar OLAP Preview (Parquet & DuckDB):** SQLite stores rows contiguously (B-Tree pages), which is fast for inserting single station pings or fetching all attributes of station `60390`. For scanning 50 years of temperature alone across 10 billion rows, columnar formats (**Apache Parquet**) and vectorized engines (**DuckDB**) read only the compressed temperature column.
+  - **SQLite (Embedded Row-Oriented OLTP):** An *in-process* SQL engine (`libsqlite3`). Your application or CLI reads and writes directly to a single ordinary disk file (`weather_ops.db`). Ideal for local analysis, embedded data loggers on weather buoys/stations, and transactional lookups.
+  - **Concurrency Limitation (Bridge to Day 2):** SQLite arbitrates writes using OS file locks (even in `WAL` mode, only **one writer** can append at a time). When 500 automated weather stations push telemetry simultaneously while forecasters query live dashboards, a client-server engine with row-level MVCC (**PostgreSQL**) is required.
+  - **Row Store vs. Columnar OLAP Preview (Parquet & DuckDB):** SQLite stores entire rows contiguously inside 4 KB B-Tree pages, which is optimal for inserting individual station pings or retrieving all attributes of station `60390`. For scanning 50 years of temperature alone across 10 billion rows, columnar formats (**Apache Parquet**) and vectorized engines (**DuckDB**) read only the compressed temperature bytes.
 
 ### 3.2 Dataset 1 Setup: Curated WMO Synoptic & NWP Database (`weather_ops.db`)
-Have attendees open their terminal in the `day1` directory and build/inspect `weather_ops.db` from `weather_ops_seed.sql`:
+Open a terminal in the `day1` directory and build/inspect `weather_ops.db` from `weather_ops_seed.sql`:
 
 ```bash
 sqlite3 weather_ops.db < weather_ops_seed.sql
 sqlite3 weather_ops.db
 ```
 
-Teach the essential **`sqlite3` CLI dot-commands** (emphasize that dot-commands are evaluated by the client shell, start at column 1 with `.`, and **never** end with a semicolon):
+#### Essential `sqlite3` CLI Dot-Commands
+Dot-commands are evaluated directly by the `sqlite3` client shell (not the SQL parser), must begin at column 1 with a `.`, and **never** end with a semicolon:
 
 ```sql
 .help                  -- Show available shell commands
@@ -97,15 +95,15 @@ SELECT * FROM stations;
 ```
 
 > [!TIP]
-> **Instructor Live Demo Tip — Making `NULL` Visible in the Terminal:**  
-> Before running any queries on `observations`, demonstrate what happens when `.nullvalue` is left at its default (an empty string): `NULL` temperature dropouts look identical to blank whitespace! Have every student run `.nullvalue NULL` and `.mode box` immediately so Three-Valued Logic (`3VL`) and sensor dropouts are visually unmistakable on screen.
+> **Engineering Tip — Making `NULL` Visible in the Terminal:**  
+> By default, the `sqlite3` shell renders `NULL` values as an empty string (`""`), making missing sensor dropouts visually indistinguishable from blank whitespace. Always run `.nullvalue NULL` and `.mode box` at the start of a session (or add them to `~/.sqliterc`) so Three-Valued Logic (`3VL`) and sensor dropouts are explicitly displayed as `NULL`.
 
-Have attendees also open **`weather_ops.db` in DBeaver / DB Browser for SQLite**:
-1. Create a New Connection $\rightarrow$ Select **SQLite** $\rightarrow$ Browse to `weather_ops.db`.
-2. Double-click the `stations` table $\rightarrow$ open the **ER Diagram** tab to visually inspect how `station_id` links `stations` to `observations`, `forecasts`, and `weather_alerts`.
+To inspect **`weather_ops.db` visually in DBeaver / DB Browser for SQLite**:
+1. Create a New Connection $\rightarrow$ Select **SQLite** $\rightarrow$ Browse to `day1/weather_ops.db`.
+2. Double-click the `stations` table $\rightarrow$ open the **ER Diagram** tab to inspect how `station_id` links `stations` to `observations`, `forecasts`, and `weather_alerts`.
 
 ### 3.3 Dataset 2 Setup: 250,000-Row High-Frequency AWS Stream (`weather_telemetry.db`)
-Next, have attendees run the standalone Python generator (`generate_weather_db.py`) using Python 3 (standard library only; zero external dependencies). It synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:
+Run the standalone Python generator (`generate_weather_db.py`) using Python 3 (standard library only; zero external dependencies). It synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:
 
 ```bash
 chmod +x generate_weather_db.py
@@ -125,10 +123,9 @@ Inside `sqlite3 weather_telemetry.db`:
 
 ---
 
-## 4. Module 2: Relational Schema Design, WMO Constraints & CRUD (09:45 – 10:45)
+## 4. Module 2: Relational Schema Design, WMO Constraints & CRUD
 
-### 4.1 Instructor Talking Points (30 min)
-
+### 4.1 Relational Schema Architecture & Physical Integrity
 #### WMO Synoptic & NWP Relational Entity-Relationship Architecture (`weather_ops.db`)
 
 ```mermaid
@@ -186,8 +183,8 @@ erDiagram
    - In `weather_ops.db`, `stations` uses `station_id` (the official 5-digit WMO station number, e.g., `60390` for Algiers - Dar El Beida) as a **Natural Primary Key**.
    - `observations` uses `obs_id INTEGER PRIMARY KEY AUTOINCREMENT` (a **Surrogate Key**) paired with a composite `UNIQUE (station_id, obs_time)` constraint so a station can never log two conflicting synoptic reports for the same timestamp.
 2. **Physical Integrity via `CHECK` Constraints:**
-   - Weather sensors fail and transmit garbage (e.g., relative humidity of `145%`, negative wind speed, or latitude `115.0`).
-   - Show how the database itself rejects impossible physics at insert time:
+   - Weather sensors fail and transmit corrupted packets (e.g., relative humidity of `145%`, negative wind speed, or latitude `115.0`).
+   - Defining declarative `CHECK` constraints directly on the table forces the storage engine to reject physically impossible measurements at insert time:
      ```sql
      CREATE TABLE stations (
          station_id   INTEGER PRIMARY KEY,               -- WMO 5-digit station identifier
@@ -214,47 +211,52 @@ erDiagram
          UNIQUE (station_id, obs_time)
      );
      ```
-3. **SQLite Dynamic Typing vs. PostgreSQL Strict Typing (Crucial Gotcha!):**
-   - Explain SQLite's 5 storage classes (`INTEGER`, `REAL`, `TEXT`, `BLOB`, `NULL`) and *Type Affinity*.
-   - SQLite stores timestamps as ISO-8601 `TEXT` (`'2026-10-05 12:00:00'`), Julian `REAL`, or Unix `INTEGER`. Because ISO-8601 strings sort lexicographically in exact chronological order (`YYYY-MM-DD HH:MM:SS`), `BETWEEN` and `ORDER BY` work naturally!
-   - *Day 2 Preview:* In PostgreSQL tomorrow, we will enforce strict native types (`TIMESTAMPTZ` and `NUMERIC(5,2)`).
+3. **SQLite Dynamic Typing & Type Affinity vs. PostgreSQL Strict Typing:**
+   - Unlike PostgreSQL (where a column's type is rigidly enforced on every row), standard SQLite uses **Dynamic Typing (Manifest Typing)**: the data type is associated with the *individual value* rather than the column container (unless a table is explicitly declared `STRICT` in SQLite 3.37+).
+   - Every value stored in an SQLite database belongs to one of **5 Fundamental Storage Classes**:
+
+     | Storage Class | Internal Representation | Meteorological Usage in SQLite |
+     | :--- | :--- | :--- |
+     | **`NULL`** | 0-byte header flag | Missing sensor reading / offline probe |
+     | **`INTEGER`** | Variable-length signed integer (`1, 2, 3, 4, 6, or 8 bytes` depending on magnitude) | WMO `station_id` (`60390`), `lead_hours`, boolean flags (`0`/`1`), or Unix epochs |
+     | **`REAL`** | 8-byte IEEE 754 floating-point number | `temp_c`, `pressure_hpa`, `wind_speed_kt`, `latitude`, `longitude` |
+     | **`TEXT`** | UTF-8 / UTF-16 string | `station_name`, `qc_flag`, and ISO-8601 UTC timestamps (`'2026-10-05 12:00:00'`) |
+     | **`BLOB`** | Raw byte sequence (stored verbatim) | Compact binary payloads (though large gridded arrays belong in object storage) |
+
+   - **How Type Affinity Works:** Column declarations (`INTEGER`, `REAL`, `TEXT`, `NUMERIC`) act as *Type Affinity* hints—if you insert the text string `'24.5'` into a `REAL` column, SQLite automatically converts it to a float (`24.5`), but if you insert `'N/A'` into a `REAL` column without a `CHECK(typeof(col) = 'real')` or `STRICT` table modifier, SQLite will store `'N/A'` as `TEXT`!
+   - **Why ISO-8601 `TEXT` Timestamps Work in SQLite:** Because ISO-8601 UTC strings (`YYYY-MM-DD HH:MM:SS`) order most-significant to least-significant digit, standard byte-by-byte lexicographical sorting (`BETWEEN` and `ORDER BY`) matches chronological order.
+   - *Day 2 Contrast:* In PostgreSQL, timestamps are stored as native 8-byte `TIMESTAMPTZ` integers (microseconds since `2000-01-01 00:00:00 UTC`), and calibrated measurements use exact base-10 `NUMERIC(5,2)`.
 4. **Foreign Keys in SQLite (`PRAGMA foreign_keys = ON;`):**
-   - By default, for backwards compatibility from the early 2000s, SQLite starts with foreign key enforcement turned **off** on each new connection! Always run `PRAGMA foreign_keys = ON;` so you cannot insert an observation for a non-existent WMO station.
+   - For backwards compatibility with legacy SQLite 3.6 applications, SQLite starts every new connection with foreign key enforcement turned **off** by default. Always execute `PRAGMA foreign_keys = ON;` so the engine rejects observations referencing non-existent WMO stations.
 
 > [!WARNING]
-> **Common Student Pitfall — Forgotten `PRAGMA foreign_keys = ON;` Across Sessions:**  
-> In SQLite, `PRAGMA foreign_keys = ON;` is a **per-connection setting**, not a persistent database flag! If a student closes their `sqlite3` terminal or opens a new SQL editor tab in DBeaver and runs Lab 1 Step 2b (`INSERT INTO observations` with `station_id = 99999`), the insert will silently succeed if they forgot to re-enable `PRAGMA foreign_keys = ON;`. Remind students to check `PRAGMA foreign_keys;` (returns `1` when active) before testing referential integrity.
+> **Production Engineering Pitfall — `PRAGMA foreign_keys = ON;` Is Per-Connection:**  
+> In SQLite, `PRAGMA foreign_keys = ON;` is a **session-level setting**, not a persistent flag stored inside the `.db` file header. Whenever you open a new `sqlite3` terminal session, reconnect in DBeaver, or open a new Python `sqlite3.connect()` handle, you must execute `PRAGMA foreign_keys = ON;` (verify with `PRAGMA foreign_keys;`, which returns `1` when active) to enforce referential integrity.
 
 5. **Safe CRUD Operations (`INSERT`, `UPDATE`, `DELETE`):**
-   - Golden Rule: **Never run `UPDATE` or `DELETE` without testing the `WHERE` clause using a `SELECT` first!**
+   - **Operational Rule:** Never run an `UPDATE` or `DELETE` statement on production telemetry without first testing the exact `WHERE` predicate using a `SELECT` query.
 
-### 4.2 Lab 1: DDL, Physical Constraints & CRUD on `weather_ops.db` (30 min)
-**Tasks for Attendees (in `weather_ops.db`):**
-1. Enable foreign keys (`PRAGMA foreign_keys = ON;`) and insert a new desert weather station: `60602` (`'In Salah'`, lat `27.25`, lon `2.51`, elev `269.0`, climate `'Arid'`, active `1`).
-2. Test the database's physical and relational safety rails:
-   - Try inserting a station with `latitude = 115.0`. Observe the `CHECK constraint failed` error.
-   - Try inserting an observation for station `99999` (which doesn't exist). Observe the `FOREIGN KEY constraint failed` error.
-3. Create a new table called `sensor_calibration` with columns: `cal_id` (PK), `station_id` (FK to `stations` with `ON DELETE CASCADE`), `sensor_type` (`CHECK` in `'THERMOMETER'`, `'BAROMETER'`, `'ANEMOMETER'`, `'RAIN_GAUGE'`), `calibrated_at` (`TEXT NOT NULL`), and `offset_applied` (`REAL NOT NULL DEFAULT 0.0`).
-4. Station `60402` (`Bejaia - Soummam`) just finished maintenance! Write an `UPDATE` statement to change its `is_active` status from `0` to `1`.
-
-<details>
-<summary><strong>Lab 1 — Instructor Solution Key</strong></summary>
+### 4.2 Lab 1 Walkthrough: DDL, Physical Constraints & CRUD on `weather_ops.db`
+In this walkthrough on `weather_ops.db`, we verify foreign-key and physical `CHECK` constraints, add a new desert synoptic station (`60602 In Salah`), create a `sensor_calibration` metadata table, and reactivate a station returning from maintenance (`60402 Bejaia - Soummam`):
 
 ```sql
+-- Enable referential integrity enforcement on the current connection
 PRAGMA foreign_keys = ON;
 
 -- 1. Insert new desert station In Salah (60602)
 INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, climate_zone, is_active)
 VALUES (60602, 'In Salah', 27.2500, 2.5100, 269.0, 'Arid', 1);
 
--- 2a. Expect error: CHECK constraint failed: latitude BETWEEN -90.0 AND 90.0
+-- 2a. Test physical CHECK safety rail (Latitude > 90.0):
+-- Expected Result: Runtime error: CHECK constraint failed: latitude BETWEEN -90.0 AND 90.0
 INSERT INTO stations VALUES (60999, 'Invalid Lat Station', 115.0, 0.0, 10.0, 'Arid', 1);
 
--- 2b. Expect error: FOREIGN KEY constraint failed
+-- 2b. Test relational FOREIGN KEY safety rail (Non-existent WMO station 99999):
+-- Expected Result: Runtime error: FOREIGN KEY constraint failed
 INSERT INTO observations (station_id, obs_time, temp_c, qc_flag)
 VALUES (99999, '2026-10-06 12:00:00', 25.0, 'VALID');
 
--- 3. Create sensor_calibration table
+-- 3. Create a sensor_calibration table linked to stations with ON DELETE CASCADE
 CREATE TABLE IF NOT EXISTS sensor_calibration (
     cal_id         INTEGER PRIMARY KEY AUTOINCREMENT,
     station_id     INTEGER NOT NULL,
@@ -264,16 +266,15 @@ CREATE TABLE IF NOT EXISTS sensor_calibration (
     FOREIGN KEY (station_id) REFERENCES stations(station_id) ON DELETE CASCADE
 );
 
--- 4. Reactivate Bejaia - Soummam
+-- 4. Reactivate Bejaia - Soummam (60402) after maintenance completion
 UPDATE stations
 SET is_active = 1
 WHERE station_id = 60402;
 ```
-</details>
 
 ---
 
-## 5. Module 3: The Declarative Engine, Query Execution Order & Three-Valued Logic (11:00 – 12:00)
+## 5. Module 3: The Declarative Engine, Query Execution Order & Three-Valued Logic
 
 ### 5.1 The Procedural Mindset vs. Relational Sets
 Software developers write code imperatively: lines execute sequentially in loops. In SQL, the engineer specifies **what** set of tuples must be generated, and the query planner constructs the physical retrieval plan.
@@ -304,8 +305,8 @@ flowchart LR
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.3 Classroom Exercise: The Premature Alias Bug
-Instruct the room to execute this query against `weather_telemetry.db`:
+### 5.3 The Premature Alias Bug (Why `WHERE` Cannot Reference `SELECT` Aliases)
+Executing this query against `weather_telemetry.db` triggers an immediate planner error:
 
 ```sql
 -- DELIBERATE FAILURE: Run directly in SQLite terminal
@@ -318,7 +319,7 @@ WHERE temp_f > 85.0;
 ```
 
 * **Observed Error:** `Error: no such column: temp_f`
-* **Teaching Point:** `WHERE` evaluates at **Step 2** to determine which disk pages to load. `SELECT` does not allocate column expressions or aliases until **Step 5/6**. The alias `temp_f` does not exist at Step 2!
+* **Architectural Reason:** `WHERE` evaluates at **Step 2** to determine which disk pages and rows to filter. `SELECT` does not evaluate scalar column expressions or assign aliases until **Step 5/6**. Therefore, the alias `temp_f` does not exist when `WHERE` executes at Step 2!
 * **Production Fix (Expression Repetition or CTE):**
   ```sql
   SELECT 
@@ -334,7 +335,7 @@ WHERE temp_f > 85.0;
   - Dewpoint depression (indicator of dry air / cloud base height): `ROUND(temp_c - dewpoint_c, 1) AS dewpoint_spread_c`
 
 ### 5.4 The Cost of `HAVING` vs. `WHERE` Pushdown
-Demonstrate memory conservation by comparing filter placement on 250,000 rows:
+Comparing filter placement on 250,000 rows demonstrates why non-aggregate filters belong in `WHERE` rather than `HAVING`:
 
 ```sql
 -- POOR: Allocates memory for 250,000 rows across 50 stations before discarding 48
@@ -362,18 +363,18 @@ In SQL, `NULL` does not mean zero or blank space—it means **unknown/missing**.
 * **The `= NULL` Trap:** `temp_c = NULL` and `temp_c != NULL` **always** evaluate to `UNKNOWN`. Because `WHERE` only admits rows that evaluate strictly to `TRUE`, `WHERE temp_c = NULL` returns 0 rows! Always use `WHERE temp_c IS NULL` or `WHERE temp_c IS NOT NULL`.
 
 > [!IMPORTANT]
-> **Common Student Pitfall — The `NOT IN (..., NULL)` Silent Zero-Row Bug:**  
+> **Production Engineering Pitfall — The `NOT IN (..., NULL)` Silent Zero-Row Bug:**  
 > In Three-Valued Logic (`3VL`), `x NOT IN (10, 20, NULL)` expands algebraically to `x != 10 AND x != 20 AND x != NULL`. Because `x != NULL` is always `UNKNOWN`, and `TRUE AND UNKNOWN` evaluates to `UNKNOWN`, **the entire `WHERE` clause returns 0 rows!** Whenever filtering against a subquery that might contain `NULL`s, always filter `WHERE col IS NOT NULL` inside the subquery or use `NOT EXISTS`.
 
 ---
 
-## 6. Module 4: Hardware Sentinels (`-9999` / `-999`), In-Band Signaling & QC Hygiene (12:00 – 13:00)
+## 6. Module 4: Hardware Sentinels (`-9999` / `-999`), In-Band Signaling & QC Hygiene
 
 ### 6.1 The Physical Problem: Why `-999.0` and `-9999.0` Exist
 In embedded systems and legacy WMO/Fortran files, sensors communicate over fixed-width serial buses (RS-485, Modbus, SDI-12). When a thermistor wire breaks or an ADC saturates, firmware emits an **in-band hardware sentinel value** (`-999.0`, `-9999.0`, `9999.0`) because `NULL` cannot physically exist on a binary wire.
 *(See `day1_hardware_sentinels_and_qc_guide.md` for the full ADC physics and variance explosion math).*
 
-### 6.2 Live Naive Query Demonstrations (Both Databases!)
+### 6.2 Naive Query Contamination Across Both Datasets
 1. **In `weather_telemetry.db` (250,000 rows):**
    ```sql
    SELECT 
@@ -392,15 +393,12 @@ In embedded systems and legacy WMO/Fortran files, sensors communicate over fixed
    └───────────────┴──────────────────┴──────────────────┴──────────────────┘
    ```
 2. **In `weather_ops.db` (WMO Synoptic Observations):**
-   - Constantine (`60419`) has a `-9999.0` rain gauge reading at `2026-10-06 12:00:00`, dragging `AVG(precip_1h_mm)` into massive negative numbers!
+   - Constantine (`60419`) has a `-9999.0` rain gauge reading at `2026-10-06 12:00:00`, dragging `AVG(precip_1h_mm)` into massive negative numbers (`-1660.4 mm`).
    - Bechar (`60571`) has an erroneous `68.5°C` sensor spike at `2026-10-06 12:00:00` (`qc_flag = 'ERRONEOUS'`).
 
-**Teaching Script:**
-> *"The query engine did not make an arithmetic error. It treated `-999.0` and `-9999.0` as legitimate physical readings. A few disconnected sensors pulled down the average temperature across a warm Mediterranean station network into sub-zero values. The database failed because we treated an operational engine as if it understood atmospheric physics."*
-
 > [!TIP]
-> **Instructor Live Demo Tip — The `-1.42°C` Reveal:**  
-> Run the naive `AVG(temperature)` query on `weather_telemetry.db` first without warning the class about `-999.0`. Ask the room: *"Why does our coastal Algerian network have an average October temperature of `-1.42°C`?"* Let a student spot `MIN(temperature) = -999.0` in the output box—this creates an unforgettable "aha!" moment about in-band hardware sentinels.
+> **Architectural Analysis — Why the October Network Mean Dropped to `-1.42°C`:**  
+> The query engine did not make an arithmetic error: it treated `-999.0` and `-9999.0` as legitimate physical readings. Just a ~2% rate of `-999.0` sensor dropouts (`MIN(temperature) = -999.0`) pulled the average temperature across a warm Mediterranean station network down from $+18.4^\circ\text{C}$ to $-1.42^\circ\text{C}$. Operational databases require explicit sentinel translation (`NULLIF`) or physical range filtering (`CASE WHEN`) before computing climatological aggregates.
 
 ### 6.3 The Core Rule: Clean at the Attribute Level, Not the Row Level
 Inspect an anomaly row in `weather_telemetry.db`:
@@ -453,21 +451,8 @@ GROUP BY station_id
 LIMIT 5;
 ```
 
-### 6.5 Lab 2: Synoptic Filtering, Data Cleaning & Operational Classification (`weather_ops.db`) (30 min)
-**Tasks for Attendees (in `weather_ops.db`):**
-1. Find all observations where `qc_flag` is **not** `'VALID'` or where `temp_c` or `precip_1h_mm` looks suspicious (`IS NULL`, `< 0`, or `temp_c > 58.0`).
-2. Clean the synoptic database!
-   - Update `observations` so any `precip_1h_mm = -9999.0` is set to `NULL`.
-   - Nullify (`SET temp_c = NULL`) the corrupted `68.5°C` erroneous reading at Bechar (`station_id = 60571` at `'2026-10-06 12:00:00'`).
-3. Write a query returning `station_id`, `obs_time`, `temp_c`, `wind_speed_kt`, and a new derived column `wind_category` using `CASE WHEN`:
-   - `< 10` kt $\rightarrow$ `'Light Breeze'`
-   - `10` to `< 22` kt $\rightarrow$ `'Moderate Wind'`
-   - `22` to `< 34` kt $\rightarrow$ `'Strong Wind'`
-   - `>= 34` kt $\rightarrow$ `'Gale Warning'`
-   Order the results by `wind_speed_kt` descending, showing the top 10 windiest observations.
-
-<details>
-<summary><strong>Lab 2 — Instructor Solution Key</strong></summary>
+### 6.5 Lab 2 Walkthrough: Synoptic Filtering, Data Cleaning & Operational Classification (`weather_ops.db`)
+In this walkthrough on `weather_ops.db`, we isolate observations with non-valid QC flags or out-of-range measurements (`precip_1h_mm < 0` or `temp_c > 58.0`), remediate the `-9999.0` sentinel and `68.5°C` thermal spike into proper SQL `NULL`s, and classify wind speeds into operational Beaufort warning tiers (`Light Breeze`, `Moderate Wind`, `Strong Wind`, `Gale Warning`):
 
 ```sql
 -- 1. Inspect suspect/erroneous or out-of-range rows
@@ -483,7 +468,7 @@ UPDATE observations
 SET precip_1h_mm = NULL
 WHERE precip_1h_mm = -9999.0;
 
--- 2b. Nullify corrupted 68.5°C temperature spike at Bechar
+-- 2b. Nullify corrupted 68.5°C temperature spike at Bechar (60571)
 UPDATE observations
 SET temp_c = NULL
 WHERE station_id = 60571
@@ -507,11 +492,10 @@ WHERE wind_speed_kt IS NOT NULL
 ORDER BY wind_speed_kt DESC
 LIMIT 10;
 ```
-</details>
 
 ---
 
-## 7. Module 5: Climatological Aggregations, Rollups & Relational `JOIN`s (14:00 – 15:00)
+## 7. Module 5: Climatological Aggregations, Rollups & Relational `JOIN`s
 
 ### 7.1 Aggregate Functions & Sensor Uptime Math
 - `COUNT(*)` counts **all rows** (all synoptic timestamps logged).
@@ -533,22 +517,11 @@ LIMIT 10;
    - To verify an NWP forecast (`forecasts` table) against ground truth (`observations` table), you must join on **both** `station_id` **AND** timestamp (`f.station_id = o.station_id AND f.valid_time = o.obs_time`)!
 
 > [!WARNING]
-> **Common Student Pitfall — Accidental Cartesian Explosion in NWP Verification Joins:**  
-> When joining `forecasts f` and `observations o`, students frequently write `ON f.station_id = o.station_id` and forget `AND f.valid_time = o.obs_time`. Because each station has 6 synoptic observations and 18 forecast rows, omitting the timestamp join predicate multiplies every station's rows into $6 \times 18 = 108$ bogus pairs—comparing Tuesday's 12:00 UTC forecast against Monday's 06:00 UTC observation! Always verify that NWP joins include **both** spatial (`station_id`) and temporal (`valid_time = obs_time`) predicates.
+> **Production Engineering Pitfall — Accidental Cartesian Explosion in NWP Verification Joins:**  
+> When joining `forecasts f` and `observations o`, writing only `ON f.station_id = o.station_id` while omitting `AND f.valid_time = o.obs_time` causes a **Cartesian product per station**. Because each station has 6 synoptic observations and 18 forecast rows, omitting the timestamp join predicate multiplies every station's rows into $6 \times 18 = 108$ mismatched pairs—comparing Tuesday's 12:00 UTC forecast against Monday's 06:00 UTC observation! Always verify that NWP joins include **both** spatial (`station_id`) and temporal (`valid_time = obs_time`) predicates.
 
-### 7.3 Lab 3: Daily Climatological Summaries & Sensor Quality Audit (`weather_ops.db`) (30 min)
-**Tasks for Attendees (in `weather_ops.db`):**
-1. **Station Summary Report:** For each `station_id`, compute:
-   - Total observations logged (`COUNT(*)`)
-   - Valid temperature readings (`COUNT(temp_c)`) and `uptime_pct`
-   - Minimum, Maximum, and Mean temperature (rounded to 1 decimal place)
-   - Diurnal temperature range (`MAX(temp_c) - MIN(temp_c)`)
-   - Total accumulated precipitation (`SUM(COALESCE(precip_1h_mm, 0.0))`)
-2. **Daily Synoptic Rollup:** Group observations by `station_id` and `DATE(obs_time)` to produce a daily climate table (`obs_date`, `daily_min_c`, `daily_max_c`, `avg_mslp_hpa`, `daily_rain_mm`).
-3. **Wet Event Detection (`HAVING`):** Find all `(station_id, DATE(obs_time))` pairs where total daily rainfall exceeded `15.0 mm`.
-
-<details>
-<summary><strong>Lab 3 — Instructor Solution Key</strong></summary>
+### 7.3 Lab 3 Walkthrough: Daily Climatological Summaries & Sensor Quality Audit (`weather_ops.db`)
+The following queries on `weather_ops.db` compute per-station sensor uptime and diurnal temperature range, generate a daily synoptic climate rollup per station (`obs_date`, `daily_min_c`, `daily_max_c`, `avg_mslp_hpa`, `daily_rain_mm`), and isolate heavy rainfall events (`> 15.0 mm/day`) using `HAVING`:
 
 ```sql
 -- 1. Station Summary & Sensor Uptime Report
@@ -589,11 +562,10 @@ GROUP BY station_id, DATE(obs_time)
 HAVING SUM(COALESCE(precip_1h_mm, 0.0)) > 15.0
 ORDER BY daily_rain_mm DESC;
 ```
-</details>
 
 ---
 
-## 8. Module 6: CTE Time Pipelines, Recursive Outage Grids & Window Functions (15:00 – 16:00)
+## 8. Module 6: CTE Time Pipelines, Recursive Outage Grids & Window Functions
 
 ### 8.1 Constructing Multi-Stage Pipelines with CTEs (`WITH`)
 CTEs (`WITH` blocks) transform queries from deeply nested subqueries into readable linear Directed Acyclic Graphs (DAGs). Run this on `weather_telemetry.db`:
@@ -661,11 +633,11 @@ GROUP BY g.slot
 ORDER BY g.slot DESC
 LIMIT 24;
 ```
-*Run this in class to expose the 6-hour communication outage simulated on station `AWS-033`.*
+*Executing this query on `weather_telemetry.db` exposes the 6-hour communication outage (`COMPLETE_BLACKOUT`, `0` packets received) on station `AWS-033`.*
 
 > [!IMPORTANT]
-> **Common Student Pitfall — Putting `LEFT JOIN` Filters in `WHERE` Instead of `ON`:**  
-> In the `WITH RECURSIVE` outage query above, notice that `AND t.station_id = 'AWS-033'` is placed inside the **`LEFT JOIN ... ON`** clause, **not** in the `WHERE` clause! If a student writes `WHERE t.station_id = 'AWS-033'`, any blackout hour where `t.station_id` is `NULL` evaluates to `UNKNOWN` and gets stripped out—converting the `LEFT JOIN` into an `INNER JOIN` and hiding the exact 6-hour blackout they were trying to detect!
+> **Production Engineering Pitfall — Putting `LEFT JOIN` Filters in `WHERE` Instead of `ON`:**  
+> In the `WITH RECURSIVE` outage query above, notice that `AND t.station_id = 'AWS-033'` is placed inside the **`LEFT JOIN ... ON`** clause, **not** in the `WHERE` clause! If you place `WHERE t.station_id = 'AWS-033'` after the `LEFT JOIN`, any blackout hour where `t.station_id` is `NULL` evaluates to `UNKNOWN` and gets stripped out—silently converting the `LEFT JOIN` into an `INNER JOIN` and hiding the exact 6-hour blackout you are trying to detect!
 
 ### 8.3 Window Functions on Sensor Streams (`OVER`, `PARTITION BY`, `LAG`, `ROWS BETWEEN`)
 * **`GROUP BY`:** Collapses rows into summaries, destroying original observation identity.
@@ -745,17 +717,11 @@ LIMIT 15;
 
 ---
 
-## 9. Module 7: Capstone Production Challenges & NWP Verification (16:00 – 17:00)
+## 9. Module 7: Capstone Production Walkthroughs & NWP Verification
 
 ### Part A: NWP Forecast Verification Capstone (`weather_ops.db`)
 
-**Tasks for Attendees:**
-1. **Find Silent Stations (`LEFT JOIN`):** Write a query joining `stations` and `observations` to identify any station in our WMO network that has **zero** recorded observations (such as `60402 Bejaia - Soummam` or `60602 In Salah`).
-2. **Point-by-Point Forecast Verification:** Join `forecasts` (`f`), `observations` (`o`), and `stations` (`s`) on both station and timestamp (`f.station_id = o.station_id AND f.valid_time = o.obs_time`). Calculate `temp_bias_c`, `temp_abs_err_c`, and compare observed vs. forecast rainfall.
-3. **NWP Model Leaderboard (CTE + Aggregation):** Using a CTE (`WITH verification_pairs AS (...)`), aggregate the errors by `model_name` (`ECMWF-HRES`, `GFS`, `AROME`) to rank the models from lowest **Mean Absolute Error (MAE)** to highest, alongside their **Mean Bias** (`AVG(pred - obs)`) for both temperature and wind speed!
-
-<details>
-<summary><strong>Part A — Instructor Solution Key (weather_ops.db)</strong></summary>
+This 3-part operational suite on `weather_ops.db` (1) identifies silent stations with zero recorded observations using an anti-join (`LEFT JOIN ... WHERE o.obs_id IS NULL`), (2) performs point-by-point forecast verification joining `forecasts`, `observations`, and `stations` on both `station_id` and `valid_time = obs_time`, and (3) builds an **NWP Model Verification Leaderboard** ranking `AROME`, `ECMWF-HRES`, and `GFS` by **Mean Absolute Error (MAE)** and **Mean Bias**:
 
 ```sql
 -- 1. Detect Silent Stations (0 observations logged) using LEFT JOIN
@@ -816,19 +782,15 @@ FROM verification_pairs
 GROUP BY model_name
 ORDER BY temp_mae_c ASC;
 ```
-</details>
 
 ---
 
-### Part B: High-Frequency Telemetry Production Challenges (`weather_telemetry.db`)
+### Part B: High-Frequency Telemetry Production Diagnostics (`weather_telemetry.db`)
 
-Have attendees complete these three real-world telemetry diagnostic challenges on the 250,000-row dataset:
+These three diagnostic queries analyze the 250,000-row high-frequency AWS dataset (`weather_telemetry.db`):
 
-#### Challenge 1: Sensor Quality Control (QC) Network Audit
-**Business Scenario:** Two stations in the network have failing hardware emitting high rates of sentinel codes (`-999.0`). Write a query calculating total readings, faulty readings, and failure rate percentage for every station. Return only stations exhibiting a failure rate $> 10\%$.
-
-<details>
-<summary><strong>Challenge 1 — Solution (`AWS-013` and `AWS-042` at ~17–19%)</strong></summary>
+#### 1. Sensor Quality Control (QC) Network Audit (`AWS-013` and `AWS-042` at ~17–19% Failure Rate)
+**Operational Scenario:** Two stations in the network have failing hardware emitting high rates of sentinel codes (`-999.0`). Using conditional aggregation (`COUNT(CASE WHEN ...)`), we compute total readings, faulty readings, and failure rate percentage for every station, filtering for stations exceeding a $10\%$ failure threshold:
 
 ```sql
 SELECT 
@@ -844,13 +806,9 @@ GROUP BY station_id
 HAVING failure_rate_pct > 10.0
 ORDER BY failure_rate_pct DESC;
 ```
-</details>
 
-#### Challenge 2: Cold Front / Squall Line Detector
-**Business Scenario:** A sharp barometric drop accompanied by increasing wind gusts marks an approaching cold front. Write a query using window functions that surfaces any occurrence where a station's pressure dropped by $\ge 4.0\text{ hPa}$ within a 3-step reading window. Include the timestamp, starting pressure, current pressure, pressure delta, and the maximum wind gust during that drop.
-
-<details>
-<summary><strong>Challenge 2 — Solution (`AWS-007` and `AWS-018` frontal passage)</strong></summary>
+#### 2. Cold Front / Squall Line Detector (`AWS-007` and `AWS-018` Frontal Passage)
+**Operational Scenario:** A sharp barometric drop accompanied by increasing wind gusts marks an approaching cold front. Using `LAG(pressure, 3)` and a sliding `MAX(wind_speed)` window (`ROWS BETWEEN 3 PRECEDING AND CURRENT ROW`), this query surfaces every timestamp where a station's barometric pressure dropped by $\ge 4.0\text{ hPa}$ within a 3-step reading window:
 
 ```sql
 WITH stream_analysis AS (
@@ -883,13 +841,9 @@ WHERE baseline_pressure IS NOT NULL
   AND (pressure - baseline_pressure) <= -4.0
 ORDER BY pressure_drop_hpa ASC;
 ```
-</details>
 
-#### Challenge 3: Thermal Anomaly Detection (Microburst Probe)
-**Business Scenario:** Sudden thermal spikes signal microbursts or sensor damage. Write a query to flag any reading where observed temperature deviates by $>6.0^\circ\text{C}$ from the centered 5-reading moving average (`2 PRECEDING AND 2 FOLLOWING`), ignoring all sentinel values.
-
-<details>
-<summary><strong>Challenge 3 — Solution (`AWS-025` +8.5°C spike)</strong></summary>
+#### 3. Thermal Anomaly Detection / Microburst Probe (`AWS-025` $+8.5^\circ\text{C}$ Spike)
+**Operational Scenario:** Sudden thermal spikes signal microbursts or radiation shield damage. By first filtering out `-999.0` sentinels in a CTE and then computing a centered 5-reading moving average (`ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING`), this query isolates any observation deviating by $>6.0^\circ\text{C}$ from its local temporal neighborhood:
 
 ```sql
 WITH filtered_stream AS (
@@ -922,7 +876,6 @@ FROM centered_baseline
 WHERE ABS(temperature - local_centered_mean) > 6.0
 ORDER BY thermal_deviation DESC;
 ```
-</details>
 
 ---
 
@@ -938,8 +891,8 @@ ORDER BY thermal_deviation DESC;
 | **Spatial / GIS Queries** | Manual math on `lat`/`lon` columns | **PostGIS** (`ST_DWithin`, radar polygons, basins) | `2dsphere` GeoJSON indexes (`$near`, `$geoWithin`) |
 | **Schema Flexibility** | Fixed relational columns (`ALTER TABLE`) | Fixed relational + indexed `JSONB` hybrid | Dynamic schema-per-document |
 
-### 10.2 Live Timing Demonstration & Closing Handoff Script
-Conclude Day 1 by executing this query on `weather_telemetry.db` and directing attendees' attention to the execution time displayed by `.timer on`:
+### 10.2 Performance Benchmark & Architectural Bridge to Day 2
+Executing a full-table aggregation on `weather_telemetry.db` with `.timer on` enabled highlights why in-memory page caching masks row-store I/O bottlenecks at small scale:
 
 ```sql
 SELECT station_id, ROUND(AVG(temperature), 2) AS mean_temp
@@ -949,13 +902,10 @@ GROUP BY station_id;
 ```
 *Typical execution time in SQLite:* $\approx 70\text{--}110\text{ ms}$.
 
-> *"Notice the execution speed: SQLite aggregated 250,000 records in under 100 milliseconds. Why? Because the entire 20 MB database file lives inside your operating system's RAM page cache.*
+> **Architectural Synthesis:**  
+> SQLite aggregates 250,000 records in under 100 milliseconds because the entire 20 MB database file fits inside the operating system's RAM page cache.  
 >
-> *In production, your national meteorological agency does not store 250,000 records. You ingest 500 million records per year, reaching hundreds of gigabytes on disk.*
->
-> *Tomorrow morning, we step away from SQLite and enter **PostgreSQL Storage Engine Internals**. We will inspect physical 8 KB binary disk blocks using `pageinspect`, examine the 23-byte MVCC header on every tuple, calculate hidden CPU byte-alignment padding, and see why executing an analytical `AVG()` across a row-store table saturates disk I/O and creates the architectural need for an OLAP tier.*
->
-> *Day 1 is complete. Tomorrow, we look inside the engine."*
+> In production, a national meteorological agency ingests hundreds of millions of records per year, reaching hundreds of gigabytes on disk. On **Day 2**, we transition from SQLite to **PostgreSQL Storage Engine Internals**—inspecting physical 8 KB binary disk blocks using `pageinspect`, examining the 23-byte MVCC header on every tuple, calculating hidden CPU byte-alignment padding ("Tuple Tetris"), and proving mathematically why analytical `AVG()` scans across a row-store table saturate disk I/O and motivate an OLAP Lakehouse tier.
 
 ---
 

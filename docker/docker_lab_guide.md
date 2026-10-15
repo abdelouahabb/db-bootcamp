@@ -10,7 +10,7 @@
 
 ## 1. Choosing Which Docker Stack to Launch
 
-This directory provides **two turnkey Docker Compose topologies** so instructors and attendees can launch either the **Multi-Node High-Availability Replica Set Lab** (Days 2–4) or the **End-to-End Polyglot Streaming Lakehouse** (Day 5 Capstone) with a single command:
+This directory provides **two turnkey Docker Compose topologies** so you can launch either the **Multi-Node High-Availability Replica Set Lab** (Days 2–4) or the **End-to-End Polyglot Streaming Lakehouse** (Day 5 Capstone) with a single command:
 
 | Stack File | Services Included | When to Use |
 | :--- | :--- | :--- |

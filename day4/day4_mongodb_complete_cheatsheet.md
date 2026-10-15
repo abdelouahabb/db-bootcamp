@@ -238,8 +238,8 @@ db.cap_alerts.createIndex({ affected_stations: 1 });
 - **Efficiency Check:** `executionStats.nReturned` should be as close as possible to `executionStats.totalKeysExamined` and `executionStats.totalDocsExamined`.
 
 > [!TIP]
-> **Instructor Live Demo Tip (Spot the Blocking `SORT` Stage):**  
-> Have attendees run `.explain("executionStats")` on a query with a misordered index (`{ station_id: 1, cape_j_kg: 1, launch_time: -1 }`) vs. the proper ESR index (`{ station_id: 1, launch_time: -1, cape_j_kg: 1 }`). Seeing the blocking `SORT` stage vanish in `winningPlan` cements the ESR rule forever.
+> **Execution Plan Verification Tip (Spotting the Blocking `SORT` Stage):**  
+> Compare `.explain("executionStats")` on a query with a misordered index (`{ station_id: 1, cape_j_kg: 1, launch_time: -1 }`) against the proper ESR index (`{ station_id: 1, launch_time: -1, cape_j_kg: 1 }`). With the ESR key order, the blocking in-memory `SORT` stage vanishes completely from `winningPlan`.
 
 ---
 

@@ -532,8 +532,8 @@ sh.isBalancerRunning();
 ```
 
 > [!TIP]
-> **Instructor Live Demo Tip (Balancer Window Scheduling):**  
-> Emphasize to operational meteorologists why scheduling the MongoDB Chunk Balancer between `03:00` and `05:30 UTC` is critical: `00Z` and `12Z` are the global WMO synoptic and radiosonde release windows when ingestion spikes $10\times$. Restricting chunk migrations to quiet inter-synoptic hours prevents network and disk I/O contention during live forecast runs!
+> **Production Engineering Tip (Balancer Window Scheduling):**  
+> Scheduling the MongoDB Chunk Balancer between `03:00` and `05:30 UTC` is critical in meteorological operations: `00Z` and `12Z` are the global WMO synoptic and radiosonde release windows when ingestion spikes $10\times$. Restricting chunk migrations to quiet inter-synoptic hours prevents network and disk I/O contention during live forecast runs!
 
 ---
 

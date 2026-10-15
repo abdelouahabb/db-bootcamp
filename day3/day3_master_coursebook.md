@@ -5,12 +5,12 @@
 
 **Bootcamp:** Database & NoSQL Engineering (5-Day Intensive)  
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Systems Administrators, Environmental Data Scientists  
-**Day 3 Duration:** Full Day (Modules 0–5 + Hands-On Production Engineering Labs)  
+**Curriculum Scope:** Modules 0–5 + Hands-On Production Engineering Labs  
 **Execution Environment:** PostgreSQL 16+ with PostGIS 3.4+ (`psql` CLI + DBeaver, local host or Docker `postgis/postgis:16-3.4`)  
 
 **Companion Files in Day 3 Directory:**
-- [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) — Partitioned synoptic tables (`synoptic.observations_part`), BRIN/Partial/Covering/GIN indexes, `JSONB` sensor payloads, and Materialized Views (`nwp.mv_daily_model_verification`)
-- [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) — Automated 5,000,000-row partitioned telemetry seed (`raw_telemetry_partitioned`), B-Tree vs. BRIN benchmark, and PostGIS `ST_DWithin` geodesic radial queries
+- [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) ([📖 Course Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md)) — Partitioned synoptic tables (`synoptic.observations_part`), BRIN/Partial/Covering/GIN indexes, `JSONB` sensor payloads, and Materialized Views (`nwp.mv_daily_model_verification`)
+- [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) ([📖 Course Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)) — Automated 5,000,000-row partitioned telemetry seed (`raw_telemetry_partitioned`), B-Tree vs. BRIN benchmark, and PostGIS `ST_DWithin` geodesic radial queries
 - [day3_postgres_advanced_cheatsheet.md](./day3_postgres_advanced_cheatsheet.md) — Quick-reference guide for Partitioning, Index Selection, PostGIS Geodesy, Window Functions, `UPSERT`, and `JSONB`
 - [day3_postgres_extensions_guide.md](./day3_postgres_extensions_guide.md) — Complete production reference for `PostGIS`, `TimescaleDB`, `pg_partman`, `pg_cron`, `pg_stat_statements`, `pageinspect`, `pg_buffercache`, `pgstattuple`, `pg_repack`, and `btree_gist`
 - [day3_postgres_ha_patroni_and_ops_guide.md](./day3_postgres_ha_patroni_and_ops_guide.md) — Enterprise High Availability (CAP/PACELC, Patroni + `etcd` + HAProxy), Streaming & Logical Replication, RBAC, `PgBouncer`, and PITR Backups
@@ -32,31 +32,27 @@ Today on **Day 3**, we apply that architectural knowledge to solve the **6 bigge
 
 ---
 
-## 2. Daily Schedule & Time Budget
+## 2. Module Outline
 
 ```
 ┌─────────────────┬───────────────────────────────────────────────────────────────────────┐
-│ 09:00 – 09:45   │ Module 0: Explicit PostGIS Installation, Enablement & 5M-Row Seeding  │
+│ Module 0        │ Explicit PostGIS Installation, Enablement & 5M-Row Seeding            │
 ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 09:45 – 11:00   │ Module 1: Declarative Time-Range Partitioning & Lifecycle Management  │
+│ Module 1        │ Declarative Time-Range Partitioning & Lifecycle Management            │
 ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 11:00 – 11:15   │ Morning Break                                                         │
+│ Module 2        │ Advanced Indexing (B-Tree, BRIN, Partial, INCLUDE, PostGIS)           │
 ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 11:15 – 12:45   │ Module 2: Advanced Indexing (B-Tree, BRIN, Partial, INCLUDE, PostGIS) │
+│ Module 3        │ Analytical Window Functions (OVER, LAG, Rolling Frames)               │
 ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 12:45 – 13:45   │ Lunch Break                                                           │
+│ Module 4        │ Idempotent Ingestion (UPSERT) & Concurrent Materialized View          │
 ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 13:45 – 14:45   │ Module 3: Analytical Window Functions (OVER, LAG, Rolling Frames)     │
-├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 14:45 – 15:45   │ Module 4: Idempotent Ingestion (UPSERT) & Concurrent Materialized View│
-├─────────────────┼───────────────────────────────────────────────────────────────────────┤
-│ 15:45 – 17:00   │ Module 5: Semi-Structured Telemetry (JSONB + GIN) & Bridge to Day 4   │
+│ Module 5        │ Semi-Structured Telemetry (JSONB + GIN) & Bridge to Day 4             │
 └─────────────────┴───────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Module 0: Explicit PostGIS Installation, Enablement & 5,000,000-Row Seed Script (09:00 – 09:45)
+## Module 0: Explicit PostGIS Installation, Enablement & 5,000,000-Row Seed Script
 
 ### 0.1 Explicit OS Package Installation
 
@@ -219,7 +215,7 @@ CREATE INDEX idx_telemetry_brin_time
 
 ---
 
-## Module 1: Declarative Time-Range Partitioning & Lifecycle Management (09:45 – 11:00)
+## Module 1: Declarative Time-Range Partitioning & Lifecycle Management
 
 ### 1.1 The Operational Failure Modes of Monolithic Tables
 
@@ -314,8 +310,8 @@ When a forecaster runs a query covering a 24-hour or 48-hour storm window, the q
 - **Rule #1 of PostgreSQL Partitioning:** Any `PRIMARY KEY` or `UNIQUE` constraint on a partitioned table **must include the partition key**, e.g. `PRIMARY KEY (obs_time, station_id)`.
 
 > [!WARNING]
-> **Common Student Pitfall — Attempting `PRIMARY KEY (obs_id)` on a Partitioned Table:**  
-> Students migrating a monolithic table to `PARTITION BY RANGE (obs_time)` almost always try to keep `obs_id BIGSERIAL PRIMARY KEY` and hit `ERROR: unique constraint on partitioned table must include all partitioning columns`. Explain *why*: PostgreSQL enforces uniqueness using each child partition's local B-Tree index rather than a single global cross-partition index (which would reintroduce the exact RAM and lock bottleneck partitioning was meant to solve!). Therefore, `obs_time` **must** be part of any `PRIMARY KEY` or `UNIQUE` constraint: `PRIMARY KEY (obs_time, station_id)`.
+> **Production Engineering Pitfall — Attempting `PRIMARY KEY (obs_id)` on a Partitioned Table:**  
+> Migrating a monolithic table to `PARTITION BY RANGE (obs_time)` while keeping `obs_id BIGSERIAL PRIMARY KEY` fails immediately with `ERROR: unique constraint on partitioned table must include all partitioning columns`. Why? PostgreSQL enforces uniqueness using each child partition's local B-Tree index rather than a single global cross-partition index (which would reintroduce the exact RAM and lock bottleneck partitioning is designed to eliminate). Therefore, `obs_time` **must** be part of any `PRIMARY KEY` or `UNIQUE` constraint: `PRIMARY KEY (obs_time, station_id)`.
 
 ---
 
@@ -371,20 +367,13 @@ HashAggregate
 
 ---
 
-### 1.4 Hands-On Lab 1: Building & Querying Monthly Synoptic Partitions (20 min)
-
+### 1.4 Hands-On Lab 1 Walkthrough: Building & Querying Monthly Synoptic Partitions
 Load the Day 3 synoptic script on `weather_ops`:
 ```bash
 psql -d weather_ops -f day3_weather_advanced_pg.sql
 ```
 
-**Tasks for Attendees:**
-1. Inspect the partitioned table hierarchy in `psql` using `\d+ synoptic.observations_part` and check the size of each monthly child table (`obs_y2026m06` .. `obs_y2026m10`).
-2. Run `EXPLAIN (ANALYZE, BUFFERS)` on `synoptic.observations_part` for a 48-hour storm window in October (`'2026-10-05'` to `'2026-10-06'`) and verify that **only `synoptic.obs_y2026m10`** is scanned (Partition Pruning!).
-3. Create a brand-new monthly partition for **November 2026 (`synoptic.obs_y2026m11`)** and insert a test observation for `'2026-11-01 00:00:00+00'`, confirming via `tableoid::regclass` that it lands physically inside `synoptic.obs_y2026m11`.
-
-<details>
-<summary><strong>Lab 1 — Instructor Solution Key</strong></summary>
+This walkthrough inspects the monthly partition hierarchy on `synoptic.observations_part` (`obs_y2026m06` .. `obs_y2026m10`), verifies partition pruning via `EXPLAIN (ANALYZE, BUFFERS)` for an October storm window, and creates a new monthly child partition for **November 2026 (`synoptic.obs_y2026m11`)** while verifying physical routing via `tableoid::regclass`:
 
 ```sql
 -- 1. View all child partitions and their individual disk sizes
@@ -416,11 +405,10 @@ SELECT tableoid::regclass AS physical_partition, station_id, obs_time, temp_c
 FROM synoptic.observations_part
 WHERE obs_time >= '2026-11-01 00:00:00+00';
 ```
-</details>
 
 ---
 
-## Module 2: Advanced Indexing — B-Tree, BRIN, Partial, Covering (`INCLUDE`) & PostGIS Geodesy (11:15 – 12:45)
+## Module 2: Advanced Indexing — B-Tree, BRIN, Partial, Covering (`INCLUDE`) & PostGIS Geodesy
 
 ### 2.1 The Physical Failure of B-Trees on Append-Only Time Series vs. BRIN
 
@@ -451,8 +439,8 @@ Weather observations arrive in temporal order. Because rows are appended sequent
 3. During a query, if the requested timestamp falls outside $[\min, \max]$, PostgreSQL skips the entire block range in a single operation.
 
 > [!TIP]
-> **Instructor Live Demo Tip — Checking `pg_stats.correlation` Before Creating a BRIN Index:**  
-> Show students how to verify whether a column is physically ordered on disk before creating a BRIN index: `SELECT attname, correlation FROM pg_stats WHERE tablename = 'telemetry_y2026m10';`. When `correlation` is close to `1.0` or `-1.0` (like `recorded_at` at `0.999`), BRIN skips 99% of blocks at $0.1\%$ of a B-Tree's size! Conversely, if a student builds a BRIN index on `station_id` or `temperature` (where every 64-page range contains all 50 stations and temperatures from $10^\circ\text{C}$ to $35^\circ\text{C}$, `correlation ≈ 0.01`), BRIN skips **zero** blocks!
+> **Architectural Verification Tip — Checking `pg_stats.correlation` Before Creating a BRIN Index:**  
+> Before creating a BRIN index on a column, verify its physical disk ordering via `SELECT attname, correlation FROM pg_stats WHERE tablename = 'telemetry_y2026m10';`. When `correlation` is close to `1.0` or `-1.0` (such as `recorded_at` at `0.999`), BRIN skips 99% of blocks at $0.1\%$ of a B-Tree's size! Conversely, building a BRIN index on `station_id` or `temperature` (where every 64-page range contains all 50 stations and temperatures from $10^\circ\text{C}$ to $35^\circ\text{C}$, `correlation ≈ 0.01`) will skip **zero** blocks because every block range's $[\min, \max]$ overlaps the query predicate.
 
 ---
 
@@ -498,8 +486,8 @@ Meteorological phenomena are spatial. Atmospheric fronts, convective cells, and 
 > **Coordinate Order Rule:** Just like GeoJSON in MongoDB, `ST_MakePoint(longitude, latitude)` always takes **`(X, Y)` = `(longitude, latitude)`**!
 
 > [!WARNING]
-> **Common Student Pitfall — Swapping `(Latitude, Longitude)` in `ST_MakePoint()`:**  
-> Meteorologists are trained to say *"36.75°N, 3.05°E"* (`lat, lon`), but GIS and Cartesian math always use **`(X, Y)` = `(longitude, latitude)`**! If a student writes `ST_MakePoint(36.7538, 3.0588)` for Algiers Port, PostGIS places the station in the middle of the **Indian Ocean off the coast of Somalia (`3.05°N, 36.75°E`)**, and their `ST_DWithin` query for Algeria returns `0 rows`! Always repeat the mantra: **`X = Lon, Y = Lat`**.
+> **Production Engineering Pitfall — Swapping `(Latitude, Longitude)` in `ST_MakePoint()`:**  
+> Meteorologists conventionally state coordinates as *"36.75°N, 3.05°E"* (`lat, lon`), whereas GIS and Cartesian geometry always use **`(X, Y)` = `(longitude, latitude)`**! Writing `ST_MakePoint(36.7538, 3.0588)` for Algiers Port places the station in the **Indian Ocean off the coast of Somalia (`3.05°N, 36.75°E`)**, causing any `ST_DWithin` query for Algeria to return `0 rows`. Always enforce the convention **`X = Lon, Y = Lat`**.
 
 #### Real-World Operational Query: Stations Under Threat (`ST_DWithin`)
 Find all active meteorological stations within a $40\text{ km}$ ($40,000\text{ m}$) radius of an advancing squall line offshore from Dellys Cape at coordinates $(36.95^\circ\text{N}, 3.90^\circ\text{E})$:
@@ -537,15 +525,9 @@ ORDER BY distance_km ASC;
 
 ---
 
-### 2.4 Hands-On Lab 2A, 2B & 2C: Indexing & PostGIS Benchmarks (35 min)
-
+### 2.4 Hands-On Lab 2A, 2B & 2C Walkthrough: Indexing & PostGIS Benchmarks
 #### Lab 2A: Partial Indexes & Covering Index-Only Scans (`weather_ops` database)
-1. Compare the exact disk size in bytes (`pg_relation_size`) between `idx_obs_btree_time` (B-Tree), `idx_obs_brin_time` (BRIN), `idx_obs_suspect_only` (Partial), and `idx_obs_station_time_covering` (Covering) on `synoptic.observations`.
-2. Run `EXPLAIN (ANALYZE, BUFFERS)` on a query finding all non-valid observations (`WHERE qc_flag != 'VALID'`) and verify the planner uses the tiny **Partial Index (`idx_obs_suspect_only`)**.
-3. Run `EXPLAIN (ANALYZE, BUFFERS)` on a query fetching `obs_time, temp_c, pressure_hpa` for station `60390` in October 2026, and verify it achieves an **`Index Only Scan` with `Heap Fetches: 0`** using `idx_obs_station_time_covering`!
-
-<details>
-<summary><strong>Lab 2A — Instructor Solution Key</strong></summary>
+This walkthrough compares the physical disk footprint (`pg_relation_size`) across `idx_obs_btree_time` (B-Tree), `idx_obs_brin_time` (BRIN), `idx_obs_suspect_only` (Partial), and `idx_obs_station_time_covering` (Covering) on `synoptic.observations`, and verifies both Partial Index selection and Covering `Index Only Scan` (`Heap Fetches: 0`) via `EXPLAIN (ANALYZE, BUFFERS)`:
 
 ```sql
 -- 1. Compare disk footprint: B-Tree vs. BRIN vs. Partial vs. Covering Index
@@ -570,7 +552,6 @@ FROM synoptic.observations
 WHERE station_id = 60390
   AND obs_time BETWEEN '2026-10-01 00:00:00+00' AND '2026-10-06 23:00:00+00';
 ```
-</details>
 
 #### Lab 2B: 5,000,000-Row B-Tree vs. BRIN Benchmark (`weather_ops_db` database)
 Empirically compare index creation time and physical disk footprint between a standard B-Tree and a BRIN index on the 1.27M-row October child partition (`telemetry_y2026m10`):
@@ -650,7 +631,7 @@ ORDER BY ns.dist_km ASC;
 
 ---
 
-## Module 3: Analytical Window Functions for Weather Forecasting (13:45 – 14:45)
+## Module 3: Analytical Window Functions for Weather Forecasting
 
 ### 3.1 Why `GROUP BY` Isn't Enough for Synoptic Meteorology
 
@@ -682,20 +663,13 @@ ORDER BY ns.dist_km ASC;
    - Finding the top 3 hottest or windiest observations inside each `station_id` or `climate_zone`.
 
 > [!IMPORTANT]
-> **Instructor Live Demo Tip — Why `RANGE BETWEEN INTERVAL '23 hours' PRECEDING` Beats `ROWS BETWEEN 23 PRECEDING`:**  
-> Point out to the class that automated weather stations occasionally drop a transmission slot due to cellular/satellite interference. If a station misses two hourly pings, `ROWS BETWEEN 23 PRECEDING` blindly counts 23 physical rows backward—accidentally spanning **26 clock hours**! By contrast, `RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW` evaluates the `TIMESTAMPTZ` values directly, guaranteeing a true 24-hour meteorological accumulation window even across missing timestamps.
+> **Architectural Note — Why `RANGE BETWEEN INTERVAL '23 hours' PRECEDING` Beats `ROWS BETWEEN 23 PRECEDING`:**  
+> Automated weather stations occasionally drop a transmission slot due to cellular or satellite interference. If a station misses two hourly pings, `ROWS BETWEEN 23 PRECEDING` blindly counts 23 physical rows backward—accidentally spanning **26 clock hours**! By contrast, `RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW` evaluates the `TIMESTAMPTZ` values directly, guaranteeing a true 24-hour meteorological accumulation window even across missing timestamps.
 
 ---
 
-### 3.3 Hands-On Lab 3: Storm Front Detection ($\Delta P_{3\text{h}}$), Rolling 24h Rain & Heatwave Ranking (35 min)
-
-**Tasks for Attendees (on `weather_ops`):**
-1. **3-Hour Barometric Pressure Tendency ($\Delta P_{3\text{h}}$):** Using `LAG(pressure_hpa, 3) OVER (PARTITION BY station_id ORDER BY obs_time)`, calculate the 3-hour pressure change for every observation and flag rows where pressure dropped by $\le -2.5\text{ hPa}$ in 3 hours (`'RAPID_PRESSURE_FALL (Storm Approaching)'`).
-2. **Rolling 24-Hour Precipitation & Moving Average Temperature:** For Algiers (`60390`), compute the 24-hour rolling rainfall (`SUM(precip_1h_mm) OVER (... RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW)`) and 24-hour moving average temperature using a named `WINDOW w_24h`.
-3. **Top 3 Hottest Readings per Station (`DENSE_RANK`):** Use a CTE and `DENSE_RANK() OVER (PARTITION BY station_id ORDER BY temp_c DESC)` to list the top 3 highest temperatures recorded at each station.
-
-<details>
-<summary><strong>Lab 3 — Instructor Solution Key</strong></summary>
+### 3.3 Hands-On Lab 3 Walkthrough: Storm Front Detection ($\Delta P_{3\text{h}}$), Rolling 24h Rain & Heatwave Ranking
+These three queries on `weather_ops` compute (1) the **3-Hour Barometric Pressure Tendency ($\Delta P_{3\text{h}}$)** via `LAG(pressure_hpa, 3)` to flag approaching low-pressure storm fronts ($\le -2.5\text{ hPa}$), (2) a **Rolling 24-Hour Precipitation Accumulation & Moving Average Temperature** for Algiers (`60390`) using a named `WINDOW w_24h` (`RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW`), and (3) the **Top 3 Hottest Readings per Station** via `DENSE_RANK()`:
 
 ```sql
 -- 1. Barometric Pressure Tendency (3-hour delta) to detect approaching low-pressure fronts
@@ -770,11 +744,10 @@ FROM ranked_temps
 WHERE temp_rank <= 3
 ORDER BY climate_zone, station_name, temp_rank;
 ```
-</details>
 
 ---
 
-## Module 4: Idempotent Ingestion (`UPSERT`) & Concurrent Materialized Views (14:45 – 15:45)
+## Module 4: Idempotent Ingestion (`UPSERT`) & Concurrent Materialized Views
 
 ### 4.1 Real-World Telemetry Problem: Duplicate & Corrected Bulletins (`COR` / `AMD`)
 
@@ -792,23 +765,13 @@ ORDER BY climate_zone, station_name, temp_rank;
 - **Critical Production Rule:** Always create a **`UNIQUE INDEX`** on a Materialized View and refresh it with **`REFRESH MATERIALIZED VIEW CONCURRENTLY`**. Without `CONCURRENTLY`, PostgreSQL acquires an `AccessExclusiveLock` and freezes all forecaster dashboards until the refresh finishes!
 
 > [!WARNING]
-> **Common Student Pitfall — `REFRESH MATERIALIZED VIEW CONCURRENTLY` Failing Without a `UNIQUE INDEX`:**  
-> If a student creates a Materialized View and immediately runs `REFRESH MATERIALIZED VIEW CONCURRENTLY`, PostgreSQL throws `ERROR: cannot refresh materialized view "..." concurrently / HINT: Create a unique index with no WHERE clause on one or more columns of the materialized view`. Explain why: `CONCURRENTLY` computes a diff between the old view and the new query and applies `INSERT`/`UPDATE`/`DELETE` row-by-row so readers are never locked—which requires a `UNIQUE INDEX` to identify each row!
+> **Production Engineering Pitfall — `REFRESH MATERIALIZED VIEW CONCURRENTLY` Requires a `UNIQUE INDEX`:**  
+> Creating a Materialized View and immediately running `REFRESH MATERIALIZED VIEW CONCURRENTLY` without a unique index fails with `ERROR: cannot refresh materialized view "..." concurrently / HINT: Create a unique index with no WHERE clause on one or more columns of the materialized view`. Why? `CONCURRENTLY` computes a diff between the old view and the new query and applies `INSERT`/`UPDATE`/`DELETE` row-by-row so readers are never locked—which requires a `UNIQUE INDEX` to uniquely identify each row!
 
 ---
 
-### 4.3 Hands-On Lab 4: Idempotent Synoptic `UPSERT` & Concurrent Materialized View Refresh (35 min)
-
-**Tasks for Attendees (on `weather_ops`):**
-1. Write an idempotent `INSERT INTO synoptic.observations ... ON CONFLICT (station_id, obs_time) DO UPDATE` statement that ingests a batch of 2 observations for Algiers (`60390`):
-   - One existing timestamp (`'2026-10-06 12:00:00+00'`) where a corrected rain gauge reading (`2.5 mm`) and `qc_flag = 'VALID'` arrived.
-   - One brand-new timestamp (`'2026-10-07 00:00:00+00'`).
-   Include `RETURNING obs_id, station_id, obs_time, temp_c, precip_1h_mm, (xmax = 0) AS is_fresh_insert;`.
-2. Query the pre-built materialized view `nwp.mv_daily_model_verification` to compare daily `ECMWF-HRES`, `GFS`, and `AROME` verification metrics in sub-millisecond time.
-3. Run `REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;` after your `UPSERT`.
-
-<details>
-<summary><strong>Lab 4 — Instructor Solution Key</strong></summary>
+### 4.3 Hands-On Lab 4 Walkthrough: Idempotent Synoptic `UPSERT` & Concurrent Materialized View Refresh
+This walkthrough on `weather_ops` demonstrates an idempotent `INSERT INTO synoptic.observations ... ON CONFLICT (station_id, obs_time) DO UPDATE` statement with dead-tuple prevention (`IS DISTINCT FROM`) and `(xmax = 0) AS is_fresh_insert` inspection, queries the pre-computed `nwp.mv_daily_model_verification` materialized view, and refreshes it lock-free using `REFRESH MATERIALIZED VIEW CONCURRENTLY`:
 
 ```sql
 -- 1. Idempotent Synoptic Ingestion (UPSERT) with smart dead-tuple prevention
@@ -851,11 +814,10 @@ ORDER BY overall_temp_mae_c ASC;
 -- 3. Refresh the Materialized View in the background without locking readers!
 REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 ```
-</details>
 
 ---
 
-## Module 5: Semi-Structured Telemetry (`JSONB` + `GIN`) & Architectural Bridge to Day 4 MongoDB (15:45 – 17:00)
+## Module 5: Semi-Structured Telemetry (`JSONB` + `GIN`) & Architectural Bridge to Day 4 MongoDB
 
 ### 5.1 Why Strict Relational Columns Hit a Schema-Rigidity Wall in Modern Meteorology
 
@@ -904,20 +866,13 @@ When **80% of your schema is fixed WMO columns** and **20% is variable sensor di
   - **`payload @> '{"diagnostics": {"door_open": true}}'` (Containment Operator):** Uses the **`GIN` index (`idx_obs_part_sensor_gin`)** to find matching nested JSON documents in sub-millisecond time!
 
 > [!TIP]
-> **Common Student Pitfall — Using `->>` Equality Instead of `@>` Containment with a `GIN` Index:**  
-> Students often write `WHERE (sensor_payload -> 'diagnostics' ->> 'door_open')::boolean = true` and wonder why `EXPLAIN` shows a slow `Seq Scan` instead of using their `GIN` index (`idx_obs_part_sensor_gin`). Explain that a standard `GIN` index on `JSONB` accelerates the **Containment Operator (`@>`)**, Existence (`?`), and `jsonpath` (`@?`), *not* arbitrary `->>` text extraction expressions! Rewriting the filter to `WHERE sensor_payload @> '{"diagnostics": {"door_open": true}}'` immediately triggers a sub-millisecond `Bitmap Index Scan` on the `GIN` index.
+> **Production Engineering Pitfall — Using `->>` Equality Instead of `@>` Containment with a `GIN` Index:**  
+> Writing `WHERE (sensor_payload -> 'diagnostics' ->> 'door_open')::boolean = true` forces PostgreSQL into a slow `Seq Scan` instead of using the `GIN` index (`idx_obs_part_sensor_gin`). A standard `GIN` index on `JSONB` accelerates the **Containment Operator (`@>`)**, Existence (`?`), and `jsonpath` (`@?`), *not* arbitrary `->>` text extraction casts! Rewriting the filter to `WHERE sensor_payload @> '{"diagnostics": {"door_open": true}}'` immediately triggers a sub-millisecond `Bitmap Index Scan` on the `GIN` index.
 
 ---
 
-### 5.3 Hands-On Lab 5 (Capstone): Querying & Indexing Nested Sensor Telemetry (`JSONB`) (35 min)
-
-**Tasks for Attendees (on `weather_ops`):**
-1. Inspect the `sensor_payload` `JSONB` column on `synoptic.observations_part` and extract `battery_v` (`::NUMERIC`), `solar_w_m2` (`::NUMERIC`), `gust_3s_kt` (`::NUMERIC`), and nested `diagnostics -> firmware`.
-2. Use the **`JSONB` Containment Operator (`@>`)** along with `EXPLAIN (ANALYZE, BUFFERS)` to find all observations where the physical enclosure door was opened (`{"diagnostics": {"door_open": true}}`). Confirm that PostgreSQL uses a **`Bitmap Index Scan on idx_obs_part_sensor_gin` (`GIN` index)**!
-3. Update `sensor_payload` on station `60390` at `'2026-10-06 12:00:00+00'` using the `||` concatenation operator to append a new nested soil-moisture calibration object without altering the table schema!
-
-<details>
-<summary><strong>Lab 5 — Instructor Solution Key</strong></summary>
+### 5.3 Hands-On Lab 5 Walkthrough (Capstone): Querying & Indexing Nested Sensor Telemetry (`JSONB`)
+This walkthrough extracts typed sensor telemetry fields (`gust_3s_kt`, `battery_v`, `solar_w_m2`, and `diagnostics -> firmware`) from the `sensor_payload` `JSONB` column on `synoptic.observations_part`, uses the **`JSONB` Containment Operator (`@>`)** to trigger a `Bitmap Index Scan` on `idx_obs_part_sensor_gin`, and appends a new nested soil-moisture calibration object dynamically using the `||` concatenation operator without altering the table schema:
 
 ```sql
 -- 1. Extract typed fields from JSONB sensor_payload alongside relational columns
@@ -950,7 +905,6 @@ WHERE station_id = 60390
   AND obs_time = '2026-10-06 12:00:00+00'
 RETURNING station_id, obs_time, jsonb_pretty(sensor_payload);
 ```
-</details>
 
 ---
 

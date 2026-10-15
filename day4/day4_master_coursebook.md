@@ -5,12 +5,12 @@
 
 **Bootcamp:** Database, NoSQL & High-Throughput Telemetry Engineering (5-Day Intensive — Unified Best-of-Both Edition)  
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Environmental Systems Architects  
-**Day 4 Duration:** 6 Hours (5 Comprehensive Technical Modules + 7 Hands-On Production Labs)  
+**Curriculum Scope:** 5 Comprehensive Technical Modules + 7 Hands-On Production Labs  
 **Execution Environment:** MongoDB 7.0+ (`mongod` & `mongosh` CLI + MongoDB Compass / VS Code MongoDB Extension)  
 **Companion Files in `day4/`:**
-- [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
-- [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
-- [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics
+- [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) ([📖 Course Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md)) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
+- [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) ([📖 Course Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
+- [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) ([📖 Course Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics
 - [day4_mongodb_complete_cheatsheet.md](./day4_mongodb_complete_cheatsheet.md) — Complete CLI, SQL-to-MQL Translator, Aggregation Pipeline, `2dsphere`, and `ESR` Cheatsheet
 - [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md) — Deep-dive reference card on BSON binary encoding, WiredTiger internals, 3-node Replica Set failover, Tunable CAP/PACELC, GridFS, and Sharded Clusters
 
@@ -31,27 +31,25 @@ By the end of Day 4, attendees will master:
 
 ---
 
-## Daily Schedule & Time Budget
+## Module Outline
 
 ```text
 ┌─────────────────┬──────────────────────────────────────────────────────────────────────────┐
-│ 09:00 – 10:15   │ Module 1: The Schema-Rigidity Wall, $jsonSchema & BSON/WiredTiger Engine │
+│ Module 1        │ The Schema-Rigidity Wall, $jsonSchema & BSON/WiredTiger Engine           │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 10:15 – 11:45   │ Module 2: Radiosonde Soundings, $elemMatch, Atomic Updates & Bucketing   │
+│ Module 2        │ Radiosonde Soundings, $elemMatch, Atomic Updates & Bucketing             │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 11:45 – 12:45   │ Module 3: Multi-Stage Aggregation Pipelines & 50k Fault Diagnostics      │
+│ Module 3        │ Multi-Stage Aggregation Pipelines & 50k Fault Diagnostics                │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 12:45 – 13:45   │ Lunch Break                                                              │
+│ Module 4        │ Geospatial Meteorology (2dsphere) & The ESR Indexing Rule                │
 ├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 13:45 – 15:00   │ Module 4: Geospatial Meteorology (2dsphere) & The ESR Indexing Rule      │
-├─────────────────┼──────────────────────────────────────────────────────────────────────────┤
-│ 15:00 – 16:30   │ Module 5: Distributed Production MongoDB — Replica Sets, CAP & Sharding  │
+│ Module 5        │ Distributed Production MongoDB — Replica Sets, CAP & Sharding            │
 └─────────────────┴──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Module 1: The Schema-Rigidity Wall, Polymorphic Station Metadata (`$jsonSchema`) & BSON / WiredTiger Internals (09:00 – 10:15)
+## Module 1: The Schema-Rigidity Wall, Polymorphic Station Metadata (`$jsonSchema`) & BSON / WiredTiger Internals
 
 ### 1.1 The Schema-Rigidity Wall in Modern Meteorological Telemetry
 
@@ -175,24 +173,20 @@ While developers write queries in JSON syntax, `mongod` compiles, stores, and in
 
 ---
 
-### 1.4 Lab 1: Loading `weather_nosql`, Exploring BSON Internals & Testing `$jsonSchema` Guardrails (30 min)
-
-Have attendees load [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) into MongoDB:
+### 1.4 Lab 1: Loading `weather_nosql`, Exploring BSON Internals & Testing `$jsonSchema` Guardrails
+Load [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) into MongoDB:
 
 ```bash
 mongosh weather_nosql day4_weather_ops_mongo.js
 mongosh weather_nosql
 ```
 
-#### Tasks for Attendees:
-1. Run `show dbs`, `show collections`, and `db.stats()` to inspect the `weather_nosql` database and its 4 collections (`stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`).
-2. Fetch station `60390` (Algiers Upper-Air), `60901` (Algiers Bay Marine Buoy #1), and `60419` (Constantine Agro-Soil). Compare their polymorphic fields (`buoy_specs` vs. `soil_depths_cm`) and verify the exact BSON binary size in bytes of a radiosonde launch document using `Object.bsonsize()`.
-3. Inspect the active `$jsonSchema` validator on `db.stations` using `db.getCollectionInfos({ name: "stations" })`.
-4. Attempt to insert an invalid station document (missing `location` or with an unapproved `station_type: "WEATHER_BALLOON"`) and observe how MongoDB rejects the write!
-5. Insert a valid new station for **Setif - Ain Arnat (`_id: 60445`)** as a `"SURFACE_AWS"` station at GeoJSON `[5.3244, 36.1781]`, including a custom nested `icing_sensor: { heated_anemometer: true, power_watts: 150 }` object.
-
-<details>
-<summary><strong>Lab 1 — Instructor Solution Key</strong></summary>
+#### Lab 1 Walkthrough & Verification:
+1. **Inspect Collections & Storage Engine Statistics:** Run `show dbs`, `show collections`, and `db.stats()` to inspect the `weather_nosql` database and its 4 collections (`stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`).
+2. **Compare Polymorphic Documents & Measure BSON Binary Size:** Fetch station `60390` (Algiers Upper-Air), `60901` (Algiers Bay Marine Buoy #1), and `60419` (Constantine Agro-Soil). Compare their polymorphic fields (`buoy_specs` vs. `soil_depths_cm`) and verify the exact BSON binary size in bytes of a radiosonde launch document using `Object.bsonsize()`.
+3. **Inspect `$jsonSchema` Validation Rules:** Inspect the active `$jsonSchema` validator on `db.stations` using `db.getCollectionInfos({ name: "stations" })`.
+4. **Verify Schema Guardrails Against Invalid Payloads:** Attempt to insert an invalid station document (missing `location` and using an unapproved `station_type: "WEATHER_BALLOON"`) and observe how MongoDB rejects the write at the storage engine boundary.
+5. **Insert a Valid Polymorphic Station Document:** Insert **Setif - Ain Arnat (`_id: 60445`)** as a `"SURFACE_AWS"` station at GeoJSON `[5.3244, 36.1781]`, including a custom nested `icing_sensor: { heated_anemometer: true, power_watts: 150 }` object.
 
 ```javascript
 // 1. Inspect database and collections
@@ -236,11 +230,10 @@ db.stations.insertOne({
   icing_sensor: { heated_anemometer: true, power_watts: 150, deice_threshold_c: 1.5 }
 });
 ```
-</details>
 
 ---
 
-## Module 2: Upper-Air Radiosonde Vertical Soundings, Atomic Updates & High-Frequency Time-Series Bucketing (10:15 – 11:45)
+## Module 2: Upper-Air Radiosonde Vertical Soundings, Atomic Updates & High-Frequency Time-Series Bucketing
 
 ### 2.1 Embedding vs. Referencing: Modeling Radiosonde Vertical Soundings
 
@@ -344,14 +337,13 @@ db.createCollection("synoptic_timeseries", {
   4. **Zero-Maintenance Retention (`expireAfterSeconds`):** A background TTL thread automatically drops expired buckets once `control.max.obs_time` passes the 90-day retention threshold—zero `DELETE` bloat!
 
 > [!TIP]
-> **Instructor Live Demo Tip (Peeking Inside `system.buckets.*`):**  
-> During Lab 2, run `db.system.buckets.synoptic_timeseries.findOne()` live on the projector! Showing attendees how 100 logical telemetry documents collapse into a single compressed columnar BSON bucket with `control.min` and `control.max` zone-map headers creates an immediate "aha!" connection back to PostgreSQL BRIN indexes from Day 3.
+> **Architectural Verification Tip (Peeking Inside `system.buckets.*`):**  
+> Run `db.system.buckets.synoptic_timeseries.findOne()` in `mongosh` to inspect the raw physical storage layout! Observing how 100 logical telemetry documents collapse into a single compressed columnar BSON bucket with `control.min` and `control.max` zone-map headers illustrates the direct architectural parallel to PostgreSQL BRIN indexes from Day 3.
 
 ---
 
-### 2.5 Lab 2: `$elemMatch` Upper-Air Queries, Live CAP Storm Updates & Peeking Inside `system.buckets` (45 min)
-
-#### Tasks for Attendees:
+### 2.5 Lab 2: `$elemMatch` Upper-Air Queries, Live CAP Storm Updates & Peeking Inside `system.buckets`
+#### Lab 2 Walkthrough & Verification:
 1. **Polymorphic & Diagnostic Queries:**
    - Query `db.synoptic_timeseries` to find any observation containing either `soil_profile` OR `marine_telemetry` (`$or` + `$exists: true`).
    - Query `db.synoptic_timeseries` using dot notation to find stations where `diagnostics.battery_v < 12.5` OR `diagnostics.door_open == true`.
@@ -363,9 +355,6 @@ db.createCollection("synoptic_timeseries", {
    - Use the positional `$` operator (`"vertical_levels.$.dewpoint_c"`) on Tamanrasset's `12Z` sounding (`station_id: 60680`) to correct the `700 hPa` dewpoint from `-8.4` to `-7.9`.
 4. **Peek Inside `system.buckets.synoptic_timeseries`:**
    - Compare `db.synoptic_timeseries.find({ "station_meta.station_id": 60390 })` (3 logical documents) against `db.system.buckets.synoptic_timeseries.findOne({ "meta.station_id": 60390 })` (1 physical columnar bucket with `control.min` and `control.max` headers!).
-
-<details>
-<summary><strong>Lab 2 — Instructor Solution Key</strong></summary>
 
 ```javascript
 // 1a. Find specialized Agro-Soil or Marine Buoy observations using $or and $exists
@@ -459,11 +448,10 @@ db.system.buckets.synoptic_timeseries.findOne({ "meta.station_id": 60390 });
 print("Logical Observations:", db.synoptic_timeseries.countDocuments());
 print("Physical Columnar Buckets on Disk:", db.system.buckets.synoptic_timeseries.countDocuments());
 ```
-</details>
 
 ---
 
-## Module 3: Multi-Stage Aggregation Pipelines, Upper-Air Climatology & 50,000-Document Fault Diagnostics (11:45 – 12:45)
+## Module 3: Multi-Stage Aggregation Pipelines, Upper-Air Climatology & 50,000-Document Fault Diagnostics
 
 ### 3.1 How the MongoDB Aggregation Framework Works (Unix Pipe Mental Model)
 
@@ -525,8 +513,7 @@ flowchart LR
 
 ---
 
-### 3.2 Lab 3: Upper-Air Isobaric Climatology (`$unwind` + `$merge`) & Cross-Collection `$lookup` (25 min)
-
+### 3.2 Lab 3: Upper-Air Isobaric Climatology (`$unwind` + `$merge`) & Cross-Collection `$lookup`
 First load the advanced operational script [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js):
 
 ```bash
@@ -534,15 +521,12 @@ mongosh weather_nosql day4_weather_ops_mongo_advanced.js
 mongosh weather_nosql
 ```
 
-#### Tasks for Attendees:
+#### Lab 3 Walkthrough & Verification:
 1. **Unwind Radiosonde Vertical Levels (`$unwind` + `$addFields` + `$group` + `$merge`):**
    - Build an aggregation pipeline on `db.radiosonde_soundings` that unwinds `$vertical_levels`, calculates the **dewpoint spread (`temp_c - dewpoint_c`)** at each pressure level (a critical indicator of cloud base saturation vs. dry Saharan air layers!), groups by isobaric surface (`$vertical_levels.pressure_hpa`), and computes `avg_height_m`, `avg_temp_c`, `avg_dewpoint_spread_c`, and `max_wind_kt`.
    - Materialize the output into a collection named `upper_air_climatology` using **`$merge`**.
 2. **Enrich Time-Series Telemetry with Station Coordinates (`$lookup`):**
    - Run an aggregation on `db.synoptic_timeseries` that filters for wind speeds `>= 25 kt` (`$match`), joins with `db.stations` (`$lookup` on `localField: "station_meta.station_id"`, `foreignField: "_id"`), and outputs the station's full name, elevation, and GeoJSON coordinates alongside the wind observation.
-
-<details>
-<summary><strong>Lab 3 — Instructor Solution Key</strong></summary>
 
 ```javascript
 // 1. Unwind upper-air soundings, compute isobaric stats, and materialize via $merge
@@ -617,27 +601,22 @@ db.synoptic_timeseries.aggregate([
   { $sort: { wind_speed_kt: -1 } }
 ]);
 ```
-</details>
 
 ---
 
-### 3.3 Lab 4: 50,000-Document Polymorphic Telemetry Benchmark, Road Safety Analytics & `$unwind` Hardware Fault Diagnostics (35 min)
-
-Now let's test MongoDB at production scale! Have attendees run [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js), which generates **50,000 polymorphic telemetry documents** across 50 stations (`AWS-001` to `AWS-050`) and 4 distinct instrument types (`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`) into both a standard BSON collection (`sensor_payloads`) and a native Time-Series collection (`weather_stream`):
+### 3.3 Lab 4: 50,000-Document Polymorphic Telemetry Benchmark, Road Safety Analytics & `$unwind` Hardware Fault Diagnostics
+Now let's test MongoDB at production scale! Run [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js), which generates **50,000 polymorphic telemetry documents** across 50 stations (`AWS-001` to `AWS-050`) and 4 distinct instrument types (`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`) into both a standard BSON collection (`sensor_payloads`) and a native Time-Series collection (`weather_stream`):
 
 ```bash
 mongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js
 mongosh "mongodb://localhost:27017/weather_telemetry_db"
 ```
 
-#### Tasks for Attendees:
+#### Lab 4 Walkthrough & Verification:
 1. **Cross-Instrument Anomaly Query:** Query `db.sensor_payloads` to find observations where optical disdrometers report reduced visibility (`visibility_meters < 1000`) OR 3D ultrasonic anemometers report severe boundary-layer turbulence (`turbulent_kinetic_energy > 0.35`).
 2. **Wet-Road Grip Safety Aggregation:** Aggregate all `ROAD_SURFACE_RADAR` payloads where `water_film_height_mm > 0.5`, grouped by `metadata.region`, calculating the number of distinct reporting stations (`$addToSet` + `$size`), `avg_grip_factor`, and `min_road_temp`.
 3. **Fleet-Wide `$unwind` Hardware Fault Diagnostics:** Using `$match` $\rightarrow$ `$unwind: "$hardware_faults"` $\rightarrow$ `$group`, rank the top hardware fault codes (`ERR_BATTERY_UNDERVOLT`, `WARN_OPTICAL_LENS_DUST`, etc.) by region and count how many unique stations are affected.
 4. **Physical Storage Compression Audit:** Compare the on-disk `storageSize` of `db.sensor_payloads` (standard collection) vs. `db.weather_stream` (columnar time-series buckets).
-
-<details>
-<summary><strong>Lab 4 — Instructor Solution Key</strong></summary>
 
 ```javascript
 use weather_telemetry_db;
@@ -721,11 +700,10 @@ print(`Standard BSON Storage Size       : ${(stdStats.storageSize / (1024 * 1024
 print(`Time-Series Buckets Storage Size : ${(tsStats.storageSize / (1024 * 1024)).toFixed(2)} MB`);
 print(`Columnar Compression Ratio       : ${(stdStats.storageSize / tsStats.storageSize).toFixed(2)}x savings!`);
 ```
-</details>
 
 ---
 
-## Module 4: Geospatial Meteorology in MongoDB (`2dsphere` Indexes) & The `ESR` Compound Indexing Rule (13:45 – 15:00)
+## Module 4: Geospatial Meteorology in MongoDB (`2dsphere` Indexes) & The `ESR` Compound Indexing Rule
 
 ### 4.1 Spherical Earth Geometry Out-of-the-Box (`2dsphere` Indexes & GeoJSON)
 
@@ -784,11 +762,10 @@ When you create an index on an array field like `db.radiosonde_soundings.createI
 
 ---
 
-### 4.3 Lab 5: Radar Storm Polygon Containment (`2dsphere`) & Diagnosing `ESR` Execution Plans (40 min)
-
+### 4.3 Lab 5: Radar Storm Polygon Containment (`2dsphere`) & Diagnosing `ESR` Execution Plans
 Switch back to the `weather_nosql` database (`use weather_nosql;`):
 
-#### Tasks for Attendees:
+#### Lab 5 Walkthrough & Verification:
 1. **Proximity Search (`$geoNear`):** A Mediterranean waterspout/mesocyclone is spotted offshore near Algiers at `[3.30, 36.80]`. Use the **`$geoNear`** aggregation stage on `db.stations` to find all active stations/buoys within **250 km** (`250000` meters), returning each station's name, type, and exact distance in **kilometers** (`distanceMultiplier: 0.001`).
 2. **Radar Polygon Containment (`$geoWithin`):**
    - Fetch the GeoJSON `footprint` polygon of `"CELL-MED-20261006-A"` (`Mediterranean Convective System Alpha`) from `db.storm_polygons`.
@@ -798,9 +775,6 @@ Switch back to the `weather_nosql` database (`use weather_nosql;`):
    - Run `.explain("executionStats")` on `db.radiosonde_soundings.find({ station_id: 60390, cape_j_kg: { $gte: 200 } }).sort({ launch_time: -1 })`.
    - Verify that `winningPlan` uses `IXSCAN` on `idx_sonde_esr` with **zero `SORT` stage**.
 5. **Before vs. After Multikey Index:** Run `.explain("executionStats")` on `db.cap_alerts.find({ affected_stations: 60419 })` before and after creating `db.cap_alerts.createIndex({ affected_stations: 1 })`.
-
-<details>
-<summary><strong>Lab 5 — Instructor Solution Key</strong></summary>
 
 ```javascript
 use weather_nosql;
@@ -872,11 +846,10 @@ db.cap_alerts.createIndex({ affected_stations: 1 });
 print("=== After Multikey Index (Expect IXSCAN) ===");
 printjson(db.cap_alerts.find({ affected_stations: 60419 }).explain("executionStats").queryPlanner.winningPlan);
 ```
-</details>
 
 ---
 
-## Module 5: Distributed MongoDB in Production — Replica Sets, Tunable CAP/PACELC, GridFS & Horizontal Sharding (15:00 – 16:30)
+## Module 5: Distributed MongoDB in Production — Replica Sets, Tunable CAP/PACELC, GridFS & Horizontal Sharding
 
 ### 5.1 High Availability via 3-Node Replica Sets & The Oplog (`local.oplog.rs`)
 
@@ -941,8 +914,8 @@ sequenceDiagram
 ```
 
 > [!TIP]
-> **Instructor Live Demo Tip (2-Minute Live Chaos Failover):**  
-> With Stack A (`docker-compose.ha-replicaset.yml`) running, have attendees watch `rs.status()` while you execute `docker stop weather-mongo-node1`. Within 8–10 seconds, `mongo-node2` wins the Raft election and becomes `PRIMARY`, while `mongo-node3` (`priority: 0`) stays `SECONDARY` serving analytics!
+> **Operational Chaos Engineering Verification (Live Primary Failover):**  
+> With Stack A (`docker-compose.ha-replicaset.yml`) running, monitor `rs.status()` while executing `docker stop weather-mongo-node1`. Within 8–10 seconds, `mongo-node2` wins the Raft election and becomes `PRIMARY`, while `mongo-node3` (`priority: 0`) stays `SECONDARY` serving analytics!
 
 ---
 
@@ -1024,19 +997,12 @@ flowchart TB
 
 ---
 
-### 5.5 Lab 6: Tunable CAP Write Concerns, WiredTiger Cache Forensics & Sharded Cluster Design (25 min)
-
-#### Tasks for Attendees:
-1. **Enforce CP Durability on a Life-Safety Alert:** Insert a new Red Severe Weather Alert (`_id: "DZ-ONM-2026-10-06-003"`) into `db.cap_alerts` using explicit journaled majority Write Concern (`{ writeConcern: { w: "majority", j: true, wtimeout: 5000 } }`).
-2. **Inspect WiredTiger Cache & Concurrency Tickets:** Run `db.serverStatus().wiredTiger.cache` and `db.serverStatus().wiredTiger.concurrentTransactions` in `mongosh` to inspect maximum cache bytes, dirty bytes currently in RAM, and available read/write tickets.
-3. **Architecture Design Exercise — Choose the Optimal Shard Key:**
-   For each of the 3 collections below, write the exact `sh.shardCollection(...)` command and explain why your Shard Key avoids both **monotonic write hotspots** and **Jumbo Chunks** while supporting the primary forecaster query pattern:
-   - `weather_nosql.synoptic_timeseries`
-   - `weather_nosql.radiosonde_soundings`
-   - `weather_nosql.radar_volumetric_scans` (only 8 Doppler radar sites nationwide, ingesting 500 scans/day each)
-
-<details>
-<summary><strong>Lab 6 — Instructor Solution Key</strong></summary>
+### 5.5 Lab 6: Tunable CAP Write Concerns, WiredTiger Cache Forensics & Sharded Cluster Design
+#### Lab 6 Walkthrough & Architectural Reference:
+1. **Enforce CP Durability on a Life-Safety Alert:** Insert a Red Severe Weather Alert (`_id: "DZ-ONM-2026-10-06-003"`) into `db.cap_alerts` using explicit journaled majority Write Concern (`{ writeConcern: { w: "majority", j: true, wtimeout: 5000 } }`).
+2. **Inspect WiredTiger Cache & Concurrency Tickets:** Query `db.serverStatus().wiredTiger.cache` and `db.serverStatus().wiredTiger.concurrentTransactions` in `mongosh` to inspect maximum cache bytes, dirty bytes currently in RAM, and available read/write tickets.
+3. **Production Shard Key Patterns (`sh.shardCollection`):**
+   Compare the optimal compound shard keys for three meteorological workloads (`synoptic_timeseries`, `radiosonde_soundings`, and `radar_volumetric_scans` with only 8 Doppler radar sites nationwide) so that every collection avoids both **monotonic write hotspots** and **Jumbo Chunks** while supporting targeted station + time-window queries:
 
 ```javascript
 use weather_nosql;
@@ -1067,20 +1033,19 @@ print("Current Cache Used (MB)  :", (wtCache["bytes currently in the cache"] / 1
 print("Tracked Dirty Bytes (MB) :", (wtCache["tracked dirty bytes in the cache"] / 1024 / 1024).toFixed(2));
 printjson(db.serverStatus().wiredTiger.concurrentTransactions);
 
-// 3. Optimal Shard Key Design Answers (Run on mongos in a Sharded Cluster):
+// 3. Optimal Shard Key Reference Patterns (Executed on mongos in a Sharded Cluster):
 // A) synoptic_timeseries:
 //    sh.shardCollection("weather_nosql.synoptic_timeseries", { "station_meta.station_id": 1, obs_time: 1 });
-//    Why: High-cardinality station_id spreads live writes across shards; obs_time keeps station history ordered.
+//    Rationale: High-cardinality station_id distributes live ingestion across all shards; obs_time keeps each station's time-series contiguous on disk.
 //
 // B) radiosonde_soundings:
 //    sh.shardCollection("weather_nosql.radiosonde_soundings", { station_id: 1, launch_time: 1 });
-//    Why: Forecasters query soundings by station_id + launch_time window (Targeted Routing).
+//    Rationale: Forecasters query upper-air soundings by station_id + launch_time window (Targeted Single-Shard Routing).
 //
 // C) radar_volumetric_scans (Only 8 radar sites -> compound prefix + time prevents Jumbo Chunks!):
 //    sh.shardCollection("weather_nosql.radar_volumetric_scans", { radar_site_id: 1, scan_time: 1 });
-//    Why: Combining radar_site_id + scan_time allows MongoDB to split chunks along scan_time as a site's archive grows!
+//    Rationale: A single-field { radar_site_id: 1 } key with only 8 distinct values would trap all scans for a site in an unsplittable Jumbo Chunk. Appending scan_time: 1 allows MongoDB to split chunks along the time axis as each radar site's archive grows.
 ```
-</details>
 
 ---
 

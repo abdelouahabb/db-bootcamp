@@ -1070,15 +1070,11 @@ printjson(db.serverStatus().wiredTiger.concurrentTransactions);
 ================================================================================
 ```
 
-### Preview of Day 5 (Grand Finale): Columnar OLAP (DuckDB & Parquet), Gridded NWP Formats (GRIB2 / NetCDF / Zarr) & Polyglot Architecture Capstone
-Conclude Day 4 by framing the final architectural frontier for **Day 5**:
-
-> *"Today we mastered MongoDB to ingest, validate, bucket, spatially query, and aggregate polymorphic IoT streams, upper-air radiosonde profiles, and GeoJSON storm polygons at wire speed.*
->
-> *Tomorrow on **Day 5 (Final Day)**, we tackle two remaining questions:*
-> 1. *What happens when climatologists need to scan **30 years of historical observations (20 billion rows)** in milliseconds, or slice 4-dimensional gridded NWP cubes (**Parquet, DuckDB, GRIB2, NetCDF, Zarr**)?*
-> 2. *How do we combine **SQLite (Edge)** + **PostgreSQL/PostGIS (Core Relational)** + **MongoDB (Polymorphic Telemetry & Spatial Alerts)** + **DuckDB/Parquet (Analytical Lakehouse)** into one unified **National Meteorological Center Polyglot Architecture**?"*
+> [!TIP]
+> **Next Step — Review Day 4 Walkthroughs & Install DuckDB / Python `venv` / Docker (Day 5)**
+> - 📖 **Review the 3 Day 4 MongoDB Walkthroughs:** [day4_weather_ops_mongo](./day4_weather_ops_mongo_js_course_walkthrough.md) | [day4_weather_ops_mongo_advanced](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [day4_mongo_50k_polymorphic_benchmark](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
+> - 💿 **Install Day 5 OLAP & Lakehouse Stack From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 4: DuckDB CLI, Python 3.12 `venv`, Mosquitto & Docker)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install the Day 5 tools before starting the Lakehouse & Capstone labs!
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)

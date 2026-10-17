@@ -954,7 +954,7 @@ flowchart LR
 
 ### 6.2 The Architectural Decision Matrix: PostgreSQL (Days 2–3) vs. MongoDB (Day 4)
 
-End Day 3 with this clear decision matrix so the weather engineers understand **when to use PostgreSQL (`PARTITION BY RANGE` + `BRIN` + `PostGIS` + `JSONB`)** vs. **when to move to MongoDB BSON & Time-Series Collections tomorrow on Day 4**:
+The following decision matrix summarizes **when to use PostgreSQL (`PARTITION BY RANGE` + `BRIN` + `PostGIS` + `JSONB`)** vs. **when to move to MongoDB BSON & Time-Series Collections on Day 4**:
 
 | Architectural Question | Keep It in PostgreSQL (Days 2–3 Relational + `JSONB`) | Move It to MongoDB (Day 4 Document & Time-Series NoSQL) |
 | :--- | :--- | :--- |
@@ -963,7 +963,13 @@ End Day 3 with this clear decision matrix so the weather engineers understand **
 | **How does it scale writes & time-series?** | Vertical scaling + Read Replicas + Declarative Range Partitioning + BRIN on a single Primary node | Native **Time-Series Bucket Collections** (`system.buckets`, 80–90% columnar compression), **Replica Sets** with tunable per-query CAP (`w: 1` vs `w: "majority"`), and horizontal **Sharding** |
 | **How are sub-document updates handled?** | Updating 1 key inside a 50 KB `JSONB` column rewrites the **entire 50 KB tuple** (MVCC dead-tuple bloat!) | MongoDB `$set` modifies specific BSON fields in-place inside WiredTiger without rewriting the entire document on disk |
 
+> [!TIP]
+> **Next Step — Interactive BRIN Calculator & Installing MongoDB 7.0 + Compass (Day 4)**
+> - 🧪 **Test in the Interactive Simulator:** [Switch to Portal Tab 04: Storage & BRIN vs B-Tree Calculator](../bootcamp_portal.html#tab-scaling)
+> - 📖 **Review the 2 Day 3 SQL Walkthroughs:** [day3_weather_advanced_pg](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [day3_postgis_5m_benchmark](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)
+> - 💿 **Install Day 4 MongoDB & Compass From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 3: Native MongoDB 7.0, `mongosh` & Compass)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install MongoDB 7.0 before starting Day 4!
+
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | **Day 3 Coursebook** | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | **Day 3 Coursebook** | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
 

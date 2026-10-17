@@ -1061,7 +1061,13 @@ Tomorrow on **Day 3**, we solve these exact time-series and spatial scale challe
 3. **Window Functions (`LAG`, `LEAD`, `AVG() OVER`) & PostGIS Spatial Queries:** Computing 3-hour pressure tendencies ($\Delta P_{3\text{h}}$), rolling 24-hour rainfall accumulations, and spatial radar polygon containment.
 4. **Hybrid `JSONB` + `GIN` Indexing:** Handling polymorphic sensor payloads and bridging to **MongoDB & Distributed NoSQL (Days 4–5)**.
 
+> [!TIP]
+> **Next Step — Interactive Tuple Tetris Simulator & Installing PostGIS 3.4 (Day 3)**
+> - 🧪 **Test in the Interactive Simulator:** [Switch to Portal Tab 02: PG Tuple Alignment ("Tuple Tetris") Lab](../bootcamp_portal.html#tab-tetris)
+> - 📖 **Review the 3 Day 2 SQL Walkthroughs:** [weather_ops_pg](./weather_ops_pg_sql_course_walkthrough.md) | [pageinspect & Storage Lab](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | [Two-Terminal ACID Lab](./day2_two_terminal_acid_lab_course_walkthrough.md)
+> - 💿 **Install Day 3 Spatial Extensions From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 2B: PostGIS 3.4 & Partitioning)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install PostGIS 3.4 before starting Day 3!
+
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
 

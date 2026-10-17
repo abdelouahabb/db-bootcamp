@@ -2,7 +2,8 @@
 
 > [!IMPORTANT]
 > **Architected & Synthesized with Gemini 4 Argon**  
-> This repository is the unified, zero-duplication **"Best of Both"** master edition (`67 files`, `28,000+ lines` of coursebooks, SQL/MongoDB course walkthroughs, reference cards, interactive simulators, and runnable SQL/MQL/Python/Docker labs).
+> This repository is the unified, zero-duplication **"Best of Both"** master edition (`68 files`, `29,000+ lines` of coursebooks, SQL/MongoDB course walkthroughs, reference cards, interactive simulators, and runnable SQL/MQL/Python/Docker labs).
+> - 💿 **VMware Ubuntu 24.04 Blank Lab From-Scratch Installation Guide:** Read **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md](./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to create the blank Ubuntu VM in VMware and install every database, CLI tool, Python environment, and GUI client from scratch (Native + Docker alternative).
 > - 🛠️ **Attendee Tooling & Day-0 Setup Guide (Windows, macOS & Linux):** Read **[ATTENDEE_SETUP_GUIDE.md](./ATTENDEE_SETUP_GUIDE.md)** for step-by-step instructions on reading coursebooks, setting up **DBeaver Community** & **MongoDB Compass**, and launching the Docker Compose database stacks.
 > - 🌐 **Interactive Web Command Center, Built-In Coursebook Reader & Simulators:** Run `python3 start_bootcamp.py` (or open [bootcamp_portal.html](./bootcamp_portal.html)) to launch the **Built-In Dark-Mode Markdown/Code Reader**, **PostgreSQL Tuple Tetris 8-Byte Alignment Visualizer**, **`-9999.0` Hardware Sentinel & 3VL Simulator**, **Multi-Engine Scaling Calculator**, **Polyglot Architecture Map**, and **15-Question Live Certification Quiz** at `http://127.0.0.1:8088/bootcamp_portal.html`.
 > - ✅ **1-Command Pre-Flight Verification:** Run [`./verify_bootcamp.sh`](./verify_bootcamp.sh) to execute automated integrity, SQLite seed, 250,000-row telemetry generation, Python AST compilation, and Docker Compose checks.
@@ -13,11 +14,12 @@
 
 ---
 
-## 1. Repository Architecture & Complete File Navigator (`67 Files`)
+## 1. Repository Architecture & Complete File Navigator (`68 Files`)
 
 ```text
 alternative B/
 ├── README.md                                                      # Master Syllabus, File Navigator & Quick-Start Runbook
+├── VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md                             # Blank Ubuntu 24.04 VM in VMware & From-Scratch Install Guide
 ├── ATTENDEE_SETUP_GUIDE.md                                        # Attendee Tooling & Day-0 Setup Guide (Windows, macOS & Linux)
 ├── start_bootcamp.py                                              # Zero-Dependency HTTP Server & Browser Launcher (Port 8088)
 ├── bootcamp_portal.html                                           # Interactive Command Center, Built-In Reader, 3 Simulators & Quiz
@@ -150,12 +152,16 @@ See **[reference_cards/README.md](./reference_cards/README.md)** for the **20-Sc
 
 ## 5. Quick-Start Lab Execution Commands (Days 1–5)
 
-### Day 0: Web Portal Launcher & Pre-Bootcamp Verification
+### Day 0: Clone Repository, Launch Web Portal & Run Verification
 ```bash
+# 0. Clone the bootcamp repository from GitHub
+git clone https://github.com/abdelouahabb/db-bootcamp.git
+cd db-bootcamp
+
 # 1. Launch the Interactive Web Command Center & Built-In Coursebook Reader (http://127.0.0.1:8088/bootcamp_portal.html)
 python3 start_bootcamp.py
 
-# 2. Run the automated 65+ check verification suite across all 5 days
+# 2. Run the automated 89-check verification suite across all 5 days
 ./verify_bootcamp.sh
 ```
 

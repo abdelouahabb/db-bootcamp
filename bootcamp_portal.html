@@ -948,8 +948,8 @@
       <div class="hero-metrics">
         <div class="metric-box">
           <span class="m-label">Curriculum Repository</span>
-          <span class="m-val">58 Files</span>
-          <span class="m-sub">5 Days + 13 Ref Cards + Docker Labs</span>
+          <span class="m-val">69 Files</span>
+          <span class="m-sub">5 Days + 9 Walkthroughs + 13 Ref Cards</span>
         </div>
         <div class="metric-box">
           <span class="m-label">Tuple Alignment Savings</span>
@@ -996,7 +996,10 @@
       <button class="tab-btn" onclick="switchTab('tab-quiz', this)">
         <span class="tab-num">06</span> 15-Question Quiz
       </button>
-      <button class="tab-btn" onclick="openDocModal('./ATTENDEE_SETUP_GUIDE.md')" style="margin-left: auto; border-color: var(--border-strong);">
+      <button class="tab-btn" onclick="openDocModal('./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md')" style="margin-left: auto; border-color: var(--accent-cyan);">
+        💿 Blank Ubuntu VM Lab
+      </button>
+      <button class="tab-btn" onclick="openDocModal('./ATTENDEE_SETUP_GUIDE.md')" style="border-color: var(--border-strong);">
         Attendee Setup Guide
       </button>
     </div>
@@ -1013,7 +1016,7 @@
           <p>Click any <code>.md</code>, <code>.sql</code>, <code>.js</code>, <code>.py</code>, or <code>.yml</code> file below to open it in the built-in reader, or copy the terminal quick-start commands.</p>
         </div>
         <div class="btn-group">
-          <button class="action-btn active" onclick="filterCurriculum('all', this)">All Files (58)</button>
+          <button class="action-btn active" onclick="filterCurriculum('all', this)">All Files (69)</button>
           <button class="action-btn" onclick="filterCurriculum('days', this)">Days 0–5</button>
           <button class="action-btn" onclick="filterCurriculum('refs', this)">13 Reference Cards</button>
           <button class="action-btn" onclick="filterCurriculum('docker', this)">Docker Stacks</button>
@@ -1024,13 +1027,17 @@
         <!-- DAY 0: ATTENDEE SETUP & PORTAL LAUNCHER -->
         <div class="card curr-card" data-category="days" style="grid-column: 1 / -1;">
           <div class="card-header">
-            <div class="card-title">Day 0 — Attendee Setup Guide, Local Web Server &amp; Verification Suite</div>
-            <span class="pill pill-emerald">Windows • macOS • Linux</span>
+            <div class="card-title">Day 0 — Blank Ubuntu VM Lab Runbook, Attendee Setup Guide &amp; Verification Suite</div>
+            <span class="pill pill-emerald">VMware Ubuntu 24.04 • Native + Docker</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Covers the two ways to read coursebooks (this Built-In Web Portal via <code>python3 start_bootcamp.py</code> or VS Code Markdown Preview), DBeaver Community PostGIS map viewer &amp; MongoDB Compass setup, and turnkey Docker Compose stacks.
+            Complete step-by-step runbook for building the blank Ubuntu 24.04 LTS VM in VMware and installing every database engine, CLI tool, Python environment, and GUI client from scratch (Native Linux packages + Docker Compose alternative).
           </p>
           <ul class="file-list">
+            <li class="file-item">
+              <a href="./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md" title="./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md">VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md</a>
+              <span class="file-desc">💿 Complete VMware Ubuntu 24.04 Blank Lab From-Scratch Installation Guide (Native + Docker)</span>
+            </li>
             <li class="file-item">
               <a href="./ATTENDEE_SETUP_GUIDE.md" title="./ATTENDEE_SETUP_GUIDE.md">ATTENDEE_SETUP_GUIDE.md</a>
               <span class="file-desc">Attendee Tooling &amp; Setup Guide (DBeaver, Compass, VS Code, Docker)</span>
@@ -1045,12 +1052,12 @@
             </li>
             <li class="file-item">
               <a href="./verify_bootcamp.sh" title="./verify_bootcamp.sh">verify_bootcamp.sh</a>
-              <span class="file-desc">Automated 79-Check Pre-Flight &amp; Live SQL/Python/Docker Verification Suite</span>
+              <span class="file-desc">Automated 89-Check Pre-Flight &amp; Live SQL/Python/Docker Verification Suite</span>
             </li>
           </ul>
           <div class="code-box">
             <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>
-            <pre>python3 start_bootcamp.py</pre>
+            <pre>git clone https://github.com/abdelouahabb/db-bootcamp.git &amp;&amp; cd db-bootcamp &amp;&amp; python3 start_bootcamp.py</pre>
           </div>
         </div>
 
@@ -1091,6 +1098,10 @@
             <li class="file-item">
               <a href="./day1/weather_ops.db" title="./day1/weather_ops.db">day1/weather_ops.db</a>
               <span class="file-desc">Pre-built SQLite DB (36 KB)</span>
+            </li>
+            <li class="file-item">
+              <a href="./day1/weather_telemetry.db" title="./day1/weather_telemetry.db">day1/weather_telemetry.db</a>
+              <span class="file-desc">250k-Row Synthetic AWS SQLite DB</span>
             </li>
           </ul>
           <div class="code-box">
@@ -1901,7 +1912,20 @@ USING brin (obs_time) WITH (pages_per_range = 128);</pre>
       document.querySelectorAll('.tab-section').forEach(sec => sec.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.getElementById(tabId).classList.add('active');
-      btnEl.classList.add('active');
+      if (btnEl) btnEl.classList.add('active');
+    }
+
+    function jumpToPortalTab(tabId) {
+      closeDocModal();
+      const targetSec = document.getElementById(tabId);
+      if (!targetSec) return;
+      document.querySelectorAll('.tab-section').forEach(sec => sec.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        btn.classList.toggle('active', onclickAttr.includes(`'${tabId}'`));
+      });
+      targetSec.classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function filterCurriculum(category, btnEl) {
@@ -2704,8 +2728,14 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
       // Links [label](url)
       out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
         const cleanHref = href.trim();
+        const tabMatch = cleanHref.match(/(?:bootcamp_portal\.html)?#(tab-[a-z0-9_-]+)$/i);
+        if (tabMatch) {
+          const targetTab = tabMatch[1];
+          return `<a href="#${targetTab}" class="md-doc-link" onclick="event.preventDefault(); jumpToPortalTab('${targetTab}')">${label}</a>`;
+        }
         if (/\.(md|sql|py|js|yml|yaml|sh)(#.*)?$/i.test(cleanHref) && !cleanHref.startsWith('http')) {
-          const resolved = resolveRelativePath(docPath, cleanHref);
+          const baseHref = cleanHref.split('#')[0];
+          const resolved = resolveRelativePath(docPath, baseHref);
           return `<a href="${resolved}" class="md-doc-link" onclick="event.preventDefault(); openDocModal('${resolved}')">${label}</a>`;
         }
         return `<a href="${cleanHref}" target="_blank" rel="noopener" class="md-ext-link">${label}</a>`;

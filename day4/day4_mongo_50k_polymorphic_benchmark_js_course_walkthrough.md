@@ -1,6 +1,6 @@
 # Day 4 Course Walkthrough: `day4_mongo_50k_polymorphic_benchmark.js` — 50,000 Polymorphic Telemetry Benchmark, Bucket Pattern & `$unwind` Hardware Fault Diagnostics
 
-[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [🧪 Hands-On Lab](./day4_Rebuild_With_Me_Lab.md) | [⚙️ Original Script](./day4_mongo_50k_polymorphic_benchmark.js) | [🌱 Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [🚀 Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)
+[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⚙️ Original Script](./day4_mongo_50k_polymorphic_benchmark.js) | [🌱 Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [🚀 Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)
 
 ---
 
@@ -568,4 +568,4 @@ Native Time-Series Collection ("weather_stream"):
 
 ---
 
-[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [🧪 Hands-On Lab](./day4_Rebuild_With_Me_Lab.md) | [⚙️ Original Script](./day4_mongo_50k_polymorphic_benchmark.js) | [🌱 Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [🚀 Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)
+[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⚙️ Original Script](./day4_mongo_50k_polymorphic_benchmark.js) | [🌱 Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [🚀 Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)

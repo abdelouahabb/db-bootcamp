@@ -3,7 +3,8 @@
 > [!IMPORTANT]
 > **100% Portable & Self-Contained Bootcamp Package**  
 > Everything in this folder is designed to run locally on **Windows 10/11**, **macOS (Intel & Apple Silicon)**, and **Linux (Ubuntu/Debian/RHEL/Fedora)** with zero cloud account dependencies.  
-> Follow this guide to understand **which tools to use for reading coursebooks, visualizing spatial/document data, and executing labs across Days 1–5**.
+> - **Building a Blank Ubuntu 24.04 VM in VMware from Scratch?** Open **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md](./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** for the complete step-by-step VMware creation and from-scratch native + Docker installation runbook.
+> - Follow this guide to understand **which tools to use for reading coursebooks, visualizing spatial/document data, and executing labs across Days 1–5**.
 
 ---
 
@@ -12,7 +13,7 @@
 | Task During the Bootcamp | Recommended Primary Tool | Zero-Install / Browser Fallback |
 | :--- | :--- | :--- |
 | **Reading Coursebooks (`.md`), Reference Cards, Simulators & Quiz** | **Built-In Web Portal** (`python3 start_bootcamp.py` $\rightarrow$ `http://127.0.0.1:8088/bootcamp_portal.html`) | **VS Code** (`Ctrl+Shift+V` / `Cmd+Shift+V` Markdown + Mermaid Preview) |
-| **Day 1: SQLite Operational & 250k Telemetry Labs** | **`sqlite3` CLI** + **DBeaver Community Edition** | Python `sqlite3` module (built into Python 3) |
+| **Day 1: SQLite Operational & 250k Telemetry Labs** | **`sqlite3` CLI** + **DB Browser for SQLite (`DB4S`)** + **DBeaver Community** | Python `sqlite3` module (built into Python 3) |
 | **Days 2 & 3: PostgreSQL 16 + PostGIS 3.4 Internals & Spatial Maps** | **DBeaver Community** *(Leaflet GIS Map Viewer + `Ctrl+Shift+E` Visual Explain)* + **`psql` CLI** | **Adminer Web SQL UI** (`http://localhost:8080`) + `docker exec -it` |
 | **Day 4: MongoDB 7.0 BSON, Time-Series & `2dsphere` Storm Polygons** | **MongoDB Compass GUI** *(Interactive GeoJSON Map + Visual Aggregation Builder)* + **`mongosh` CLI** | `docker exec -it weather-mongo-node1 mongosh` |
 | **Day 5: DuckDB, Apache Parquet, NetCDF4 & Polyglot Lakehouse** | **Python 3** + **DuckDB CLI / DBeaver** + **MinIO S3 Console** (`http://localhost:9001`) | Built-In Portal Multi-Engine Scaling Calculator & Architecture Explorer |
@@ -27,8 +28,11 @@ All coursebooks (`day1/` through `day5/`) and the 13 Engineering Reference Cards
 
 We include a zero-dependency launcher script (`start_bootcamp.py`) that starts a lightweight local HTTP server and opens the **Interactive Bootcamp Command Center (`bootcamp_portal.html`)** in your browser.
 
-1. Open a terminal (`PowerShell`/`cmd` on Windows, `Terminal` on macOS/Linux) inside this bootcamp folder:
+1. Clone the repository (if you haven't already) and open a terminal (`PowerShell`/`cmd` on Windows, `Terminal` on macOS/Linux) inside the `db-bootcamp` folder:
    ```bash
+   git clone https://github.com/abdelouahabb/db-bootcamp.git
+   cd db-bootcamp
+
    # macOS / Linux:
    python3 start_bootcamp.py
 
@@ -64,37 +68,50 @@ If you prefer working inside an IDE with an integrated terminal right below your
 
 ---
 
-## 2. Database GUI Clients (Visual Maps, ER Diagrams & Explain Plans)
+## 2. Database GUI Clients (Visual Maps, ER Diagrams, Pragmas & Explain Plans)
 
-While every lab in this bootcamp can be executed 100% from the terminal CLI, meteorological data engineers rely on **two free visual GUI applications** to inspect PostGIS geodesic maps, `2dsphere` storm polygons, Entity-Relationship (ER) diagrams, and visual query execution plans.
+While every lab in this bootcamp can be executed 100% from the terminal CLI, meteorological data engineers rely on **three free visual GUI applications** to inspect SQLite Pragmas/B-Trees, PostGIS geodesic maps, `2dsphere` storm polygons, Entity-Relationship (ER) diagrams, and visual query execution plans.
 
 *(For advanced GUI pro-tips, see [reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md](./reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md)).*
 
-### A. DBeaver Community Edition (Days 1, 2, 3 & 5)
+### A. DB Browser for SQLite (`DB4S`) — Dedicated Featherweight GUI for Day 1
+- **Download:** [https://sqlitebrowser.org/dl/](https://sqlitebrowser.org/dl/) *(Free & Open-Source — Windows `.msi`/`.zip`, macOS, Linux `sudo apt install sqlitebrowser`)*
+- **Why It Shines on Day 1:**
+  - **Zero JDBC Driver Downloads & Featherweight (`~35 MB` RAM):** Written in native C++/Qt; opens `./day1/weather_ops.db` and `./day1/weather_telemetry.db` (`250,000` rows) instantaneously.
+  - **Visual `Edit Pragmas` Tab:** Lets you see that **`Foreign Keys`** is unchecked by default on new connections and toggle it on visually (proving why `PRAGMA foreign_keys = ON;` is per-connection!).
+  - **Color-Coded `NULL` Cells (`Browse Data` Tab):** Highlights true SQL `NULL` dropouts (Oran `60490`) in a distinct badge so you can visually contrast them against numeric `-9999.0` sentinels (Constantine `60419`).
+  - **`Database Structure` Tab:** Displays the exact `CREATE TABLE` DDL, `CHECK` constraints, and hidden `sqlite_autoindex_*` B-Trees.
+
+### B. DBeaver Community Edition (Days 1, 2, 3 & 5)
 - **Download:** [https://dbeaver.io/download/](https://dbeaver.io/download/) *(Free & Open-Source — Windows, macOS, Linux)*
 - **What You Use It For:**
-  - **Day 1 (SQLite):** Open `./day1/weather_ops.db` and `./day1/weather_telemetry.db`, inspect ER diagrams, and test `PRAGMA foreign_keys = ON`.
+  - **Day 1 (SQLite):** Open `./day1/weather_ops.db` and `./day1/weather_telemetry.db` to generate visual Entity-Relationship (ER) diagrams.
   - **Days 2 & 3 (PostgreSQL 16 + PostGIS 3.4):**
     - **Visual Spatial Map Viewer:** Click any `GEOGRAPHY(Point, 4326)` column or `ST_Buffer` / `ST_DWithin` query result to plot WMO weather stations and storm radii directly on an interactive **OpenStreetMap / Leaflet GIS panel** inside DBeaver!
     - **Visual Execution Plan (`Ctrl+Shift+E`):** Highlight any slow query and press `Ctrl+Shift+E` (`Cmd+Shift+E` on Mac) to visualize `Seq Scan` vs. `Bitmap Heap Scan` vs. `Partition Pruning` cost trees.
   - **Day 5 (DuckDB & Parquet):** Connect DBeaver's DuckDB driver to `:memory:` or `./day5/weather.duckdb` to query `SELECT * FROM read_parquet('day5/lakehouse_parquet/**/*.parquet')` visually.
 
 #### Exact DBeaver Connection Parameters
+*(Note: If you are using the **4 GB RAM Hybrid VMware Setup** where DBeaver runs on your Windows Host and the databases run inside the Ubuntu VM, replace `localhost` with your Ubuntu VM's IP address `<VM_IP>` from `hostname -I`!)*
 
 | Bootcamp Day | Engine Driver | Host / File Path | Port | Database | Username | Password |
 | :--- | :--- | :--- | :---: | :--- | :--- | :--- |
 | **Day 1** | **SQLite** | Browse to `./day1/weather_ops.db` or `./day1/weather_telemetry.db` | *N/A* | *N/A* | *N/A* | *N/A* |
-| **Days 2 & 3** *(HA Stack)* | **PostgreSQL** | `localhost` | `5432` | `weather_ops` | `postgres` | `meteo_password` |
-| **Day 5** *(Polyglot Stack)* | **PostgreSQL** | `localhost` | `5432` | `weather_ops_db` | `postgres` | `postgres` |
+| **Days 2 & 3** *(Native / HA)* | **PostgreSQL** | `localhost` *(or `<VM_IP>`)* | `5432` | `weather_ops` / `weather_ops_db` | `postgres` | `meteo_password` |
+| **Day 5** *(Polyglot Stack)* | **PostgreSQL** | `localhost` *(or `<VM_IP>`)* | `5432` | `weather_ops_db` | `postgres` | `postgres` |
 | **Day 5** *(Lakehouse)* | **DuckDB** | Enter `:memory:` *(or `./day5/weather.duckdb`)* | *N/A* | *N/A* | *N/A* | *N/A* |
 
 ---
 
-### B. MongoDB Compass (Day 4 & Day 5)
+### C. MongoDB Compass (Day 4 & Day 5)
 - **Download:** [https://www.mongodb.com/try/download/compass](https://www.mongodb.com/try/download/compass) *(Free GUI Edition — Windows, macOS, Linux)*
-- **Connection URI:**
+- **Connection URI (on Windows Host connecting to local or Ubuntu VM MongoDB):**
   ```text
+  # If MongoDB is running on the same machine:
   mongodb://localhost:27017
+
+  # If MongoDB is running inside the 4 GB Ubuntu VM (replace <VM_IP> with hostname -I output):
+  mongodb://<VM_IP>:27017
   ```
 - **What You Use It For on Day 4:**
   - **Schema Tab & GeoJSON Maps:** Click the **Schema** tab on `weather_nosql.stations` or `weather_nosql.storm_polygons` and click **"Analyze Schema"** — Compass automatically renders an interactive **2dsphere Map** of your Algerian & Mediterranean weather stations and convective storm polygons!

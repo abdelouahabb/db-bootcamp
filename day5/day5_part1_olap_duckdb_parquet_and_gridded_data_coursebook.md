@@ -351,6 +351,24 @@ climatology_lake/
 > **Production Pitfall (The "Small Files Problem" on S3 / Ceph RGW):**  
 > Never configure an MQTT or Kafka consumer to flush a new Parquet file every 5 seconds or partition by `day/hour/minute`! Writing 200,000 tiny `10 KB` Parquet files destroys RLE/Dictionary compression, exhausts filesystem inodes, and causes DuckDB/Spark to spend $99\%$ of query time on HTTP `GET` handshakes and Thrift footer parsing. Run `./compact_small_parquet_files.py` to see how compacting 200 tiny files into 1 ZSTD Row Group cuts scan latency by $10\times$!
 
+#### Black Box 5A Demystified: How DuckDB Scans 100M Parquet Rows in Milliseconds *Without Any B-Tree Index!*
+
+In Days 2–3, we learned that querying an unindexed relational table forces a slow `Seq Scan`. Yet Apache Parquet has **no external B-Tree index files at all**, and DuckDB queries 100 million Parquet rows in `< 15 ms`! How does that "black box" work—and when does it silently break?
+
+1. **The 3-Level Pruning & Skipping Hierarchy in Parquet + DuckDB:**
+   Every DuckDB query over a Hive-partitioned Parquet lake applies three progressive filters **before decompressing a single data page**:
+   - **Gate 1 — Hive Directory Pruning (OS / S3 Prefix Level):** A filter on `WHERE year = 2026 AND month = 10` skips all other directory prefixes (`year=2024/`, `year=2025/`) without even opening those files.
+   - **Gate 2 — Parquet Footer Zone Maps (Row Group `min`/`max` Metadata):** At the very end of every `.parquet` file lives a compact binary **File Footer** containing exact `min_value`, `max_value`, and `null_count` statistics for every column in every **Row Group** (typically `100,000`–`250,000` rows per Row Group)—acting like a **built-in PostgreSQL BRIN index inside the file**!
+   - **Gate 3 — Column Chunk Projection Pushdown:** For the surviving Row Groups, DuckDB issues byte-range reads (`HTTP Range GET` on S3/Ceph) for **only the columns named in the query** (e.g., reading `temperature` while physically skipping `pressure`, `wind_speed`, `humidity`, and `solar_rad` on disk).
+
+2. **The Hidden Trap: Why Unsorted Parquet Files Destroy Row Group Zone Maps!**
+   Compare what happens inside the Parquet File Footer when you export 1,000,000 rows **unsorted** vs. **sorted (`ORDER BY obs_time, station_id`)**:
+
+| Parquet Export Method | Row Group 0 `obs_time` `[min, max]` | Row Group 9 `obs_time` `[min, max]` | Query: `WHERE obs_time BETWEEN '2026-10-15' AND '2026-10-16'` |
+| :--- | :--- | :--- | :--- |
+| **1. Unsorted Export** (`SELECT * FROM observations`) | `['2026-01-01', '2026-12-31']` *(All dates mixed!)* | `['2026-01-01', '2026-12-31']` *(All dates mixed!)* | ❌ **0% Row Groups Skipped!** Every single Row Group overlaps `Oct 15`, forcing DuckDB to decompress 100% of the file! |
+| **2. Sorted Export** (`ORDER BY obs_time, station_id`) | `['2026-01-01', '2026-02-05']` *(Strictly bounded!)* | `['2026-10-10', '2026-11-14']` *(Strictly bounded!)* | ✅ **90%+ Row Groups Skipped via Footer Metadata!** Only Row Group 9 is read and decompressed! |
+
 ---
 
 ### 2.3 Tiering Data from PostgreSQL to Apache Parquet (3 Production Patterns)
@@ -602,6 +620,26 @@ Multidimensional arrays are stored on disk in rectangular blocks called **Chunks
 ```
 
 > **The Architectural Rule of Gridded Storage:** You cannot optimize a single gridded file for both 2D horizontal spatial maps and long-term 1D station time-series simultaneously. Storage chunking must reflect the primary analytical query path.
+
+#### Black Box 5B Demystified: `NetCDF4` / `COG` Integer Quantization (`scale_factor`, `add_offset`, and `_FillValue` Masking Order)
+
+When satellite imagery (`MSG SEVIRI` Cloud-Optimized GeoTIFFs) or reanalysis archives (`ECMWF ERA5` NetCDF4) store brightness temperatures (`200.00 K` to `330.00 K`), they rarely store 4-byte `Float32` on disk—instead, they pack values into 2-byte **`Int16` / `UInt16` integers** (`satellite_cog_int16_quantization.py`), cutting petabyte storage by **$50\text{–}75\%$**!
+
+1. **The Packing & Unpacking Formula:**
+   - **Packing (Float32 $\rightarrow$ UInt16 on Disk):**
+     $$\text{Packed\_UInt16} = \text{ROUND}\!\left(\frac{T_{\text{physical}} - \text{add\_offset}}{\text{scale\_factor}}\right)$$
+     *(Example: With `add_offset = 150.0` K and `scale_factor = 0.01` K, a physical temperature of `295.42 K` is stored as integer `(295.42 - 150.0) / 0.01 = 14542`).*
+   - **Unpacking (UInt16 $\rightarrow$ Float32 in RAM):**
+     $$T_{\text{physical}} = (\text{Packed\_UInt16} \times \text{scale\_factor}) + \text{add\_offset}$$
+
+2. **The #1 Raster Bug: Applying `scale_factor` *Before* Masking `_FillValue` (`nodata = 65535`)!**
+   - Just like `-9999.0` in Day 1 SQLite tables, integer raster arrays cannot store `NaN` (`NaN` is an IEEE-754 floating-point concept—it does not exist in `Int16`/`UInt16`!). Instead, rasters reserve `65535` (`UInt16` max) or `-32768` (`Int16` min) as `_FillValue` / `nodata` for outer-space limb pixels or missing scanlines.
+
+| Raster Reading Method | What Happens to Valid Pixel (`14542`) | What Happens to `_FillValue` (`65535` Outer Space Pixel) | Resulting Impact on Climatology Mean |
+| :--- | :--- | :--- | :--- |
+| **1. Raw Unscaled Read** (`rasterio.read(1)` without unpacking) | Read as `14542` (`14,542 K`!) | Read as `65535` (`65,535 K`!) | ❌ **Completely unusable** (raw digital numbers instead of Kelvin). |
+| **2. Unpack First, Mask Later** *(Bug!)* | `14542 * 0.01 + 150 = 295.42 K` | Unpacked to **`805.35 K` (`532°C`!)** and no longer equals `65535`! | ❌ **Silent Sentinel Contamination!** Outer-space pixels turn into `805.35 K` lava and corrupt regional averages! |
+| **3. Mask `_FillValue == 65535` to `NaN` FIRST, Then Unpack** *(Correct; `xarray mask_and_scale=True`)* | `295.42 K` | Converted to **`np.nan`** (`NaN * 0.01 + 150 = NaN`, ignored by `np.nanmean()`) | ✅ **100% Physically Accurate!** |
 
 ---
 

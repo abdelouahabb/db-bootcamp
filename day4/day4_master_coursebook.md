@@ -171,6 +171,31 @@ While developers write queries in JSON syntax, `mongod` compiles, stores, and in
 > In everyday conversation, meteorologists say *"Latitude, Longitude"* (`36.69, 3.21`).  
 > In **GeoJSON (both MongoDB `2dsphere` and PostGIS `ST_MakePoint`)**, coordinates are **ALWAYS `[X, Y]` = `[longitude, latitude]`** (`[3.2154, 36.6910]`)! Reversing them places Algiers in the Indian Ocean.
 
+#### Black Box 4A Demystified: MongoDB `$jsonSchema` (`required` vs. `bsonType`) & The `{ field: null }` Query Trap
+
+On Day 1, we saw how SQL separates **Presence (`NOT NULL`)** from **Domain Validation (`CHECK`)**. MongoDB has the exact same orthogonal separation inside `$jsonSchema`—plus a famous query trap around `null` vs. missing fields!
+
+1. **The Two Orthogonal Validation Keys in `$jsonSchema`:**
+   - **`required: ["station_name", "location"]` enforces Key Existence Only:** It verifies that the field key is present in the BSON document—**but if you omit `bsonType` inside `properties`, `required` alone happily accepts `{ station_name: null }` or `{ station_name: 12345 }`!**
+   - **`properties: { temp_c: { bsonType: "double", minimum: -90 } }` enforces Type & Range Only When the Key Is Present:** Just like a SQL `CHECK` constraint without `NOT NULL`, if `"temp_c"` is **not** listed in the `required` array, MongoDB allows documents to **omit `temp_c` completely**—and if an offline sensor wants to explicitly send `{ temp_c: null }`, you must declare `bsonType: ["double", "null"]` because in BSON, `null` (`type 10`) is a distinct type from `"double"` (`type 1`)!
+
+| `$jsonSchema` Pattern | Key in `required: [...]`? | `bsonType` in `properties` | Allows Missing Key? | Allows Explicit `null`? | SQL Equivalent (Day 1) |
+| :--- | :---: | :--- | :---: | :---: | :--- |
+| **1. Mandatory + Typed (`db.stations`)** | ✅ **Yes** | `bsonType: "string"` (or `"int"`, `"object"`) | ❌ No | ❌ No | `NOT NULL CHECK (...)` |
+| **2. Mandatory Key, Nullable Value** | ✅ **Yes** | `bsonType: ["double", "null"]` | ❌ No | ✅ Yes | Column exists in table, nullable `CHECK` |
+| **3. Optional Polymorphic Field** | ❌ **No** | `bsonType: "object"` (e.g., `buoy_specs`) | ✅ Yes (Omitted on land stations) | ❌ No (If key is sent, must be `"object"`) | Nullable + `CHECK` |
+| **4. Unconstrained Polymorphic Payload** | ❌ **No** | *(Not listed in `properties`)* | ✅ Yes | ✅ Yes | Raw unconstrained landing column |
+
+2. **The `{ temp_c: null }` Query Trap in MongoDB (`null` vs. Missing Key):**
+   Suppose Document A has `{ _id: 1, temp_c: null }` (thermometer offline) and Document B has `{ _id: 2 }` (`temp_c` key completely omitted). What does `db.obs.find({ temp_c: null })` return?
+
+| MongoDB Query Filter | Matches `{ temp_c: 22.5 }`? | Matches `{ temp_c: null }` *(Explicit Null)*? | Matches `{ }` *(Key Missing)*? | Engineering Explanation |
+| :--- | :---: | :---: | :---: | :--- |
+| **`{ temp_c: null }`** | ❌ No | ✅ **Yes** | ⚠️ **YES! (Matches both!)** | In MQL, `{ field: null }` matches both explicit `null` **and** documents where `field` does not exist! |
+| **`{ temp_c: { $type: 10 } }`** *(or `"null"`)* | ❌ No | ✅ **Yes (Explicit `null` only)** | ❌ **No** | Checks BSON type byte `0x0A` (`null`)—only matches documents that actually contain the key with value `null`. |
+| **`{ temp_c: { $exists: false } }`** | ❌ No | ❌ **No** | ✅ **Yes (Missing key only)** | Matches only documents where the `temp_c` key is completely absent from the BSON object. |
+| **`{ temp_c: { $ne: null } }`** *(or `$gt: -900`)* | ✅ **Yes** | ❌ No | ❌ No | Safely returns only documents where `temp_c` is present and non-null. |
+
 ---
 
 ### 1.4 Lab 1: Loading `weather_nosql`, Exploring BSON Internals & Testing `$jsonSchema` Guardrails
@@ -510,6 +535,17 @@ flowchart LR
 > [!IMPORTANT]
 > **Production Pitfall (Placing `$unwind` Before `$match`):**  
 > If you place `$unwind: "$vertical_levels"` *before* `$match: { station_id: 60390 }`, MongoDB cannot use the `idx_sonde_esr` B-Tree index! Instead, it performs a full `COLLSCAN`, explodes 50,000 radiosonde documents into 2,500,000 in-memory level documents, and only filters them afterward. Always filter with `$match` (or `$geoNear`) at Stage 1!
+
+#### Black Box 4B Demystified: Why `$unwind` Silently Drops Documents With Empty `[]` or Missing Arrays (`preserveNullAndEmptyArrays`)
+
+When engineers run `{ $unwind: "$hardware_faults" }` (or `{ $unwind: "$station_details" }` after a `$lookup`), what happens to healthy weather stations where `hardware_faults: []` (an empty array) or where the `hardware_faults` field is missing?
+- **By default, `{ $unwind: "$field" }` acts like an SQL `INNER JOIN`:** Any document whose array is empty (`[]`), `null`, or missing emits **0 output documents** and is silently dropped from the pipeline!
+- **To make `$unwind` act like an SQL `LEFT JOIN`:** Pass `preserveNullAndEmptyArrays: true`, which keeps the parent document and sets the unwound field to `null` (or omits it).
+
+| `$unwind` Syntax | Input: `{ _id: 1, faults: ["E1", "E2"] }` | Input: `{ _id: 2, faults: [] }` *(Empty Array)* | Input: `{ _id: 3 }` *(Missing / `null`)* | SQL `JOIN` Equivalent & When to Use |
+| :--- | :--- | :---: | :---: | :--- |
+| **`{ $unwind: "$faults" }`** *(Default)* | Emits **2** docs (`"E1"`, `"E2"`) | ❌ **DROPPED (`0` docs!)** | ❌ **DROPPED (`0` docs!)** | **`INNER JOIN`**: Use when you *only* want documents that have at least 1 array element (e.g., counting fault occurrences across faulty packets). |
+| **`{ $unwind: { path: "$faults", preserveNullAndEmptyArrays: true } }`** | Emits **2** docs (`"E1"`, `"E2"`) | ✅ **Kept (1 doc, `faults: null`)** | ✅ **Kept (1 doc, `faults: null`)** | **`LEFT JOIN`**: Use when every station must remain in the report even if it had `0` faults or `0` matching `$lookup` rows! |
 
 ---
 

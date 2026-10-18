@@ -285,7 +285,7 @@ WHERE datname = current_database();
   - `alerts.weather_alerts` — Severe weather warnings (`HEATWAVE`, `FLASH_FLOOD`, `SANDSTORM`).
   This enables granular role-based access control (`GRANT USAGE ON SCHEMA synoptic TO ingest_worker;`), clean search paths (`SET search_path TO synoptic, nwp, alerts, public;`), and independent backup/restore operations (`pg_dump -n synoptic`).
 
-### 4.2 Strict Meteorological Data Types: Upgrading from SQLite
+### 4.2 Strict Meteorological Data Types & Constraint Black Boxes Demystified
 
 | Domain Concept | Anti-Pattern / Legacy Type | Production PostgreSQL Type | Physical Size | Meteorological Engineering Rationale |
 | :--- | :--- | :--- | :--- | :--- |
@@ -293,6 +293,83 @@ WHERE datname = current_database();
 | **Forecast Lead Time** | Integer hours (`lead_hr INT`) | **`INTERVAL`** + Generated `valid_time` | **16 Bytes** (`INTERVAL`) | Allows native temporal arithmetic (`init_time + lead_interval`) for sub-hourly radar (`INTERVAL '15 minutes'`) or synoptic steps (`INTERVAL '6 hours'`). In `nwp.forecasts`, `valid_time` is computed automatically via `GENERATED ALWAYS AS (...) STORED`. |
 | **Calibrated Synoptic & WMO Reporting (`temp_c`, `pressure_hpa`, `latitude`)** | `REAL` / `FLOAT` with binary rounding artifacts (`22.10000038`) | **`NUMERIC(p, s)`** (e.g., `NUMERIC(4,1)`, `NUMERIC(6,1)`, `NUMERIC(7,4)`) | **Variable** (~5–8 Bytes) | Base-10 exact decimal arithmetic. Guarantees zero IEEE-754 floating-point representation drift (`0.1 + 0.2 = 0.3` exactly) for legal WMO bulletins, station coordinates, and precipitation thresholds. |
 | **High-Frequency Raw IoT / Sonic Anemometer Streams** | `NUMERIC` (higher CPU overhead in tight math loops) | **`REAL` (`float4`)** or **`DOUBLE PRECISION` (`float8`)** | **4 Bytes** (`REAL`) / **8 Bytes** (`FLOAT8`) | Hardware-accelerated IEEE-754 floating point. Compact fixed 4-byte (`REAL`) or 8-byte (`DOUBLE PRECISION`) width for fast CPU vector aggregations and predictable byte alignment on raw 10Hz telemetry tables. |
+
+---
+
+#### Black Box 2A Demystified: `TIMESTAMPTZ` vs. `TIMESTAMP` (Why `TIMESTAMPTZ` Does NOT Store a Timezone on Disk!)
+
+One of the biggest misconceptions in PostgreSQL is assuming that `TIMESTAMP WITH TIME ZONE` (`TIMESTAMPTZ`) stores the input timezone string (like `'+01:00'` or `'Europe/Paris'`) alongside the timestamp on disk, or that it takes more bytes than `TIMESTAMP WITHOUT TIME ZONE` (`TIMESTAMP`).
+
+1. **The Physical Reality Under the Hood:**
+   - **Both `TIMESTAMP` and `TIMESTAMPTZ` occupy strictly `8 bytes` (`int64` microseconds since `2000-01-01 00:00:00`).**
+   - **`TIMESTAMPTZ` does NOT store the original timezone offset on disk!** Instead, on `INSERT`, PostgreSQL inspects the input string's offset (or the session's `timezone` setting if no offset is provided), **converts the instant to pure UTC microseconds**, and discards the input offset. On `SELECT`, it converts the stored UTC microseconds into the client's current session `timezone` (`SET timezone = 'UTC'`).
+   - **`TIMESTAMP` (without time zone) is a "Blind Wall-Clock":** If you insert `'2026-10-05 12:00:00+02'`, bare `TIMESTAMP` **silently throws away the `+02` offset without converting to UTC** and stores `12:00:00` verbatim!
+
+2. **The Asymmetry Matrix: What Happens When an Algerian Station (`+01`) and a Ship in UTC (`+00`) Report Simultaneously?**
+
+| Input Literal Inserted at `12:00 UTC` | Stored in `TIMESTAMPTZ` Column (`8 Bytes`) | Stored in Bare `TIMESTAMP` Column (`8 Bytes`) | Resulting Bug in Bare `TIMESTAMP` |
+| :--- | :--- | :--- | :--- |
+| Ship at `0°` Meridian: `'2026-10-05 12:00:00+00'` | `2026-10-05 12:00:00 UTC` | `2026-10-05 12:00:00` | Appears 1 hour *earlier* than Algiers even though both occurred at the exact same physical instant! |
+| Algiers Station (`+01`): `'2026-10-05 13:00:00+01'` | `2026-10-05 12:00:00 UTC` *(Normalized!)* | `2026-10-05 13:00:00` *(`+01` stripped without conversion!)* | Synoptic `JOIN ON f.valid_time = o.obs_time` **fails by 1 hour**! |
+| European Station Across Autumn DST Fallback (`02:30 CEST` $\rightarrow$ `02:30 CET`) | Two distinct UTC microsecond values (`00:30 UTC` and `01:30 UTC`) | **Identical `02:30:00` twice!** | Violates `UNIQUE (station_id, obs_time)` and crashes ingestion during DST fallback! |
+
+3. **The 4-Pattern Temporal Decision Matrix**
+
+| Temporal Type | Physical Size | Timezone-Aware? | When to Use It in Weather Engineering | Example in `weather_ops` |
+| :--- | :---: | :---: | :--- | :--- |
+| **1. `TIMESTAMPTZ`** | `8 Bytes` (`int64`) | ✅ **Yes** (Normalized to UTC) | **99% of timestamps:** Every physical observation (`obs_time`), NWP model run (`init_time`, `valid_time`), and alert issuance (`issued_at`). | `obs_time TIMESTAMPTZ NOT NULL` |
+| **2. `DATE`** | `4 Bytes` (`int32`) | N/A (Calendar day) | Daily climatological aggregations, materialized view keys (`valid_date`), and sensor calibration dates. | `valid_date DATE` in `mv_daily_model_verification` |
+| **3. `INTERVAL`** | `16 Bytes` (`months`, `days`, `µs`) | Duration | Forecast lead times (`INTERVAL '6 hours'`), rolling window frames (`RANGE BETWEEN INTERVAL '23 hours' PRECEDING`), and retention policies. | `lead_interval INTERVAL NOT NULL` |
+| **4. `TIMESTAMP`** *(without TZ)* | `8 Bytes` (`int64`) | ❌ **No** | **Rarely used directly:** Only inside internal `AT TIME ZONE 'UTC'` immutable expressions or abstract local calendar schedules where UTC instants do not apply. | Intermediate step in `GENERATED ALWAYS AS` |
+
+---
+
+#### Black Box 2B Demystified: `NUMERIC(p, s)` vs. `REAL` / `DOUBLE PRECISION` (Exact Base-10 vs. IEEE-754 Binary Float)
+
+Why did `weather_ops_pg.sql` use `NUMERIC(4,1)` and `NUMERIC(7,4)` on `synoptic.observations` and `synoptic.stations`, while Day 3's 5,000,000-row high-frequency benchmark used `REAL` (`float4`)?
+
+1. **The Binary Floating-Point Trap (`0.1 + 0.2 != 0.3`):**
+   - `REAL` (`4-byte float4`, ~6–7 decimal digits precision) and `DOUBLE PRECISION` (`8-byte float8`, ~15–17 decimal digits precision) store numbers in **base-2 (binary) scientific notation** executed directly by the CPU's hardware FPU/SIMD registers.
+   - In base-2, simple base-10 fractions like $0.1_{10}$ ($1/10$) have an **infinite repeating binary expansion** ($0.0001100110011\dots_2$).
+   - Consequently, in PostgreSQL:
+     ```sql
+     SELECT (0.1::REAL + 0.2::REAL) = 0.3::REAL;          -- Returns FALSE! (0.30000000447 != 0.30000001192)
+     SELECT (0.1::NUMERIC + 0.2::NUMERIC) = 0.3::NUMERIC; -- Returns TRUE!  (Exact base-10000 arithmetic)
+     ```
+2. **What `(p, s)` Means in `NUMERIC(p, s)`:**
+   - **`p` (Precision):** Total number of significant digits stored (both left *and* right of the decimal point).
+   - **`s` (Scale):** Number of digits to the **right** of the decimal point.
+   - **Maximum Integer Digits Allowed to the Left of the Decimal Point = $p - s$!**
+     - Example: `temp_c NUMERIC(4,1)` allows $4 - 1 = 3$ digits before the decimal and $1$ after (`-999.9` to `+999.9`). If a corrupted datalogger tries to insert `-9999.0` (4 digits before the decimal), `NUMERIC(4,1)` rejects it automatically with `ERROR: numeric field overflow`!
+
+3. **The 4-Pattern Numeric Decision Matrix**
+
+| PostgreSQL Numeric Type | Storage Size & Alignment | Exact or Approximate? | CPU Math Speed | When to Use It in Meteorology | Examples in Bootcamp |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. `NUMERIC(p, s)`** | Variable (`~5–8 Bytes`, `1B` short `varlena` header) | ✅ **100% Exact Base-10** | Software math (~$3\times\text{–}5\times$ slower than FPU) | Official WMO synoptic archives, legal/contractual weather alerts, station `latitude`/`longitude` (`NUMERIC(7,4)`), and exact equality checks. | `synoptic.observations` (`temp_c NUMERIC(4,1)`, `pressure_hpa NUMERIC(6,1)`) |
+| **2. `REAL` (`float4`)** | Fixed **`4 Bytes`** (`4B` alignment) | ⚠️ **Approx.** (~7 decimal digits) | ⚡ **Fastest** (16 ops/cycle in AVX-512) | High-frequency (1Hz–10Hz) raw IoT telemetry, 5M+ row partitioned streams, and Parquet/NetCDF float arrays where `4B` compact width halves RAM/disk vs. `8B`. | Day 3 `raw_telemetry_partitioned` (`temperature REAL`, `wind_speed REAL`) |
+| **3. `DOUBLE PRECISION` (`float8`)** | Fixed **`8 Bytes`** (`8B` alignment) | ⚠️ **Approx.** (~15 decimal digits) | ⚡ **Fast Hardware FPU** | Geodesic trigonometry (`ST_Distance`, Haversine `sin`/`cos`), scientific accumulation, and coordinates when PostGIS `GEOGRAPHY` is not used. | Day 2 `day2_pageinspect_and_storage_lab.sql` (`latitude DOUBLE PRECISION`) |
+| **4. `SMALLINT` / `INTEGER` / `BIGINT`** | Fixed **`2B` / `4B` / `8B`** | ✅ **100% Exact Integer** | ⚡ **Fastest ALU** | Discrete identifiers (`station_id INTEGER`), compass degrees (`wind_direction SMALLINT` `0–359`), and 64-bit surrogate keys (`obs_id BIGSERIAL` = `BIGINT`). | `wind_direction SMALLINT`, `station_id INTEGER`, `obs_id BIGSERIAL` |
+
+---
+
+#### Black Box 2C Demystified: `PRIMARY KEY` vs. `UNIQUE NOT NULL` vs. Nullable `UNIQUE` (Why `UNIQUE` Allows Multiple `NULL`s!)
+
+Engineers are often surprised to discover that in SQLite, PostgreSQL, DuckDB, and MySQL, declaring a column `UNIQUE` (without `NOT NULL`) **allows you to insert `NULL` thousands of times** without triggering a uniqueness violation!
+
+1. **Why Does `UNIQUE` Allow Multiple `NULL`s?**
+   - Under SQL Three-Valued Logic (`3VL`), `NULL = NULL` evaluates to **`UNKNOWN`** (not `TRUE`). Two missing values are not considered "equal" to each other.
+   - Therefore, ANSI SQL defines a standard `UNIQUE` constraint as **`NULLS DISTINCT`** (every `NULL` is treated as distinct from every other `NULL`).
+2. **How PostgreSQL 15+ Solves This When Needed (`UNIQUE NULLS NOT DISTINCT`):**
+   - If you have an optional column (like an external `wigos_id VARCHAR(32)`) where stations without a WIGOS ID are `NULL`, you want **standard `UNIQUE`** (multiple stations can have `NULL`, but no two stations can share the same non-null WIGOS ID).
+   - If you instead want **at most one `NULL` row**, PostgreSQL 15+ supports `UNIQUE NULLS NOT DISTINCT (col)`.
+
+| Constraint Pattern | Allows `NULL`? | Max `NULL` Rows Allowed | Automatically Creates B-Tree Index? | Default Target for Foreign Keys & Logical Replication? | When to Use It |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **1. `PRIMARY KEY`** | ❌ **No** (Implicitly forces `NOT NULL`) | `0` | ✅ Yes (`<table>_pkey`) | ✅ **Yes** (1 per table; default `REPLICA IDENTITY`) | The primary row identifier (`station_id`, `obs_id`, or `(obs_time, station_id)`). |
+| **2. `UNIQUE NOT NULL`** | ❌ **No** | `0` | ✅ Yes | Candidate key | Secondary natural keys that must always exist and never repeat (`station_name VARCHAR(100) NOT NULL UNIQUE`, `(station_id, obs_time)`). |
+| **3. Nullable `UNIQUE`** *(Default `NULLS DISTINCT`)* | ✅ **Yes** | **Unlimited `NULL`s!** | ✅ Yes | No | Optional external identifiers (e.g., `icao_airport_code CHAR(4) UNIQUE`—only airport stations have one; non-airport stations are all `NULL`). |
+| **4. `UNIQUE NULLS NOT DISTINCT`** *(PG 15+)* | ✅ **Yes** | **At most `1` `NULL`!** | ✅ Yes | No | When `NULL` represents a singleton default slot that must not be duplicated. |
 
 ### 4.3 Unclustered Heap vs. Clustered B+Tree Storage
 

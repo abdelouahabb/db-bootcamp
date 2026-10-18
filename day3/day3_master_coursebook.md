@@ -365,6 +365,27 @@ HashAggregate
 ```
 *Proof:* The query planner evaluated the timestamp constraint and completely pruned `telemetry_y2026m09`, `telemetry_y2026m11`, `telemetry_y2026m12`, and `telemetry_default`.
 
+#### Black Box 3A Demystified: Partitioned Table `PRIMARY KEY` Rules & Half-Open Bounds $[T_{\text{start}}, T_{\text{end}})$
+
+When engineers convert a normal PostgreSQL table (`synoptic.observations` with `obs_id BIGSERIAL PRIMARY KEY`) into a partitioned table (`synoptic.observations_part PARTITION BY RANGE (obs_time)`), two immediate black-box questions arise:
+
+1. **Why Does `PRIMARY KEY (obs_id)` Fail on a Partitioned Table (`ERROR: unique constraint on partitioned table must include all partitioning columns`)?**
+   - In PostgreSQL, the parent partitioned table (`observations_part`) stores **zero bytes of data and has no global B-Tree index across all partitions**. Each monthly child table (`obs_y2026m09`, `obs_y2026m10`) maintains its own independent local B-Tree index.
+   - If PostgreSQL allowed `PRIMARY KEY (obs_id)` without `obs_time`, checking whether `obs_id = 500` already exists during an `INSERT` would require locking and probing **every single historical child partition's B-Tree** (e.g., 120 monthly partitions!), destroying write throughput.
+   - By requiring the partition key (`obs_time`) to be included in every `PRIMARY KEY` or `UNIQUE` constraint (`PRIMARY KEY (obs_time, station_id)`), PostgreSQL knows that any duplicate `(obs_time, station_id)` can **only** live inside that single month's child partition—so uniqueness is verified with **1 local B-Tree lookup**!
+
+2. **Why `FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00')` Uses Half-Open Interval $[A, B)$ Instead of `23:59:59`:**
+   - If you defined October's upper bound as `'2026-10-31 23:59:59+00'`, what happens when a high-frequency sensor reports at `'2026-10-31 23:59:59.500000+00'`? It falls into a **1-second gap** between October and November and crashes ingestion!
+   - Therefore, PostgreSQL `PARTITION BY RANGE` always evaluates **`FROM A TO B` as a mathematical half-open interval $[A, B)$**:
+     - **Lower Bound (`FROM A`):** **Inclusive ($\ge A$)** — `'2026-10-01 00:00:00.000000+00'` goes into **October**.
+     - **Upper Bound (`TO B`):** **Strictly Exclusive ($< B$)** — `'2026-11-01 00:00:00.000000+00'` goes into **November**, while `'2026-10-31 23:59:59.999999+00'` goes into **October** with zero microsecond gaps!
+
+| Partition DDL Feature | What Happens If Omitted / Misused | Production Engineering Rule |
+| :--- | :--- | :--- |
+| **`PRIMARY KEY (obs_time, station_id)`** | `PRIMARY KEY (obs_id)` fails with `ERROR: unique constraint ... must include all partitioning columns` | Always include the partition key (`obs_time`) in every `PRIMARY KEY` and `UNIQUE` constraint on a partitioned table. |
+| **`FOR VALUES FROM (A) TO (B)`** | Using `'2026-10-31 23:59:59'` leaves a 1-second gap where sub-second telemetry crashes | Always set `TO (B)` equal to the exact `00:00:00+00` start of the **next** partition ($[A, B)$). |
+| **`PARTITION OF ... DEFAULT`** | Out-of-order edge telemetry for next month crashes the entire batch if next month's partition wasn't created yet | Always attach a `DEFAULT` partition (`obs_default`) to catch unexpected timestamps without dropping packets. |
+
 ---
 
 ### 1.4 Hands-On Lab 1 Walkthrough: Building & Querying Monthly Synoptic Partitions
@@ -463,6 +484,27 @@ CREATE INDEX idx_obs_station_time_covering
 ON synoptic.observations (station_id, obs_time)
 INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 ```
+
+#### Black Box 3B Demystified: Why `BRIN` Always Uses `Bitmap Heap Scan + Recheck Cond` & The 6-Index Decision Matrix
+
+Why does `EXPLAIN` on a `BRIN` index **always** show `Bitmap Index Scan` $\rightarrow$ `Bitmap Heap Scan` with a `Recheck Cond`—and why can't a `BRIN` index ever enforce `UNIQUE` or perform an `Index Only Scan`?
+
+1. **Exact Row-Pointer Index (`B-Tree`) vs. Lossy Block-Summary Index (`BRIN`):**
+   - **B-Tree is Exact (Row-Level):** Every entry in a B-Tree leaf page stores an exact key value and its exact 6-byte `ctid = (block, offset)`.
+   - **BRIN is Lossy (Block-Range Level):** A BRIN index does **not** store individual row `ctid`s! It only knows that **Heap Blocks `64..127` contain timestamps somewhere between `00:00` and `04:12`**.
+   - Therefore, when you query `WHERE recorded_at BETWEEN '01:00' AND '02:00'`, the BRIN `Bitmap Index Scan` flags Blocks `64..127` as *candidate blocks* in a memory bitmap, and the **`Bitmap Heap Scan` must inspect every tuple inside Blocks `64..127` (`Recheck Cond`)** to discard rows from `00:15` or `03:45`!
+2. **Why Put Columns in `INCLUDE (temp_c, pressure_hpa)` Instead of Making a 4-Column Key `(station_id, obs_time, temp_c, pressure_hpa)`?**
+   - Putting `temp_c` and `pressure_hpa` into the main index key forces PostgreSQL to store and compare them inside **upper B-Tree branch/internal nodes** too, bloating the entire tree and breaking `UNIQUE (station_id, obs_time)` semantics.
+   - `INCLUDE (temp_c, pressure_hpa)` stores those payload columns **only in the bottom B-Tree leaf nodes**, keeping internal navigation branches tiny while still satisfying `Index Only Scan`!
+
+| PostgreSQL Index Type | What It Stores Physically | Relative Size (per 1M rows) | Supports `UNIQUE`? | Supports `Index Only Scan`? | Ideal Meteorological Workload |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **1. `B-Tree` *(Default)*** | Sorted key + `6B ctid` for **every row** | `~22–28 MB` | ✅ Yes | ✅ Yes | Primary keys, `(station_id, obs_time)` uniqueness, high-selectivity point/range lookups. |
+| **2. `BRIN`** | Only `[min, max]` per $N$ heap pages (`pages_per_range`) | **`~24–48 KB`** *(99.8% smaller!)* | ❌ **No** *(lossy block index)* | ❌ **No** *(always rechecks heap)* | Append-only chronological timestamp columns (`recorded_at`, `obs_time`) with `correlation > 0.95`. |
+| **3. `Partial B-Tree` (`WHERE`)** | Sorted key + `ctid` **only for rows matching `WHERE`** | `~1 MB` *(if 4% match)* | ✅ Yes *(partial uniqueness)* | ✅ Yes | Filtering rare anomalies (`WHERE qc_flag != 'VALID'`) or active alerts (`WHERE is_active = TRUE`). |
+| **4. `Covering B-Tree` (`INCLUDE`)** | Key in all nodes + extra payload columns in **leaf nodes only** | `~35–45 MB` | ✅ Yes *(on key columns)* | ✅ **Yes (`Heap Fetches: 0`)** | High-QPS station time-series charts (`SELECT obs_time, temp_c FROM ... WHERE station_id = ?`). |
+| **5. `GIN` (Inverted Index)** | Each nested JSONB key/path or array element $\rightarrow$ posting list of `ctid`s | `~15–40 MB` | ❌ No | ❌ No | Semi-structured `JSONB` sensor diagnostics (`WHERE sensor_payload @> '{"door_open": true}'`). |
+| **6. `GiST` (R-Tree Spatial)** | Hierarchical 2D/3D bounding boxes (`MBR`) over geometries | `~30–50 MB` | ❌ No *(supports `EXCLUDE`)* | ✅ Yes *(bounding box)* | PostGIS `GEOGRAPHY`/`GEOMETRY` spatial proximity (`ST_DWithin`, `ST_Intersects`) and range overlaps. |
 
 ---
 

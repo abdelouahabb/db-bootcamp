@@ -2717,16 +2717,125 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
         .replace(/"/g, '&quot;');
     }
 
+    function convertLatexFragment(tex) {
+      let s = String(tex).trim();
+
+      // Remove sizing & spacing modifiers
+      s = s.replace(/\\(?:left|right|big|Big|bigg|Bigg)\s*([()[\]|.]|\\[{}|\lfloor\rfloor\lceil\rceil])/g, '$1');
+      s = s.replace(/\\(?:left|right|big|Big|bigg|Bigg)\b/g, '');
+      s = s.replace(/\\!/g, '');
+      s = s.replace(/\\ /g, ' ');
+
+      // Replace standalone LaTeX symbol commands with Unicode
+      const symMap = [
+        [/\\longrightarrow/g, ' ⟶ '],
+        [/\\rightarrow/g, ' → '],
+        [/\\to\b/g, ' → '],
+        [/\\implies/g, ' ⇒ '],
+        [/\\leftrightarrow/g, ' ↔ '],
+        [/\\iff/g, ' ⇔ '],
+        [/\\neq/g, ' ≠ '],
+        [/\\equiv/g, ' ≡ '],
+        [/\\approx/g, ' ≈ '],
+        [/\\sim/g, ' ∼ '],
+        [/\\le\b/g, ' ≤ '],
+        [/\\ge\b/g, ' ≥ '],
+        [/\\times/g, ' × '],
+        [/\\cdot/g, ' · '],
+        [/\\pm/g, ' ± '],
+        [/\\infty/g, '∞'],
+        [/\\in\b/g, ' ∈ '],
+        [/\\cup/g, ' ∪ '],
+        [/\\cap/g, ' ∩ '],
+        [/\\setminus/g, ' ∖ '],
+        [/\\bowtie/g, ' ⋈ '],
+        [/\\land/g, ' ∧ '],
+        [/\\lor/g, ' ∨ '],
+        [/\\lceil/g, '⌈'],
+        [/\\rceil/g, '⌉'],
+        [/\\lfloor/g, '⌊'],
+        [/\\rfloor/g, '⌋'],
+        [/\\dots/g, '…'],
+        [/\\Delta/g, 'Δ'],
+        [/\\Omega/g, 'Ω'],
+        [/\\Psi/g, 'Ψ'],
+        [/\\sigma/g, 'σ'],
+        [/\\mu/g, 'μ'],
+        [/\\pi/g, 'π'],
+        [/\\phi/g, 'φ'],
+        [/\\lambda/g, 'λ'],
+        [/\\theta/g, 'θ'],
+        [/\\rho/g, 'ρ'],
+        [/\\arcsin/g, 'arcsin'],
+        [/\\arccos/g, 'arccos'],
+        [/\\sin/g, 'sin'],
+        [/\\cos/g, 'cos'],
+        [/\\log/g, 'log'],
+        [/\\min/g, 'min'],
+        [/\\max/g, 'max'],
+        [/\\quad/g, ' &nbsp;&nbsp; '],
+        [/\\,/g, ' '],
+        [/\\%/g, '%'],
+        [/\\_/g, '_'],
+        [/\\\{/g, '{'],
+        [/\\\}/g, '}'],
+        [/\^\{\\circ\}/g, '°'],
+        [/\^\\circ/g, '°'],
+        [/\\circ/g, '°']
+      ];
+      for (const [re, rep] of symMap) {
+        s = s.replace(re, rep);
+      }
+
+      // Unified innermost-brace resolver (handles arbitrary nesting of \text, \frac, \sqrt, \mathbf, \underbrace, \xrightarrow, ^, _)
+      for (let pass = 0; pass < 8; pass++) {
+        const prev = s;
+        s = s.replace(/\\(?:textbf|mathbf)\{([^{}]*)\}/g, '<strong>$1</strong>');
+        s = s.replace(/\\texttt\{([^{}]*)\}/g, '<code class="md-inline-code">$1</code>');
+        s = s.replace(/\\text\{([^{}]*)\}/g, '$1');
+        s = s.replace(/\\xrightarrow\{([^{}]*)\}/g, ' ──[$1]──► ');
+        s = s.replace(/\\underbrace\{([^{}]*)\}_\{([^{}]*)\}/g, '$1 <sub class="math-note">[$2]</sub>');
+        s = s.replace(/\\underbrace\{([^{}]*)\}/g, '$1');
+        s = s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '<span class="math-frac"><span class="math-num">$1</span><span class="math-sep">/</span><span class="math-den">$2</span></span>');
+        s = s.replace(/\\sqrt\{([^{}]*)\}/g, '√($1)');
+        s = s.replace(/\\sum_\{([^{}]*)\}\^\{([^{}]*)\}/g, '∑<sub>$1</sub><sup>$2</sup>');
+        s = s.replace(/\\sum_\{([^{}]*)\}/g, '∑<sub>$1</sub>');
+        s = s.replace(/\^\{([^{}]*)\}/g, '<sup>$1</sup>');
+        s = s.replace(/_\{([^{}]*)\}/g, '<sub>$1</sub>');
+        if (s === prev) break;
+      }
+
+      s = s.replace(/\\sum/g, '∑');
+      s = s.replace(/\^([a-zA-Z0-9+-])/g, '<sup>$1</sup>');
+      s = s.replace(/_([a-zA-Z0-9+-])/g, '<sub>$1</sub>');
+
+      // Clean up remaining grouping curly braces
+      s = s.replace(/[{}]/g, '');
+      return s;
+    }
+
     function formatInlineMarkdown(text, docPath) {
       let out = escapeHtml(text);
-      // Inline code `...`
+      // 1. Protect inline code `...` first so `$match` / `$group` inside backticks are never touched
       const codeTokens = [];
       out = out.replace(/`([^`]+)`/g, (_, code) => {
         const idx = codeTokens.length;
         codeTokens.push(`<code class="md-inline-code">${code}</code>`);
         return `@@CODE_${idx}@@`;
       });
-      // Links [label](url)
+      // 2. Render inline math $$...$$ and $...$ and protect as tokens
+      const mathTokens = [];
+      out = out.replace(/\$\$([^$]+)\$\$/g, (_, expr) => {
+        const idx = mathTokens.length;
+        mathTokens.push(`<span class="md-math-inline">${convertLatexFragment(expr)}</span>`);
+        return `@@MATH_${idx}@@`;
+      });
+      out = out.replace(/\$([^$\n]+)\$/g, (_, expr) => {
+        const idx = mathTokens.length;
+        mathTokens.push(`<span class="md-math-inline">${convertLatexFragment(expr)}</span>`);
+        return `@@MATH_${idx}@@`;
+      });
+      // 3. Links [label](url)
       out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
         const cleanHref = href.trim();
         const tabMatch = cleanHref.match(/(?:bootcamp_portal\.html)?#(tab-[a-z0-9_-]+)$/i);
@@ -2741,10 +2850,20 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
         }
         return `<a href="${cleanHref}" target="_blank" rel="noopener" class="md-ext-link">${label}</a>`;
       });
-      // Bold & Italic
+      // 4. Bold & Italic
       out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
       out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-      // Restore inline code
+      // 5. Safe inline HTML tags (<br>, <br/>, <ul>, </ul>, <li>, </li>) & escaped punctuation
+      out = out
+        .replace(/&lt;br\s*\/?&gt;/gi, '<br/>')
+        .replace(/&lt;ul&gt;/gi, '<ul class="md-list">')
+        .replace(/&lt;\/ul&gt;/gi, '</ul>')
+        .replace(/&lt;li&gt;/gi, '<li>')
+        .replace(/&lt;\/li&gt;/gi, '</li>')
+        .replace(/\\\|/g, '|')
+        .replace(/\\#/g, '#');
+      // 6. Restore math and code tokens
+      out = out.replace(/@@MATH_(\d+)@@/g, (_, idx) => mathTokens[Number(idx)]);
       out = out.replace(/@@CODE_(\d+)@@/g, (_, idx) => codeTokens[Number(idx)]);
       return out;
     }
@@ -2803,6 +2922,35 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           continue;
         }
 
+        // Display Math Block $$ ... $$ (single-line or multi-line)
+        if (line.trim().startsWith('$$')) {
+          const trimmed = line.trim();
+          let rawMath = '';
+          if (trimmed.length > 4 && trimmed.endsWith('$$')) {
+            rawMath = trimmed.slice(2, -2);
+            i++;
+          } else {
+            const mathLines = [];
+            const firstAfter = trimmed.slice(2).trim();
+            if (firstAfter) mathLines.push(firstAfter);
+            i++;
+            while (i < lines.length) {
+              const cur = lines[i].trim();
+              if (cur.endsWith('$$')) {
+                const beforeEnd = cur.slice(0, -2).trim();
+                if (beforeEnd) mathLines.push(beforeEnd);
+                i++;
+                break;
+              }
+              mathLines.push(lines[i]);
+              i++;
+            }
+            rawMath = mathLines.join(' ');
+          }
+          html += `<div class="md-math-block">${convertLatexFragment(escapeHtml(rawMath))}</div>`;
+          continue;
+        }
+
         // Horizontal Rule
         if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line.trim())) {
           html += '<hr class="md-hr" />';
@@ -2844,9 +2992,9 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           continue;
         }
 
-        // Markdown Table
+        // Markdown Table (supports escaped pipes \| inside cells)
         if (line.includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
-          const parseRow = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+          const parseRow = (r) => r.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|'));
           const headers = parseRow(lines[i]);
           i += 2; // skip header + separator
           const rows = [];
@@ -2892,6 +3040,7 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           i < lines.length &&
           lines[i].trim() !== '' &&
           !lines[i].trim().startsWith('```') &&
+          !lines[i].trim().startsWith('$$') &&
           !/^\s*#{1,6}\s+/.test(lines[i]) &&
           !lines[i].trim().startsWith('>') &&
           !/^\s*([-*+]|\d+\.)\s+/.test(lines[i]) &&
@@ -3252,6 +3401,49 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
       color: var(--accent-cyan);
       padding: 0.12rem 0.4rem;
       border-radius: 4px;
+    }
+    .md-math-inline {
+      font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', Georgia, serif;
+      font-size: 0.98em;
+      color: var(--text-primary);
+      padding: 0 0.12rem;
+    }
+    .md-math-block {
+      font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', Georgia, serif;
+      font-size: 1.05rem;
+      background: var(--bg-deep);
+      border: 1px solid var(--border-subtle);
+      border-left: 3px solid var(--accent-cyan);
+      border-radius: 6px;
+      padding: 0.85rem 1.25rem;
+      margin: 0.9rem 0;
+      text-align: center;
+      overflow-x: auto;
+      color: var(--text-primary);
+    }
+    .math-frac {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      vertical-align: middle;
+      margin: 0 0.2rem;
+      font-size: 0.88em;
+      line-height: 1.15;
+    }
+    .math-frac .math-num {
+      border-bottom: 1px solid var(--text-secondary);
+      padding: 0 0.25rem 0.08rem;
+    }
+    .math-frac .math-sep {
+      display: none;
+    }
+    .math-frac .math-den {
+      padding: 0.08rem 0.25rem 0;
+    }
+    .math-note {
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+      font-size: 0.75em;
     }
     .md-doc-link, .md-ext-link {
       color: var(--accent-cyan);

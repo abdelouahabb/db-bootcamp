@@ -2810,10 +2810,10 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           continue;
         }
 
-        // Headings # .. ####
-        const hMatch = line.match(/^(#{1,5})\s+(.*)$/);
+        // Headings # .. ###### (including indented headings inside lists)
+        const hMatch = line.trim().match(/^(#{1,6})\s+(.*)$/);
         if (hMatch) {
-          const level = hMatch[1].length;
+          const level = Math.min(hMatch[1].length, 5);
           html += `<h${level} class="md-h${level}">${formatInlineMarkdown(hMatch[2], docPath)}</h${level}>`;
           i++;
           continue;
@@ -2892,11 +2892,16 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           i < lines.length &&
           lines[i].trim() !== '' &&
           !lines[i].trim().startsWith('```') &&
-          !lines[i].trim().startsWith('#') &&
+          !/^\s*#{1,6}\s+/.test(lines[i]) &&
           !lines[i].trim().startsWith('>') &&
           !/^\s*([-*+]|\d+\.)\s+/.test(lines[i]) &&
-          !/^(\*{3,}|-{3,}|_{3,})\s*$/.test(lines[i].trim())
+          !/^(\*{3,}|-{3,}|_{3,})\s*$/.test(lines[i].trim()) &&
+          !(lines[i].includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]))
         ) {
+          pLines.push(lines[i]);
+          i++;
+        }
+        if (pLines.length === 0 && i < lines.length) {
           pLines.push(lines[i]);
           i++;
         }

@@ -260,13 +260,19 @@ db.cap_alerts.createIndex({ affected_stations: 1 });
 
 ---
 
-## 8. Replica Sets, Tunable CAP & Sharding Quick Reference
+## 8. Replica Set Failover, `w: 1` Rollback Hazard & Shard Key Decision Matrix (Black Boxes 4C & 4D)
 
-| Concept | Best Practice for Weather Engineers |
-| :--- | :--- |
-| **Write Concern (`w`)** | Use `{ w: "majority", j: true }` for official severe weather alerts (`cap_alerts`) & station metadata (**CP** — zero rollback risk); use `{ w: 1, j: false }` for high-rate 1Hz IoT sensor streams (**AP** — maximum ingest speed). |
-| **Read Concern & Preference** | Use `readConcern: "linearizable"` + `primary` for life-safety warnings; use `readPreference: "secondaryPreferred"` (or analytics tag sets) for heavy multi-year climatology aggregations so they never slow down primary ingestion. |
-| **Shard Key Selection** | **NEVER** shard solely on `{ obs_time: 1 }` (creates a 100% write hotspot on the single newest chunk!). Always prefix with a high-cardinality station/region identifier: **`{ "station_meta.station_id": 1, obs_time: 1 }`** or **`{ "metadata.region_code": 1, "metadata.station_id": 1, recorded_at: 1 }`**. |
+### 8.1 PostgreSQL (`Patroni`) vs. MongoDB (`Replica Set`) Failover & The `w: 1` Rollback Trap (Black Box 4C)
+* **Built-In Raft Election vs. External Patroni/etcd:** While PostgreSQL streams physical 8 KB WAL bytes and relies on external `Patroni` + `etcd` + `HAProxy` for failover, a 3-node MongoDB Replica Set replicates logical idempotent BSON ops via `local.oplog.rs`, runs a **built-in Raft election** (`electionTimeoutMillis: 10000`), and relies on **topology-aware smart drivers (`replicaSet=rs_meteo&retryWrites=true`)** to auto-route writes to the new Primary in $< 10\text{s}$ without external proxies.
+* **Why `w: 1` Causes Post-Failover Rollbacks (`rollback/` BSON files):** If Primary `node1` acknowledges a write with `{ w: 1 }` and loses power 30 ms later *before* `node2`/`node3` pull that oplog entry, `node2` is elected Primary without that document. When `node1` recovers, it **deletes ("rolls back")** its unreplicated `w: 1` writes! Always use **`{ w: "majority", j: true }`** for life-safety `cap_alerts` and `stations` (`RPO = 0`, zero rollbacks).
+
+### 8.2 The 4-Pattern MongoDB Shard Key Decision Matrix (Black Box 4D)
+| Pattern | Shard Key Declaration | Live Write Distribution | Station + Time Range Query (`station_id = X AND obs_time BETWEEN ...`) | Risk of Jumbo Chunks? | Engineering Verdict |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or `ObjectId`)* | **❌ 100% on 1 Shard (`MaxKey` Hotspot!)** — All new writes hit the single highest chunk. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
+| **2. Low-Cardinality Enum** *(Anti-Pattern)* | `{ station_type: 1 }` or `{ radar_site_id: 1 }` *(4–8 values)* | ❌ Capped at 4–8 chunks total. | Scatter-Gather unless `station_type` is in every query. | **❌ YES (Fatal Jumbo Chunks!)** | **NEVER USE alone.** Chunks with identical key values cannot be split past 64 MB. |
+| **3. Hashed Single Key** | `{ station_id: "hashed" }` *(or `{ obs_time: "hashed" }`)* | **✅ 100% Evenly Distributed** via MD5 hash. | `station_id: "hashed"` targets 1 shard for equality, **but `obs_time: "hashed"` forces Scatter-Gather on EVERY time-range query!** | Low | Use `{ sensor_uuid: "hashed" }` only for point lookups; **never hash `obs_time`**. |
+| **4. Compound Prefix + Time** *(Production Gold Standard)* | **`{ "station_meta.station_id": 1, obs_time: 1 }`** | **✅ Evenly Distributed** across all shards simultaneously by `station_id`. | **✅ Targeted Single-Shard Scan!** `station_id` pins 1 shard; `obs_time: 1` scans contiguous chronological pages! | **Zero** (`obs_time` splits any large station) | **MANDATORY for meteorological time-series, radiosondes & radar scans.** |
 
 ---
 

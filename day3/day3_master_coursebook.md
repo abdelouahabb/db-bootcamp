@@ -954,8 +954,8 @@ RETURNING station_id, obs_time, jsonb_pretty(sensor_payload);
 
 ## 6. Closing Wrap-Up: Production High Availability (Patroni + `etcd` + HAProxy) & Bridge to Day 4 MongoDB
 
-### 6.1 Enterprise PostgreSQL High-Availability Failover Topology
-*(See companion guide [day3_postgres_ha_patroni_and_ops_guide.md](./day3_postgres_ha_patroni_and_ops_guide.md) for the complete CAP/PACELC analysis, `patroni.yml`, and split-brain fencing mechanics).*
+### 6.1 Black Box 3C Demystified: PostgreSQL Streaming Replication, Split-Brain Fencing & Automatic Failover (`Patroni` + `etcd` + `HAProxy`)
+*(See companion guide [day3_postgres_ha_patroni_and_ops_guide.md](./day3_postgres_ha_patroni_and_ops_guide.md) for the complete 787-line CAP/PACELC analysis, `patroni.yml`, and `pgBackRest` PITR runbook).*
 
 ```mermaid
 flowchart LR
@@ -995,6 +995,31 @@ flowchart LR
     PG2 <-->|"Watches Leader Key"| ETCD1
     PG3 <-->|"Watches Leader Key"| ETCD3
 ```
+
+#### 1. Why PostgreSQL Cannot Auto-Failover by Itself (The "Split-Brain" Catastrophe)
+Out of the box, PostgreSQL provides rock-solid **Physical Streaming Replication** (`walsender` on the Primary streams 16 MB `pg_wal` byte segments over TCP to `walreceiver` on Hot Standbys), **but PostgreSQL intentionally has no built-in automatic failover election daemon.** Why?
+* **The Split-Brain Trap:** Suppose a 2-node cluster (`pg-node-1` Primary, `pg-node-2` Standby) suffers a network switch glitch that cuts the cable between the two nodes while both servers remain powered on and reachable by different ingest workers.
+* If `pg-node-2` naively says *"I haven't heard from `pg-node-1` in 5 seconds, I will run `pg_promote()`!"*, you now have **two active Primaries (`Split-Brain`)** simultaneously accepting conflicting `INSERT`s into the same LSN byte offsets! Their WAL timelines diverge irreversibly, and one node's committed weather observations must be destroyed to reunite the cluster.
+
+#### 2. How `Patroni` + 3-Node `etcd` + `HAProxy` Solve Failover in $< 10\text{ Seconds}$
+To prevent Split-Brain mathematically, production PostgreSQL relies on three external components working in lockstep:
+1. **3-Node `etcd` Distributed Consensus Store (Raft Quorum):** A 3-node (or 5-node) Raft cluster holds a single key `/service/weather-pg/leader` with a strict **10-second Time-To-Live (`TTL`) lease**. To hold or win the leader key, a node must communicate with at least $\lfloor 3/2 \rfloor + 1 = 2$ `etcd` nodes.
+2. **`Patroni` Agent + Hardware Watchdog (`/dev/watchdog`) Fencing:**
+   - Every 3 seconds (`loop_wait`), the Primary's `Patroni` agent renews its 10s lease in `etcd`.
+   - If `pg-node-1` is isolated by a network partition, it **cannot reach 2 `etcd` nodes** to renew its lease. Before the 10-second TTL expires, Patroni immediately **demotes `pg-node-1` to read-only** (or if the OS freezes, the Linux kernel `/dev/watchdog` timer hard-resets the machine at $t = 5\text{s}$).
+   - At $t = 10\text{s}$, the leader key in `etcd` expires. `Patroni` on `pg-node-2` (the Standby with the highest received `pg_wal` LSN) acquires the `etcd` leader lock, executes `pg_promote()` (switching to Timeline 2), and becomes the sole Primary.
+3. **`HAProxy` REST Health-Check Routing (`Port 5000` R/W vs. `Port 5001` R/O):**
+   - Unlike MongoDB's topology-aware client drivers, standard `libpq`/`psycopg` clients connect to a single host/port. `HAProxy` polls each node's Patroni HTTP endpoint (`GET :8008/primary` returns `200 OK` only on the current leader; `GET :8008/replica` returns `200 OK` on healthy standbys) every 1 second and transparently switches port `5000` traffic to `pg-node-2` the instant promotion completes.
+
+#### 3. The 4-Pattern PostgreSQL `synchronous_commit` Durability & Failover Decision Matrix
+Even with Patroni failover, **could the promoted Standby be missing the last few milliseconds of committed rows?** That depends entirely on `synchronous_commit` (which can be set globally OR per transaction via `SET LOCAL synchronous_commit = ...`):
+
+| Pattern | Setting (`synchronous_commit`) | When Primary Returns `COMMIT` to Client | Data Loss on Primary Crash (`RPO`) | Write Latency | Meteorological Use Case |
+| :--- | :--- | :--- | :---: | :---: | :--- |
+| **1. Async Local Commit** | `off` | Immediately in RAM (`wal_buffers`); flushed to disk every `wal_writer_delay` (`200ms`). | Up to $\sim 0.6\text{s}$ of recent telemetry (Zero corruption; crash-safe). | **Ultra-Fast ($\approx 0.05\text{ ms}$)** | High-frequency $10\text{ Hz}$ ultrasonic anemometer / lightning raw ingest. |
+| **2. Local Disk Durable (Async Replica)** | `local` *(or `on` with no `synchronous_standby_names`)* | After Primary `fsync()`s WAL to its own `/data/pgwal` NVMe, *before* Standby confirms. | $0$ on Primary restart; **$> 0$ (replication lag)** if Primary disk dies & Standby promotes. | **Fast ($\approx 0.3\text{ ms}$)** | Routine hourly synoptic observations & NWP bulk `COPY` loads. |
+| **3. Quorum WAL Flush (`Zero Data Loss`)** | `on` *(or `remote_write`) + `synchronous_standby_names = 'FIRST 1 (pg2, pg3)'`* | Only after **both** Primary AND at least 1 Sync Standby flush the WAL record to disk. | **`RPO = 0` (Zero lost transactions on failover!)** | **Moderate ($+1\text{–}3\text{ ms}$ RTT)** | **Official WMO Station Registry (`stations`) & Life-Safety Weather Alerts (`weather_alerts`).** |
+| **4. Zero Read-Lag Standby** | `remote_apply` | Only after Sync Standby flushes WAL to disk **AND** replays it into Standby `shared_buffers`. | **`RPO = 0` + Zero stale read lag on Standby!** | **Higher ($+2\text{–}5\text{ ms}$)** | Read-after-write APIs that write to Primary (`:5000`) and immediately read from Standby (`:5001`). |
 
 ### 6.2 The Architectural Decision Matrix: PostgreSQL (Days 2–3) vs. MongoDB (Day 4)
 

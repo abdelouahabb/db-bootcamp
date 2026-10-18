@@ -192,6 +192,20 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 
 ---
 
+## 6.1 Streaming Replication, Split-Brain Fencing & `synchronous_commit` Matrix (Black Box 3C)
+
+* **Why PostgreSQL Needs `Patroni` + 3-Node `etcd` + `HAProxy`:** PostgreSQL has no built-in Raft election loop. If a Standby promoted itself on a 2-node network glitch, **both nodes would accept writes (`Split-Brain`)**, corrupting WAL timelines. `Patroni` uses a **10s TTL Leader Lock in 3-node `etcd`** + `/dev/watchdog` hardware fencing so an isolated Primary demotes itself *before* the Standby runs `pg_promote()`, while `HAProxy` polls `:8008/primary` to reroute port `5000`.
+* **The 4-Pattern `synchronous_commit` Durability & Failover Decision Matrix:**
+
+| Pattern | `synchronous_commit` | When `COMMIT` Returns | Failover Data Loss (`RPO`) | Latency | Weather Use Case |
+| :--- | :--- | :--- | :---: | :---: | :--- |
+| **1. Async RAM** | `off` | Immediately in `wal_buffers` ($200\text{ms}$ disk flush) | $\le 0.6\text{s}$ of telemetry | $\approx 0.05\text{ ms}$ | $10\text{ Hz}$ ultrasonic wind / lightning raw ingest |
+| **2. Local Disk (Async Standby)** | `local` | After Primary NVMe `fsync()` | $> 0$ if Primary disk dies | $\approx 0.3\text{ ms}$ | Routine hourly synoptic ingest & NWP `COPY` |
+| **3. Quorum WAL (`Zero Loss`)** | `on` *(with `synchronous_standby_names`)* | After Primary + 1 Sync Standby `fsync()` WAL | **`RPO = 0` (Zero Loss!)** | $+1\text{–}3\text{ ms}$ | **Official WMO `stations` & `weather_alerts`** |
+| **4. Zero Read-Lag Standby** | `remote_apply` | After Sync Standby replays WAL in `shared_buffers` | **`RPO = 0` + Zero Read Lag** | $+2\text{–}5\text{ ms}$ | Read-after-write APIs querying Standbys (`:5001`) |
+
+---
+
 ## 7. Executive Summary Card: Day 3 Production Directives
 
 ```

@@ -982,6 +982,29 @@ Unlike PostgreSQL (where synchronous replication is typically configured globall
   1. **Life-Safety CAP Storm Alerts (`cap_alerts`) & Station Registry (`stations`) [CP]:** Mandatory `{ w: "majority", j: true }` + `readConcern: "linearizable"`. Guarantees zero rollbacks on failover.
   2. **High-Frequency $1\text{ Hz}$ Sonic Wind / Disdrometer Stream (`weather_stream`) [AP]:** `{ w: 1, j: false }` + `readConcern: "local"`. Maximizes ingestion throughput.
 
+#### Black Box 4C Demystified: PostgreSQL (`Patroni`) vs. MongoDB (`Replica Set`) Failover & Why `w: 1` Triggers Silent Post-Failover Rollbacks
+
+Why does PostgreSQL require an external stack (`Patroni` + 3-node `etcd` + `HAProxy`) for automatic failover while MongoDB handles failover natively out of the box—and how can a "succeeded" MongoDB write silently vanish after a failover if you use the wrong Write Concern?
+
+##### 1. Head-to-Head Failover Architecture: PostgreSQL 16 vs. MongoDB 7.0
+| Architectural Dimension | PostgreSQL 16 HA (`Streaming Replication` + `Patroni`) | MongoDB 7.0 HA (`3-Node Replica Set`) |
+| :--- | :--- | :--- |
+| **Replication Log Payload** | **Physical Byte-Level WAL (`pg_wal`):** Exact 8 KB page images & byte offsets (`XLogRecord`). Standbys are byte-for-byte clones. | **Logical Idempotent Oplog (`local.oplog.rs`):** Capped collection of BSON operations (e.g., `{$inc: {n: 1}}` converted to `{$set: {n: 5}}`). |
+| **Consensus & Election Engine** | **External DCS (`3-Node etcd` + `Patroni`):** PostgreSQL has no native Raft loop; Patroni holds a 10s TTL leader lock in `etcd`. | **Built-In Raft-Derived Election Protocol:** `mongod` nodes exchange heartbeats every `2s` and elect a new Primary natively in $< 10\text{s}$ (`electionTimeoutMillis`). |
+| **Client Failover Routing** | **External Proxy (`HAProxy` / VIP):** `HAProxy` polls Patroni's `:8008/primary` HTTP endpoint and reroutes TCP port `5000`. | **Smart Topology-Aware Client Driver:** `PyMongo` / `mongosh` discovers all Replica Set members (`replicaSet=rs_meteo`) and auto-routes to the new Primary (`retryWrites=true`). |
+| **Split-Brain Defense** | Primary loses `etcd` quorum $\rightarrow$ Patroni demotes Primary to read-only (or `/dev/watchdog` resets host). | Isolated Primary cannot reach a majority ($\ge 2/3$) of nodes $\rightarrow$ **automatically steps down to `SECONDARY`** within 10s. |
+| **Zero-Data-Loss Setting (`RPO = 0`)** | `synchronous_commit = on` + `synchronous_standby_names` | `{ writeConcern: { w: "majority", j: true } }` |
+
+##### 2. Anatomy of a Silent `w: 1` Failover Rollback vs. `w: "majority"` Quorum Safety
+Suppose `mongo-node1` (Primary) receives a Flash Flood alert at `12:00:00.050` and suffers a power outage at `12:00:00.080` (30 ms later, before `mongo-node2` or `mongo-node3` have pulled that Oplog entry):
+
+| Timeline Step | With `{ w: 1 }` (Primary-Only Ack) | With `{ w: "majority", j: true }` (Quorum Ack) |
+| :--- | :--- | :--- |
+| **`t = 0 ms` (Client `insertOne`)** | `node1` writes alert to RAM/oplog and **immediately returns `acknowledged: true` to client!** | `node1` writes alert to journal + oplog and **waits** for at least 1 Secondary to confirm. |
+| **`t = 30 ms` (`node1` Power Cut)** | `node1` dies **before** `node2` or `node3` pull the alert from `node1`'s oplog. | If `node2` already confirmed at `t = 15 ms`, `node2` **has the alert on disk**. (If `node1` died before `node2` pulled it, the client never got a false success!). |
+| **`t = 9,000 ms` (Election Completes)** | `node2` + `node3` form a 2/3 majority and elect `node2` as new `PRIMARY`—**without the alert!** | `node2` has the highest `optime` (including the alert) and is elected `PRIMARY`. **Zero data loss!** |
+| **`t = 5 min` (`node1` Boots Back Up)** | `node1` reconnects as `SECONDARY`, sees `node2` is on a new election term without its `t = 0 ms` write, **deletes the alert from `cap_alerts`**, and dumps it to `/var/lib/mongodb/rollback/`! | `node1` reconnects as `SECONDARY` and resumes tailing `node2`'s oplog cleanly. **Zero rollbacks!** |
+
 ---
 
 ### 5.3 Binary Blobs & Rasters: GridFS vs. Dedicated Object Storage (S3 / MinIO)
@@ -994,9 +1017,9 @@ When storing binary meteorological files that exceed the **16 MB BSON limit** (D
 
 ---
 
-### 5.4 Horizontal Write Scaling via Sharding — And the #1 Weather Sharding Trap!
+### 5.4 Black Box 4D Demystified: Horizontal Write Scaling via Sharding — And Why Choosing the Wrong Shard Key Destroys a Weather Cluster!
 
-When a telemetry collection exceeds 10–20 TB or outgrows the write IOPS of a single Primary node, MongoDB partitions data horizontally across multiple Replica Sets (**Shards**) behind stateless **`mongos`** query routers.
+When a telemetry collection exceeds 10–20 TB or outgrows the write IOPS of a single Primary node, MongoDB partitions data horizontally across multiple Replica Sets (**Shards**) behind stateless **`mongos`** query routers. Every sharded collection is divided into contiguous key-range **Chunks** (default `64 MB` each) tracked by the **3-Node Config Server Replica Set (`CSRS`)**.
 
 ```text
                               The Shard Key Spectrum
@@ -1025,9 +1048,24 @@ flowchart TB
     end
 ```
 
-1. **Trap 1 — Monotonic Timestamp Shard Key (`{ obs_time: 1 }`):** Every live observation has the current timestamp ($T_{\text{now}}$), routing **100% of cluster writes to the single highest chunk on a single Shard** (**Hotspot Antipattern**)!
-2. **Trap 2 — Low-Cardinality Shard Key (`{ station_type: 1 }`):** With only 4 enum values, chunks cannot be split past 64 MB, creating immovable **Jumbo Chunks**.
-3. **The Production Solution — Compound Shard Key (`{ "station_meta.station_id": 1, obs_time: 1 }`):** Leading with high-cardinality `station_id` spreads live writes across all shards simultaneously while keeping each station's time-series contiguous for targeted range queries!
+#### 1. The 3 Physical Forces Governing Every MongoDB Shard Key
+Once a collection is sharded, **your Shard Key choice dictates both write distribution and query routing**:
+1. **Cardinality (Number of Distinct Values):** Determines the maximum number of chunks MongoDB can split the collection into. If you shard on `{ climate_zone: 1 }` (which has only 5 distinct values), MongoDB can create **at most 5 chunks**—even if your collection grows to 50 TB!
+2. **Frequency (Skew per Value):** If 60% of sensors belong to one region or category, that chunk grows past 64 MB and cannot be split across keys, becoming an immovable **Jumbo Chunk**.
+3. **Monotonicity (Strictly Increasing Values like `obs_time` or `ObjectId`):** In range-based sharding, the highest chunk always holds the open-ended upper bound `[T_latest, MaxKey)`. If your shard key is `{ obs_time: 1 }` (or `_id: ObjectId()`), **every new observation has $T_{\text{now}} > T_{\text{latest}}$**—routing **100.0% of live cluster writes to the single shard holding `MaxKey`** while all other shards sit completely idle on writes!
+
+#### 2. Targeted Single-Shard Query vs. Scatter-Gather Broadcast Query
+When `mongos` receives a `find()` or `aggregate()` query:
+* **Targeted Query ($O(1)$ Shard Routing):** If the query filter includes the **Shard Key prefix** (e.g., `station_id: 60390`), `mongos` looks up the chunk map in RAM and routes the query **only to the 1 shard** that owns `60390`.
+* **Scatter-Gather Query ($O(N)$ All-Shard Broadcast):** If the query filter omits the Shard Key prefix—or if the Shard Key is `{ obs_time: "hashed" }` and the query asks for a time range (`obs_time: { $gte: T1, $lt: T2 }`)—`mongos` must broadcast the query to **every shard in the cluster**, wait for the slowest shard, and merge-sort the results!
+
+#### 3. The 4-Pattern MongoDB Shard Key Decision Matrix for Weather Databases
+| Pattern | Shard Key Declaration | Live Write Distribution | Station + Time Range Query (`station_id = X AND obs_time BETWEEN ...`) | Risk of Jumbo Chunks? | Engineering Verdict |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or default `_id` `ObjectId`)* | **❌ 100% on 1 Shard (`MaxKey` Hotspot!)** — Adding more shards gives **0% extra write throughput**. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
+| **2. Low-Cardinality Enum** *(Anti-Pattern)* | `{ station_type: 1 }` or `{ radar_site_id: 1 }` *(only 4–8 values)* | ❌ Uneven (capped at 4–8 chunks total). | Scatter-Gather unless `station_type` is in every query. | **❌ YES (Fatal Jumbo Chunks!)** | **NEVER USE alone.** Chunks with identical key values cannot be split past 64 MB. |
+| **3. Hashed Single Key** | `{ station_id: "hashed" }` *(or `{ obs_time: "hashed" }`)* | **✅ 100% Evenly Distributed** across all shards via MD5 hash. | `station_id: "hashed"` targets 1 shard for equality, **but `obs_time: "hashed"` forces Scatter-Gather on EVERY time-range query!** | Low | Use `{ sensor_uuid: "hashed" }` only for pure point-lookup workloads; **avoid hashing `obs_time`**. |
+| **4. Compound Prefix + Time** *(Production Gold Standard)* | **`{ "station_meta.station_id": 1, obs_time: 1 }`** | **✅ Evenly Distributed** across all shards simultaneously (500+ stations write to different chunks at 12:00Z). | **✅ Targeted Single-Shard Scan!** `station_id` pins the exact shard; `obs_time: 1` scans contiguous chronological pages on that shard! | **Zero** (`obs_time` splits any large station) | **MANDATORY for meteorological time-series, radiosondes & radar scans.** |
 
 *(For full multi-node Replica Set deployment configs, PyMongo Tag-Set routing code, and `sh.*` sharding commands, see [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md)).*
 

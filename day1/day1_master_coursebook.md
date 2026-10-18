@@ -995,9 +995,39 @@ LIMIT 24;
 ```
 *Executing this query on `weather_telemetry.db` exposes the 6-hour communication outage (`COMPLETE_BLACKOUT`, `0` packets received) on station `AWS-033`.*
 
-> [!IMPORTANT]
-> **Production Engineering Pitfall — Putting `LEFT JOIN` Filters in `WHERE` Instead of `ON`:**  
-> In the `WITH RECURSIVE` outage query above, notice that `AND t.station_id = 'AWS-033'` is placed inside the **`LEFT JOIN ... ON`** clause, **not** in the `WHERE` clause! If you place `WHERE t.station_id = 'AWS-033'` after the `LEFT JOIN`, any blackout hour where `t.station_id` is `NULL` evaluates to `UNKNOWN` and gets stripped out—silently converting the `LEFT JOIN` into an `INNER JOIN` and hiding the exact 6-hour blackout you are trying to detect!
+#### Black Box Demystified: `LEFT JOIN ... ON` vs. `LEFT JOIN ... WHERE` (Why `WHERE` Silently Destroys `LEFT JOIN`)
+
+A classic SQL "black box" is wondering why moving a condition like `o.qc_flag = 'VALID'` from the `ON` clause to the `WHERE` clause changes the query result on a `LEFT JOIN`—even though `ON` and `WHERE` produce identical results on an `INNER JOIN`!
+
+1. **The Two Orthogonal Execution Phases (Step 1 `JOIN ON` vs. Step 2 `WHERE`):**
+   - **Phase 1 (`LEFT JOIN ... ON <join_predicate>`):** For every row in the Left table (`stations s`), the engine evaluates the `ON` predicate against the Right table (`observations o`).
+     - If one or more Right rows evaluate to `TRUE`, they are attached.
+     - **If ZERO Right rows match the `ON` predicate, `LEFT JOIN` still keeps the Left row (`60402 Bejaia`) and pads all Right columns (`o.*`) with `NULL`!**
+   - **Phase 2 (`WHERE <filter_predicate>`):** Runs **after** the `LEFT JOIN` has finished padding unmatched rows with `NULL`. It filters the combined table and keeps **only** rows where the `WHERE` expression evaluates strictly to `TRUE`.
+
+2. **The Asymmetry Matrix: Filtering the Right Table in `ON` vs. `WHERE`**
+   Suppose we want a list of **all 7 WMO stations** alongside their `'VALID'` observations (showing `0` or `NULL` if a station has no valid observations):
+
+| Station State in `weather_ops.db` | What `LEFT JOIN` Produces Before `WHERE` | Filter in `ON`:<br>`LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'` | Filter in `WHERE`:<br>`LEFT JOIN observations o ON s.station_id = o.station_id WHERE o.qc_flag = 'VALID'` |
+| :--- | :--- | :--- | :--- |
+| **`60390 Algiers`** (Has `'VALID'` rows) | Matched rows with `o.qc_flag = 'VALID'` | ✅ **Kept** (with `'VALID'` rows) | ✅ **Kept** (`'VALID' = 'VALID'` is `TRUE`) |
+| **`60571 Bechar` at `12:00`** (Only has `'ERRONEOUS'` row) | Unmatched in `ON` $\rightarrow$ padded with `o.qc_flag = NULL` | ✅ **Kept!** (Station preserved with `o.* = NULL`) | ❌ **DROPPED!** (`'ERRONEOUS' = 'VALID'` is `FALSE`) |
+| **`60402 Bejaia`** (0 observations in DB) | Unmatched in `ON` $\rightarrow$ padded with `o.qc_flag = NULL` | ✅ **Kept!** (Station preserved with `o.* = NULL`) | ❌ **SILENTLY DROPPED!** (`NULL = 'VALID'` is `UNKNOWN` $\neq$ `TRUE`!) |
+
+> [!WARNING]
+> **The Silent `LEFT`-to-`INNER` Downgrade Trap:**  
+> Writing `WHERE o.qc_flag = 'VALID'` (or `WHERE t.station_id = 'AWS-033'` in the blackout query above) tests a Right-table column for equality. For any unmatched Left row, that Right-table column is `NULL`, so `NULL = 'VALID'` evaluates to `UNKNOWN`, and `WHERE` deletes the row—**silently turning your `LEFT JOIN` into an `INNER JOIN`!**
+
+3. **The 4-Pattern `ON` vs. `WHERE` Decision Matrix for `LEFT JOIN`s**
+
+| Pattern | SQL Placement | Keeps Unmatched Left Rows? | When to Use It | Concrete Example in `weather_ops.db` |
+| :--- | :--- | :---: | :--- | :--- |
+| **Pattern 1: Right-Table Filter in `ON`** | `LEFT JOIN right r ON l.id = r.id AND r.col = 'X'` | ✅ **Yes** (unmatched Left rows kept with `NULL`s) | You want **100% of Left rows** (all stations or all clock hours) and only want to attach Right rows that meet a criterion. | `LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'` |
+| **Pattern 2: Left-Table Filter in `WHERE`** | `LEFT JOIN right r ON l.id = r.id WHERE l.col = 'Y'` | ✅ **Yes** (for matching Left rows) | You want to restrict **which Left rows** enter the report (e.g., only `'Mediterranean'` stations), while still keeping silent stations in that zone. | `FROM stations s LEFT JOIN observations o ON s.station_id = o.station_id WHERE s.climate_zone = 'Mediterranean'` |
+| **Pattern 3: Anti-Join (`IS NULL` in `WHERE`)** | `LEFT JOIN right r ON l.id = r.id WHERE r.id IS NULL` | ✅ **Only** unmatched Left rows! | You specifically want to find **orphans, silent stations, or missing timestamps** where no Right row matched. | `FROM stations s LEFT JOIN observations o ON s.station_id = o.station_id WHERE o.obs_id IS NULL` |
+| **Pattern 4: Right-Table Filter in `WHERE`** *(Anti-Pattern!)* | `LEFT JOIN right r ON l.id = r.id WHERE r.col = 'X'` | ❌ **No!** (Silently downgrades to `INNER JOIN`) | **Never use with `LEFT JOIN`!** If you actually want to drop unmatched Left rows, write `INNER JOIN` explicitly so your intent is clear. | *(Use `INNER JOIN` instead)* |
+
+---
 
 ### 8.3 Window Functions on Sensor Streams (`OVER`, `PARTITION BY`, `LAG`, `ROWS BETWEEN`)
 * **`GROUP BY`:** Collapses rows into summaries, destroying original observation identity.
@@ -1074,6 +1104,32 @@ WHERE station_id = 'AWS-018'
   AND wind_speed >= 0.0
 LIMIT 15;
 ```
+
+#### Black Box Demystified: Window Frames (`OVER (...)` Default Frame vs. `ROWS BETWEEN` vs. `RANGE BETWEEN`)
+
+When engineers write `OVER (PARTITION BY station_id ORDER BY obs_time)`, what rows are actually included in the window calculation? Most developers assume the window spans the *entire partition*, and are shocked when `LAST_VALUE()` returns the current row or `SUM()` produces a running total instead of a partition total!
+
+1. **The Hidden Default Window Frame Rule in ANSI SQL:**
+   - **Without `ORDER BY`** (`OVER (PARTITION BY station_id)`): The default frame is the **entire partition** (`RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`). Every row in the station gets the station's overall average/sum.
+   - **As soon as you add `ORDER BY`** (`OVER (PARTITION BY station_id ORDER BY obs_time)`): SQL silently changes the default frame to **`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`** (from the start of the partition **only up to the current row**!).
+   - **Why `LAST_VALUE(temp_c) OVER (PARTITION BY station_id ORDER BY obs_time)` Fails:** Because the default frame stops at `CURRENT ROW`, the "last value" inside a frame that ends at `CURRENT ROW` is literally just the current row itself! To get the true last value of the partition, you must explicitly widen the frame to `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` (or use `FIRST_VALUE(...) OVER (... ORDER BY obs_time DESC)`).
+
+2. **`ROWS BETWEEN` (Physical Row Count) vs. `RANGE BETWEEN` (Logical Value / Clock Distance):**
+
+| Dimension | `ROWS BETWEEN N PRECEDING AND CURRENT ROW` | `RANGE BETWEEN ... PRECEDING AND CURRENT ROW` |
+| :--- | :--- | :--- |
+| **What It Counts** | **Physical row offsets** before/after the current row (`N` rows back, regardless of timestamp gaps). | **Logical value distance** on the `ORDER BY` column (e.g., `INTERVAL '23 hours' PRECEDING` in PostgreSQL/DuckDB). |
+| **Behavior on Missing Sensor Pings (Gaps)** | ⚠️ **Reaches too far back in time!** If 2 hourly pings are missing, `ROWS BETWEEN 23 PRECEDING` spans **26 clock hours**. | ✅ **Strictly time-accurate!** Only includes rows whose timestamp falls within `[obs_time - 23h, obs_time]`. |
+| **Behavior on Duplicate Timestamps (Peers)** | Processes each duplicate row one by one in arbitrary/tie-breaker order. | Groups all rows with the exact same `ORDER BY` value ("peers") together at the frame boundary. |
+
+3. **The 4-Pattern Window Frame Decision Matrix**
+
+| Pattern | SQL `OVER (...)` Syntax | Effective Window Scope | When to Use It in Meteorology |
+| :--- | :--- | :--- | :--- |
+| **1. Partition-Wide (`No ORDER BY`)** | `AVG(temp_c) OVER (PARTITION BY station_id)` | **100% of rows** in the partition (`UNBOUNDED PRECEDING` to `UNBOUNDED FOLLOWING`). | Computing a station's overall mean/min/max alongside each individual hourly reading (e.g., anomaly = `temp_c - AVG(temp_c) OVER (PARTITION BY station_id)`). |
+| **2. Cumulative Running Frame (`ORDER BY` default)** | `SUM(precip_1h_mm) OVER (PARTITION BY station_id ORDER BY obs_time ROWS UNBOUNDED PRECEDING)` | From the **1st row of the partition up to `CURRENT ROW`**. | Cumulative storm rainfall total from the start of the event up to each timestamp. *(Prefer explicit `ROWS UNBOUNDED PRECEDING` over implicit `RANGE` to avoid peer-tie overhead).* |
+| **3. Fixed-Sample Sliding Window (`ROWS BETWEEN`)** | `AVG(wind_speed) OVER (PARTITION BY station_id ORDER BY recorded_at ROWS BETWEEN 4 PRECEDING AND CURRENT ROW)` | Exactly the **last $K$ physical rows** ($4 + 1 = 5$ samples). | High-frequency 1-minute sonic anemometer smoothing (`5-sample moving average`) when sampling intervals are uniform or you want a fixed sample count. |
+| **4. True Clock-Time Sliding Window (`RANGE BETWEEN`)** | `SUM(precip_1h_mm) OVER (PARTITION BY station_id ORDER BY obs_time RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW)` | All rows whose timestamp is within **$\Delta t$ of `CURRENT ROW`** (even if sensor pings dropped!). | Synoptic 24-hour rolling rainfall or 6-hour max gust on gappy telemetry streams (PostgreSQL, DuckDB, MySQL 8.0+). |
 
 ---
 

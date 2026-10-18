@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **Architected & Synthesized with Gemini 4 Argon**  
-> This repository is the unified, zero-duplication **"Best of Both"** master edition (`69 files`, `30,000+ lines` of coursebooks, SQL/MongoDB course walkthroughs, reference cards, interactive simulators, and runnable SQL/MQL/Python/Docker labs).
+> This repository is the unified, zero-duplication **"Best of Both"** master edition (`70 files`, `30,000+ lines` of coursebooks, SQL/MongoDB course walkthroughs, reference cards, interactive simulators, and runnable SQL/MQL/Python/Docker labs).
 > - 💿 **VMware Ubuntu 24.04 Blank Lab From-Scratch Installation Guide:** Read **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md](./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to create the blank Ubuntu VM in VMware and install every database, CLI tool, Python environment, and GUI client from scratch (Native + Docker alternative).
 > - 🛠️ **Attendee Tooling & Day-0 Setup Guide (Windows, macOS & Linux):** Read **[ATTENDEE_SETUP_GUIDE.md](./ATTENDEE_SETUP_GUIDE.md)** for step-by-step instructions on reading coursebooks, setting up **DB Browser for SQLite**, **DBeaver Community** & **MongoDB Compass**, and launching the Docker Compose database stacks.
 > - 🌐 **Interactive Web Command Center, Built-In Coursebook Reader & Simulators:** Run `python3 start_bootcamp.py` (or open [bootcamp_portal.html](./bootcamp_portal.html)) to launch the **Built-In Dark-Mode Markdown/Code Reader**, **PostgreSQL Tuple Tetris 8-Byte Alignment Visualizer**, **`-9999.0` Hardware Sentinel & 3VL Simulator**, **Multi-Engine Scaling Calculator**, **Polyglot Architecture Map**, and **15-Question Live Certification Quiz** at `http://127.0.0.1:8088/bootcamp_portal.html`.
@@ -14,7 +14,7 @@
 
 ---
 
-## 1. Repository Architecture & Complete File Navigator (`69 Files`)
+## 1. Repository Architecture & Complete File Navigator (`70 Files`)
 
 ```text
 alternative B/
@@ -29,7 +29,7 @@ alternative B/
 ├── day3/                                                          # Day 3: Production PostgreSQL: Partitioning, BRIN, PostGIS Geodesy, Extensions & Patroni HA
 ├── day4/                                                          # Day 4: MongoDB: BSON/WiredTiger, Time-Series, 2dsphere Storm Polygons, Aggregations & Sharding
 ├── day5/                                                          # Day 5: Vectorized DuckDB, Parquet Lakehouse, GRIB2/NetCDF4/Zarr, Polyglot Streaming & Capstone
-├── reference_cards/                                               # 13 Deep-Dive Engineering Reference Cards + 20-Symptom Diagnostic Index (README.md)
+├── reference_cards/                                               # 14 Deep-Dive Engineering Reference Cards + 21-Symptom Diagnostic Index (README.md)
 └── docker/                                                        # Turnkey Docker Compose Topologies (3-Node HA Replica Set & 6-Service Polyglot Lakehouse)
 ```
 
@@ -120,7 +120,7 @@ alternative B/
 
 ## 3. Deep-Dive Engineering Reference Cards Library (`reference_cards/`)
 
-See **[reference_cards/README.md](./reference_cards/README.md)** for the **20-Scenario Symptom-to-Reference-Card Diagnostic Lookup Table**.
+See **[reference_cards/README.md](./reference_cards/README.md)** for the **21-Scenario Symptom-to-Reference-Card Diagnostic Lookup Table**.
 
 | # | Reference Card | Lines | Core Engineering Topics Covered |
 | :-: | :--- | :---: | :--- |
@@ -137,6 +137,7 @@ See **[reference_cards/README.md](./reference_cards/README.md)** for the **20-Sc
 | **11** | [11_python_database_drivers_for_weather_engineers.md](./reference_cards/11_python_database_drivers_for_weather_engineers.md) | 225 | Production Python integration patterns: `sqlite3`, `duckdb` zero-copy DataFrame queries, `psycopg` v3 connection pools & binary `COPY`, `GeoPandas` + PostGIS (`read_postgis`), and `PyMongo` bulk writes. |
 | **12** | [12_dbeaver_and_mongodb_compass_gui_workflows.md](./reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md) | 105 | Visual GUI workflows: DBeaver Spatial GIS Leaflet Map viewer for PostGIS `GEOGRAPHY`, ER diagrams, visual `EXPLAIN` (`Ctrl+Shift+E`), and MongoDB Compass visual aggregation pipeline builder. |
 | **13** | [13_database_observability_prometheus_grafana_and_alerts.md](./reference_cards/13_database_observability_prometheus_grafana_and_alerts.md) | 167 | Golden observability signals for weather databases, `postgres_exporter` + `mongodb_exporter` + Prometheus + Grafana setup, and custom SQL monitors for silent weather stations and late NWP model runs. |
+| **14** | [14_mysql_and_mariadb_innodb_complete_engineering_guide.md](./reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | 473 | Dedicated MySQL 8.0/8.4 & MariaDB 10.11+ production engineering guide: where MySQL beats PostgreSQL (in-place heartbeat `UPDATE`s, Clustered PK range scans), Pluggable Engines (`InnoDB`, `MyRocks`, `Aria`, `ColumnStore`), 16 KB page anatomy, PK byte math (`UUID_TO_BIN`), Buffer Pool midpoint LRU & Change Buffer, Undo Log MVCC (`History List Length`), Gap & Next-Key Locks, 4-engine SQL/`JOIN` dialect (`ON DUPLICATE KEY UPDATE`, `LATERAL`, `JSON_TABLE`, `ST_Distance_Sphere`), GTID/InnoDB Cluster/ProxySQL HA, 32 GB `my.cnf`, and Top 10 DBA forensic queries. |
 
 ---
 

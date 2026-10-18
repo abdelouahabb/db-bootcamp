@@ -639,27 +639,26 @@ When data is normalized into `stations`, `observations`, `forecasts`, and `weath
 
 ---
 
-#### 2. Crucial Compatibility Matrix: SQLite (`< 3.39` vs. `3.39+`) vs. PostgreSQL 16 vs. DuckDB
+#### 2. Crucial Compatibility Matrix: SQLite (`< 3.39` vs. `3.39+`) vs. MySQL 8.0+ vs. PostgreSQL 16 vs. DuckDB
 
 > [!IMPORTANT]
-> **The SQLite `3.39.0` Compatibility Boundary (Why `RIGHT JOIN` & `FULL OUTER JOIN` Fail on Legacy Devices):**  
-> For the first 22 years of its history, **SQLite only supported `INNER JOIN`, `LEFT JOIN`, and `CROSS JOIN`**. Running a `RIGHT JOIN` or `FULL OUTER JOIN` on **SQLite `< 3.39.0`** (released July 2022—still common on embedded Linux Campbell/Vaisala weather dataloggers, Android edge gateways, and older enterprise Linux distributions) immediately aborts with:  
-> `Parse error: RIGHT and FULL OUTER JOINs are not currently supported`  
-> Starting in **SQLite `3.39.0+`** (Ubuntu 24.04 LTS ships **SQLite `3.45.x`**), `RIGHT OUTER JOIN` and `FULL OUTER JOIN` are supported natively. However, **every weather database engineer must know both the native syntax AND the 100% portable SQLite `< 3.39` rewrite**, as well as the advanced joins (`LATERAL`, `ASOF`) and physical join algorithms (`Hash Join`, `Merge Join`) that SQLite **still does not support**!
+> **The SQLite `3.39.0` Compatibility Boundary & The MySQL `FULL OUTER JOIN` Gotcha:**  
+> - **SQLite `< 3.39.0` (prior to July 2022):** Only supported `INNER JOIN`, `LEFT JOIN`, and `CROSS JOIN`. Running `RIGHT JOIN` or `FULL OUTER JOIN` on legacy edge loggers aborts with `Parse error: RIGHT and FULL OUTER JOINs are not currently supported`. Starting in **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`), both are supported natively.  
+> - **MySQL 8.0 / 8.4 (See [Reference Card 14](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)):** Supports `RIGHT JOIN`, `LATERAL` (8.0.14+), and `Hash Join` (8.0.18+), **but still does NOT support native `FULL OUTER JOIN`**! Knowing the portable `LEFT JOIN ... UNION ALL ... Anti-Join` rewrite below is therefore essential in **both** legacy SQLite and modern MySQL!
 
-| SQL `JOIN` Type / Feature | SQLite `< 3.39.0`<br>*(Legacy Edge Loggers)* | SQLite `3.39.0+`<br>*(Ubuntu 24.04 = `3.45.x`)* | PostgreSQL 16<br>*(Days 2–3)* | DuckDB OLAP<br>*(Day 5)* | Portable Workaround / Engineering Notes |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **`INNER JOIN`** (`JOIN`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps only rows matching the `ON` predicate in both tables. |
-| **`LEFT [OUTER] JOIN`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps 100% of left table rows; fills unmatched right columns with `NULL`. |
-| **`LEFT ANTI-JOIN`** (`LEFT JOIN ... WHERE B.id IS NULL`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes *(+ native `ANTI JOIN`)* | Finds left rows with **zero** matches in the right table (e.g., silent stations). |
-| **`RIGHT [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ✅ Yes | ✅ Yes | **Portable `< 3.39` Rewrite:** Swap table order from `A RIGHT JOIN B` to **`B LEFT JOIN A`**! |
-| **`FULL [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ✅ Yes | ✅ Yes | **Portable `< 3.39` Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
-| **`CROSS JOIN`** (Cartesian $M \times N$) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Generates every combination of rows (no `ON` clause). |
-| **`SELF JOIN`** (`FROM t AS t1 JOIN t AS t2`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Joins a table to itself using distinct table aliases (`t1`, `t2`). |
-| **`NATURAL JOIN`** / **`JOIN ... USING (col)`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ **Avoid `NATURAL JOIN` in production** (breaks silently when schemas add columns). `USING (station_id)` is safe. |
-| **`LATERAL` Join** (`CROSS / LEFT JOIN LATERAL (...)`) | ❌ **No** | ❌ **No** | ✅ **Yes** | ✅ **Yes** | Allows a subquery on the right to reference columns from the left row (e.g., *"Top 3 gusts per station"*). In SQLite, use **`ROW_NUMBER() OVER (PARTITION BY ...)`** inside a CTE instead. |
-| **`ASOF JOIN`** *(Temporal Nearest-Match Join)* | ❌ **No** | ❌ **No** | ❌ **No** *(uses `LATERAL ... LIMIT 1`)* | ✅ **Native `ASOF JOIN`!** | Matches asynchronous 1-min sensor pings to the closest prior NWP forecast timestamp (`ON s.station_id = f.station_id AND s.obs_time >= f.valid_time`). |
-| **Physical Execution Algorithms** | **Nested Loop Only** *(+ transient B-Tree auto-index)* | **Nested Loop Only** *(+ transient B-Tree auto-index)* | **1. Nested Loop**<br>**2. Parallel Hash Join**<br>**3. Sort-Merge Join** | **Vectorized SIMD Hash & Piece-wise Merge Join** | Because SQLite lacks `Hash Join` and `Merge Join`, joining two multi-million-row tables in SQLite is $10\times\text{–}50\times$ slower than in PostgreSQL or DuckDB! |
+| SQL `JOIN` Type / Feature | SQLite `< 3.39.0`<br>*(Legacy Edge)* | SQLite `3.39.0+`<br>*(Ubuntu 24.04)* | MySQL 8.0 / 8.4<br>*(Ref Card 14)* | PostgreSQL 16<br>*(Days 2–3)* | DuckDB OLAP<br>*(Day 5)* | Portable Workaround / Engineering Notes |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`INNER JOIN`** (`JOIN`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps only rows matching the `ON` predicate in both tables. |
+| **`LEFT [OUTER] JOIN`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps 100% of left table rows; fills unmatched right columns with `NULL`. |
+| **`LEFT ANTI-JOIN`** (`LEFT JOIN ... WHERE B.id IS NULL`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes *(+ native `ANTI JOIN`)* | Finds left rows with **zero** matches in the right table (e.g., silent stations). |
+| **`RIGHT [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | **Portable `< 3.39` Rewrite:** Swap table order from `A RIGHT JOIN B` to **`B LEFT JOIN A`**! |
+| **`FULL [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ❌ **No!** | ✅ Yes | ✅ Yes | **Portable Rewrite (for SQLite `< 3.39` & MySQL):** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
+| **`CROSS JOIN`** (Cartesian $M \times N$) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Generates every combination of rows (no `ON` clause). |
+| **`SELF JOIN`** (`FROM t AS t1 JOIN t AS t2`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Joins a table to itself using distinct table aliases (`t1`, `t2`). |
+| **`NATURAL JOIN`** / **`JOIN ... USING (col)`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ **Avoid `NATURAL JOIN` in production** (breaks silently when schemas add columns). `USING (station_id)` is safe. |
+| **`LATERAL` Join** (`CROSS / LEFT JOIN LATERAL (...)`) | ❌ **No** | ❌ **No** | ✅ **Yes (8.0.14+)** | ✅ **Yes** | ✅ **Yes** | Allows a subquery on the right to reference columns from the left row (e.g., *"Top 3 gusts per station"*). In SQLite, use **`ROW_NUMBER() OVER (PARTITION BY ...)`** inside a CTE instead. |
+| **`ASOF JOIN`** *(Temporal Nearest-Match Join)* | ❌ **No** | ❌ **No** | ❌ **No** *(uses `LATERAL`)* | ❌ **No** *(uses `LATERAL ... LIMIT 1`)* | ✅ **Native `ASOF JOIN`!** | Matches asynchronous 1-min sensor pings to the closest prior NWP forecast timestamp (`ON s.station_id = f.station_id AND s.obs_time >= f.valid_time`). |
+| **Physical Execution Algorithms** | **Nested Loop Only** *(+ auto-index)* | **Nested Loop Only** *(+ auto-index)* | **Nested Loop + Hash Join** *(8.0.18+; no Merge Join)* | **1. Nested Loop**<br>**2. Parallel Hash**<br>**3. Sort-Merge Join** | **Vectorized SIMD Hash & Piece-wise Merge Join** | Because SQLite lacks `Hash Join` and `Merge Join`, joining two multi-million-row tables in SQLite is $10\times\text{–}50\times$ slower than in PostgreSQL, MySQL 8.0+, or DuckDB! |
 
 > [!WARNING]
 > **Production Engineering Pitfall — Accidental Cartesian Explosion in Multi-Key NWP Verification Joins:**  

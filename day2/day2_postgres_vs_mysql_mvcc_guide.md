@@ -1,9 +1,9 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [🐬 Reference Card 14: Complete MySQL & MariaDB Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Definitive Comparative Architecture Guide: PostgreSQL (Heap/MVCC) vs. MySQL InnoDB (Clustered B+Tree/Undo Logs) for Meteorological Workloads
 
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Database Architects  
-**Companion to:** [day2_master_coursebook.md](./day2_master_coursebook.md) | [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md)
+**Companion to:** [day2_master_coursebook.md](./day2_master_coursebook.md) | [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md) | **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**
 
 ---
 

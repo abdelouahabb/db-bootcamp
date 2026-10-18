@@ -342,16 +342,48 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 
 ---
 
-### 3. Relational `JOIN` Patterns for Weather Forecast Engineers
+### 3. Normalization (`1NF`–`3NF`) vs. Denormalization Quick Reference
+
+| Pattern | Rule / Structure | Where We Use It in the Bootcamp | Key Trade-Off |
+| :--- | :--- | :--- | :--- |
+| **`1NF` (First Normal Form)** | Atomic scalar columns; no CSV strings (`'19.4,27.8'`) or repeating columns (`temp_00z`, `temp_06z`). | All SQL tables (`stations`, `observations`, `forecasts`). | Enables SQL indexing, `AVG()`, and `WHERE` filtering. |
+| **`2NF` (Second Normal Form)** | `1NF` + no partial dependency on a composite key `(station_id, obs_time)`. | Splitting `stations` (depends only on `station_id`) from `observations` (depends on `station_id + obs_time`). | Eliminates **Insertion**, **Update**, and **Deletion** anomalies; saves `~68 bytes/row`. |
+| **`3NF` (Third Normal Form)** | `2NF` + no transitive dependency (`non_key_A -> non_key_B`). | `day1/weather_ops.db` & `day2/weather_ops_pg.sql` (`synoptic.stations`, `synoptic.observations`). | Gold standard for **Row-Store OLTP** (`SQLite`, `PostgreSQL`). Requires `JOIN` on reads. |
+| **Deliberate Denormalization (Pre-Joined / Embedded / Columnar)** | Intentionally duplicating attributes or pre-joining tables for read performance. | • **Day 3 PG:** `MATERIALIZED VIEW nwp.mv_daily_model_verification` + Covering Index `INCLUDE (temp_c)`<br>• **Day 4 Mongo:** Embedded `vertical_levels: [...]` array in `radiosonde_soundings`<br>• **Day 5 Parquet/DuckDB:** Wide flat Parquet files | • **Row Store (`SQLite`/`PG`):** Bloats disk if done on raw tables; safe via Materialized Views.<br>• **Columnar (`Parquet`):** **Dictionary Encoding + RLE** compresses repeated strings (`'Mediterranean'`) to near-zero bytes while eliminating `JOIN`s! |
+
+---
+
+### 4. SQL `JOIN` Compatibility Matrix (`SQLite < 3.39` vs. `3.39+` vs. `PostgreSQL` vs. `DuckDB`)
+
+> [!IMPORTANT]
+> **SQLite `3.39.0` Version Boundary:** Prior to **SQLite `3.39.0` (July 2022)**, SQLite threw `Parse error: RIGHT and FULL OUTER JOINs are not currently supported`. Modern **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`) supports `RIGHT` and `FULL OUTER JOIN` natively, but embedded Linux dataloggers often run older SQLite versions—use the portable rewrites below when targeting edge hardware!
+
+| `JOIN` Type | SQLite `< 3.39` | SQLite `3.39+` | PostgreSQL 16 | DuckDB | Portable Emulation / Engine Note |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **`INNER JOIN`** | ✅ | ✅ | ✅ | ✅ | Returns only matching rows ($A \cap B$). |
+| **`LEFT [OUTER] JOIN`** | ✅ | ✅ | ✅ | ✅ | All left rows + matching right rows ($A \cup (A \cap B)$). |
+| **`LEFT ANTI-JOIN`** | ✅ | ✅ | ✅ | ✅ | `A LEFT JOIN B ON ... WHERE B.id IS NULL` ($A \setminus B$). |
+| **`RIGHT [OUTER] JOIN`** | ❌ | ✅ | ✅ | ✅ | **Portable `< 3.39` Rewrite:** Flip table order to `B LEFT JOIN A`. |
+| **`FULL [OUTER] JOIN`** | ❌ | ✅ | ✅ | ✅ | **Portable `< 3.39` Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
+| **`CROSS JOIN`** | ✅ | ✅ | ✅ | ✅ | Cartesian product ($M \times N$ rows; no `ON` clause). |
+| **`SELF JOIN`** | ✅ | ✅ | ✅ | ✅ | `FROM stations s1 JOIN stations s2 ON s1.climate_zone = s2.climate_zone AND s1.station_id < s2.station_id`. |
+| **`LATERAL` Join** | ❌ | ❌ | ✅ | ✅ | Correlated subquery per left row. In SQLite, use `ROW_NUMBER() OVER (PARTITION BY ...)` in a CTE. |
+| **`ASOF JOIN`** | ❌ | ❌ | ❌ *(use `LATERAL`)* | ✅ | Time-series nearest-timestamp match (`ON a.id = b.id AND a.ts >= b.ts`). |
+| **Join Algorithms** | Nested Loop only | Nested Loop only | Nested Loop, Parallel Hash, Merge Join | Vectorized Hash & Merge Join | SQLite has no `Hash Join` or `Merge Join`. |
+
+---
+
+### 5. All 7 Relational `JOIN` Recipes on `weather_ops.db`
 
 ```sql
--- 1. LEFT JOIN + IS NULL: Find silent/offline stations with 0 observations!
+-- 1. LEFT ANTI-JOIN (LEFT JOIN + IS NULL): Find silent/offline stations with 0 observations!
 SELECT s.station_id, s.station_name, s.climate_zone, s.is_active
 FROM stations s
 LEFT JOIN observations o ON s.station_id = o.station_id
 WHERE o.obs_id IS NULL;
 
 -- 2. Multi-Column INNER JOIN + CTE: NWP Forecast Verification (Bias & MAE across ECMWF, GFS, AROME)
+--    CRITICAL: Must join on BOTH station_id AND valid_time = obs_time to avoid a Cartesian product!
 WITH pairs AS (
     SELECT
         f.model_name,
@@ -368,14 +400,45 @@ WITH pairs AS (
 )
 SELECT
     model_name,
-    COUNT(*)                     AS n_verified,
-    ROUND(AVG(err_c), 2)         AS mean_temp_bias_c,
-    ROUND(AVG(abs_err_c), 2)     AS temp_mae_c,
-    ROUND(AVG(wind_err_kt), 2)   AS mean_wind_bias_kt,
+    COUNT(*)                       AS n_verified,
+    ROUND(AVG(err_c), 2)           AS mean_temp_bias_c,
+    ROUND(AVG(abs_err_c), 2)       AS temp_mae_c,
+    ROUND(AVG(wind_err_kt), 2)     AS mean_wind_bias_kt,
     ROUND(AVG(wind_abs_err_kt), 2) AS wind_mae_kt
 FROM pairs
 GROUP BY model_name
 ORDER BY temp_mae_c ASC;
+
+-- 3. RIGHT JOIN (SQLite 3.39+) & Portable < 3.39 LEFT JOIN Flip:
+-- Native 3.39+: FROM weather_alerts a RIGHT JOIN stations s ON a.station_id = s.station_id
+-- Portable:     FROM stations s LEFT JOIN weather_alerts a ON s.station_id = a.station_id
+
+-- 4. FULL OUTER JOIN (SQLite 3.39+) vs Portable < 3.39 UNION ALL Emulation:
+SELECT s.station_id, s.station_name, a.phenomenon, a.severity
+FROM stations s
+LEFT JOIN weather_alerts a ON s.station_id = a.station_id
+UNION ALL
+SELECT a.station_id, s.station_name, a.phenomenon, a.severity
+FROM weather_alerts a
+LEFT JOIN stations s ON a.station_id = s.station_id
+WHERE s.station_id IS NULL;
+
+-- 5. CROSS JOIN: Generate Expected (7 Stations x 3 NWP Models = 21 Pairs) Audit Grid
+WITH models AS (SELECT 'ECMWF-HRES' AS model_name UNION ALL SELECT 'GFS' UNION ALL SELECT 'AROME')
+SELECT s.station_id, s.station_name, m.model_name, COUNT(f.forecast_id) AS forecast_count
+FROM stations s
+CROSS JOIN models m
+LEFT JOIN forecasts f ON f.station_id = s.station_id AND f.model_name = m.model_name
+GROUP BY s.station_id, s.station_name, m.model_name
+ORDER BY s.station_id, m.model_name;
+
+-- 6. SELF JOIN: Compare Distinct Stations in the Same Climate Zone (s1.station_id < s2.station_id)
+SELECT s1.climate_zone, s1.station_name AS station_a, s2.station_name AS station_b,
+       ROUND(ABS(s1.elevation_m - s2.elevation_m), 1) AS elev_diff_m
+FROM stations s1
+INNER JOIN stations s2
+    ON s1.climate_zone = s2.climate_zone
+   AND s1.station_id < s2.station_id;
 ```
 
 ---

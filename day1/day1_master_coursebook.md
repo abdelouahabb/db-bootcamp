@@ -506,21 +506,328 @@ LIMIT 10;
   ```
 - Extract the date from an ISO timestamp using `DATE(obs_time)` or `STRFTIME('%Y-%m-%d', obs_time)`, or extract the synoptic hour (`00`, `06`, `12`, `18`) using `STRFTIME('%H', obs_time)`.
 
-### 7.2 Relational Normalization & `JOIN` Mechanics
-1. **Why Normalize into Separate Tables?**
-   - Storing `station_name`, `latitude`, `longitude`, and `climate_zone` inside every row of `observations` and `forecasts` wastes gigabytes and creates update anomalies. Instead, store station metadata once in `stations` and combine tables at query time with `JOIN`.
-2. **`INNER JOIN` vs. `LEFT JOIN` in Weather Operations:**
-   - `INNER JOIN`: Returns only rows that match in both tables (e.g., stations that have observations).
-   - `LEFT JOIN`: Preserves all rows from the left table (`stations`) even if there are **zero** matching rows in `observations`.
-   - **Classic Operational Query:** *"Which weather stations have sent 0 observations?"* $\rightarrow$ `LEFT JOIN` + `WHERE o.obs_id IS NULL`.
-3. **Multi-Condition `JOIN`s for NWP Forecast Verification:**
-   - To verify an NWP forecast (`forecasts` table) against ground truth (`observations` table), you must join on **both** `station_id` **AND** timestamp (`f.station_id = o.station_id AND f.valid_time = o.obs_time`)!
+### 7.2 Normalization (`1NF` $\rightarrow$ `2NF` $\rightarrow$ `3NF`) vs. Deliberate Denormalization in Weather Systems
+
+Before writing multi-table `JOIN` queries, a database engineer must understand **why** our data is split across `stations`, `observations`, `forecasts`, and `weather_alerts` in the first place—and when high-scale architectures intentionally break that rule.
+
+#### 1. The Unnormalized "Flat Table" Anti-Pattern (`observations_flat`)
+Suppose a developer designs a single flat table that repeats station metadata inside every hourly observation row:
+
+```text
+❌ ANTI-PATTERN: UNNORMALIZED FLAT TABLE (observations_flat)
+┌────────────┬────────────────────────┬───────────┬──────────┬─────────────┬───────────────┬─────────────────────┬────────┐
+│ station_id │ station_name           │ latitude  │ longitude│ elevation_m │ climate_zone  │ obs_time            │ temp_c │
+├────────────┼────────────────────────┼───────────┼──────────┼─────────────┼───────────────┼─────────────────────┼────────┤
+│ 60390      │ Algiers - Dar El Beida │ 36.6910   │ 3.2154   │ 25.0        │ Mediterranean │ 2026-10-05 06:00:00 │ 19.4   │
+│ 60390      │ Algiers - Dar El Beida │ 36.6910   │ 3.2154   │ 25.0        │ Mediterranean │ 2026-10-05 12:00:00 │ 27.8   │
+│ 60390      │ Algiers - Dar El Beida │ 36.6910   │ 3.2154   │ 25.0        │ Mediterranean │ 2026-10-05 18:00:00 │ 23.1   │
+│ 60402      │ Bejaia - Soummam       │ 36.7120   │ 5.0699   │ 6.0         │ Mediterranean │ NULL (Cannot exist!)│ NULL   │
+└────────────┴────────────────────────┴───────────┴──────────┴─────────────┴───────────────┴─────────────────────┴────────┘
+```
+
+In a row-oriented database (`SQLite` or `PostgreSQL`), this flat design triggers **four severe engineering failures**:
+
+1. **Massive Storage & RAM Buffer Pool Waste:**
+   - The static station attributes (`station_name`, `latitude`, `longitude`, `elevation_m`, `climate_zone`) consume **`~68 bytes` per row**.
+   - Across $100,000,000$ synoptic observations, repeating those 5 static columns wastes **$6.8\text{ GB}$ of disk space and RAM (`shared_buffers`)** storing identical copies of `'Algiers - Dar El Beida'` and `'Mediterranean'`!
+2. **Insertion Anomaly (Cannot Register Silent/New Stations):**
+   - Because the composite primary key of an observation table is `(station_id, obs_time)` where `obs_time NOT NULL`, you **cannot insert a newly built or under-maintenance station** (like **`60402 Bejaia - Soummam`**, which has `0` observations) until it transmits its first weather reading!
+3. **Update Anomaly (Millions of Redundant Row Writes & MVCC Bloat):**
+   - If station `60390` (`Algiers - Dar El Beida`) resurveys its barometer elevation from `25.0 m` to `25.4 m`, a flat table forces you to `UPDATE` millions of historical observation rows instead of updating **1 row** in `stations`. Worse, if a query timeout interrupts the update halfway, the database now claims Algiers sits at two different elevations simultaneously.
+4. **Deletion Anomaly (Accidental Loss of Master Metadata):**
+   - If an engineer purges corrupted test observations (`DELETE FROM observations_flat WHERE station_id = 60571 AND qc_flag = 'ERRONEOUS'`) and happens to delete the last observation for that station, the station's GPS coordinates, WMO ID, and elevation vanish from the database forever!
+
+---
+
+#### 2. Step-by-Step Normal Forms (`1NF` $\rightarrow$ `2NF` $\rightarrow$ `3NF`) in Meteorological Schemas
+
+Relational **Normalization** (formulated by Edgar F. Codd) eliminates redundancy and modification anomalies by decomposing tables according to functional dependencies ($X \rightarrow Y$):
+
+| Normal Form | Core Rule | Meteorological Violation Example (❌ Bad) | Normalized WMO Design (✅ Good) |
+| :--- | :--- | :--- | :--- |
+| **`1NF`**<br>*(First Normal Form)* | **Atomic columns & no repeating column groups.** Every cell holds a single scalar value. | • Storing a comma-separated string: `temps_csv = '19.4,27.8,23.1'`<br>• Or wide hour columns: `temp_00z`, `temp_06z`, `temp_12z`, `temp_18z` | One row per `(station_id, obs_time)` with a single scalar `temp_c REAL` column. |
+| **`2NF`**<br>*(Second Normal Form)* | **`1NF` + No Partial Dependencies on a composite key.** Every non-key column must depend on the *whole* composite key, not just part of it. | In a table keyed by `(station_id, obs_time)`:<br>• `temp_c` depends on **both** `station_id` + `obs_time` ✅<br>• `station_name` and `elevation_m` depend **only on `station_id`** ❌ *(Partial Dependency!)* | Move `station_name`, `latitude`, `longitude`, `elevation_m`, `climate_zone` into a parent **`stations`** table keyed solely by `station_id`. |
+| **`3NF`**<br>*(Third Normal Form)* | **`2NF` + No Transitive Dependencies.** No non-key column may depend on another non-key column ($A \rightarrow B \rightarrow C$). | Storing `climate_zone`, `koppen_code`, and `zone_arid_index` inside `stations` where `station_id -> climate_zone -> koppen_code`. | Either keep only `climate_zone` in `stations` and move zone definitions to a lookup table `climate_zones(climate_zone PRIMARY KEY, koppen_code, ...)`, or ensure all attributes depend directly on `station_id`. |
+
+```mermaid
+erDiagram
+    STATIONS ||--o{ OBSERVATIONS : "1-to-Many (station_id)"
+    STATIONS ||--o{ FORECASTS : "1-to-Many (station_id)"
+    STATIONS ||--o{ WEATHER_ALERTS : "1-to-Many (station_id)"
+    STATIONS {
+        int station_id PK "WMO 5-Digit Key"
+        text station_name UK "Stored ONCE (3NF)"
+        real latitude
+        real longitude
+        real elevation_m
+        text climate_zone
+        int is_active
+    }
+    OBSERVATIONS {
+        int obs_id PK
+        int station_id FK "8-byte int reference"
+        text obs_time "Composite UK (station_id, obs_time)"
+        real temp_c
+        real pressure_hpa
+        real precip_1h_mm
+        text qc_flag
+    }
+```
+
+---
+
+#### 3. Normalization vs. Denormalization: When Do We Deliberately Break `3NF`?
+
+While **`3NF` Normalization** is the law for **OLTP Relational Databases** (`SQLite` on Day 1 and `PostgreSQL` hot tables on Days 2–3), **strict normalization is not free**: reading normalized data requires CPU and I/O to **re-join** tables at query time.
+
+Across our 5-day bootcamp, we use **both** Normalization and **Deliberate, Controlled Denormalization** depending on the storage engine and workload:
+
+| Engineering Dimension | Normalized Schema (`3NF`) | Denormalized Schema (Flat / Pre-Joined / Embedded) |
+| :--- | :--- | :--- |
+| **Primary Goal** | **Write integrity, zero redundancy, compact OLTP updates** | **Maximum read/scan speed, zero runtime `JOIN` CPU overhead** |
+| **Write / `UPDATE` Cost** | **Fast & Safe ($O(1)$):** Updating a station's metadata touches **1 row** in `stations`. | **Slow & Expensive ($O(N)$):** Updating metadata requires rewriting millions of fact rows. |
+| **Read / Query Cost** | Requires runtime `JOIN` (`Nested Loop`, `Hash Join`, or `Merge Join`) between `stations` and `observations`. | **Zero `JOIN`s:** All attributes are co-located in the same row, document, or columnar stripe. |
+| **Row-Store Disk Footprint (`SQLite`, `PostgreSQL`)** | **Smallest:** Static strings stored once; fact table stores only a 4/8-byte integer `station_id`. | **Bloated ($2\times\text{–}4\times$ larger):** Repeating strings in every row wastes gigabytes of heap pages. |
+| **Columnar Lakehouse Footprint (`Apache Parquet` / `DuckDB`)** | Requires multi-file joins during petabyte analytical scans. | **Tiny!** Parquet's **Dictionary Encoding + RLE** compresses 10 million repeated `'Mediterranean'` strings into a few kilobytes! |
+
+##### Concrete Examples of Deliberate Denormalization Across This Bootcamp
+1. **Example A — PostgreSQL Materialized Views (Day 3: `nwp.mv_daily_model_verification`):**
+   - *The Bottleneck:* Joining 50 million `observations` + 150 million `forecasts` + `stations` to compute `ECMWF-HRES` vs. `AROME` Mean Absolute Error takes several seconds of CPU—too slow for a live forecaster dashboard queried 100 times/minute.
+   - *The Denormalization:* We keep the base tables in strict **`3NF`**, but create a **pre-joined, pre-aggregated Materialized View** (`CREATE MATERIALIZED VIEW nwp.mv_daily_model_verification AS SELECT s.station_name, s.climate_zone, f.model_name, ... FROM forecasts f JOIN observations o ... JOIN stations s ...`). Dashboards query the single denormalized view in **`< 2 ms`**, refreshed in the background via `REFRESH MATERIALIZED VIEW CONCURRENTLY`.
+2. **Example B — PostgreSQL Covering Indexes (Day 3: `CREATE INDEX ... ON observations (station_id, obs_time) INCLUDE (temp_c, pressure_hpa)`):**
+   - *The Denormalization:* We intentionally duplicate `temp_c` and `pressure_hpa` inside the B-Tree index leaf pages so PostgreSQL can answer time-series queries via an **`Index Only Scan` (`Heap Fetches: 0`)** without touching the main table heap.
+3. **Example C — MongoDB Embedded Document Arrays (Day 4: `radiosonde_soundings.vertical_levels`):**
+   - *The Bottleneck:* A weather balloon launch (`RS41` radiosonde) records ~80 pressure levels (`1000 hPa` to `10 hPa`). In `3NF`, this requires a parent `soundings` table and a child `sounding_levels` table (80 rows per flight). Fetching 1,000 soundings requires joining 80,000 child rows.
+   - *The Denormalization:* Because a radiosonde flight is **immutable once the balloon bursts** and **always queried as a complete vertical profile**, we denormalize all 80 levels into an **embedded BSON array** (`vertical_levels: [{pressure_hpa: 1000, temp_c: 24.5}, ...]`) inside a single MongoDB document—reading the entire atmospheric profile in **1 disk seek with 0 joins**!
+4. **Example D — Apache Parquet & DuckDB Columnar Lakehouse (Day 5: Cold Archival Tier):**
+   - *Why Columnar Flips the Normalization Rule:* When archiving historical PostgreSQL partitions to **Apache Parquet** on Day 5 (`export_pg_to_parquet.py`), we often **denormalize `station_name` and `climate_zone` directly into the Parquet file**!
+   - *Why doesn't this waste gigabytes like in SQLite/PostgreSQL?* Because Parquet is **columnar** and applies **Dictionary Encoding + Run-Length Encoding (RLE)**:
+     ```text
+     ROW STORE (SQLite / Postgres Heap): Repeats 13-byte string 'Mediterranean' in every row
+       Row 1: [60390, 'Mediterranean', 19.4]
+       Row 2: [60390, 'Mediterranean', 27.8]  --> 10,000,000 rows = 130 MB of repeated strings!
+
+     COLUMNAR PARQUET (Dictionary + RLE): Stores string ONCE in Column Chunk Dictionary
+       Dictionary: { 0: 'Mediterranean', 1: 'Highland', 2: 'Arid', 3: 'Semi-Arid' }
+       RLE Data  : [Run of 2,000,000 zeros (0)] --> 10,000,000 rows = < 50 KB on disk + ZERO JOINs!
+     ```
+
+---
+
+### 7.3 Complete Taxonomy of SQL `JOIN`s & SQLite Compatibility Matrix
+
+When data is normalized into `stations`, `observations`, `forecasts`, and `weather_alerts`, we reconstruct unified views at query time using relational **`JOIN`** operators.
+
+#### 1. Visual Set-Theory Guide to All 7 SQL `JOIN` Patterns
+
+```text
+  1. INNER JOIN                 2. LEFT [OUTER] JOIN          3. LEFT ANTI-JOIN
+     (Only matching rows)          (All Left + matching Right)   (Only Left with NO match)
+     ┌───╭───╮───┐                 ┌███████╭───╮───┐             ┌███████╭───╮───┐
+     │ A │███│ B │                 │███████│███│ B │             │███████│   │ B │
+     └───╰───╯───┘                 └███████╰───╯───┘             └███████╰───╯───┘
+  ON A.id = B.id                ON A.id = B.id                LEFT JOIN B ON A.id = B.id
+                                                              WHERE B.id IS NULL
+
+  4. RIGHT [OUTER] JOIN         5. FULL [OUTER] JOIN          6. CROSS JOIN (Cartesian)
+     (All Right + matching Left)   (All Left + All Right)        (Every A paired with Every B)
+     ┌───╭───╮███████┐             ┌███████╭───╮███████┐         ┌───┐   ┌───┐   m × n
+     │ A │███│███████│             │███████│███│███████│         │ A │ × │ B │ = total
+     └───╰───╯███████┘             └███████╰───╯███████┘         └───┘   └───┘   rows
+  ON A.id = B.id                ON A.id = B.id                FROM A CROSS JOIN B
+```
+
+---
+
+#### 2. Crucial Compatibility Matrix: SQLite (`< 3.39` vs. `3.39+`) vs. PostgreSQL 16 vs. DuckDB
+
+> [!IMPORTANT]
+> **The SQLite `3.39.0` Compatibility Boundary (Why `RIGHT JOIN` & `FULL OUTER JOIN` Fail on Legacy Devices):**  
+> For the first 22 years of its history, **SQLite only supported `INNER JOIN`, `LEFT JOIN`, and `CROSS JOIN`**. Running a `RIGHT JOIN` or `FULL OUTER JOIN` on **SQLite `< 3.39.0`** (released July 2022—still common on embedded Linux Campbell/Vaisala weather dataloggers, Android edge gateways, and older enterprise Linux distributions) immediately aborts with:  
+> `Parse error: RIGHT and FULL OUTER JOINs are not currently supported`  
+> Starting in **SQLite `3.39.0+`** (Ubuntu 24.04 LTS ships **SQLite `3.45.x`**), `RIGHT OUTER JOIN` and `FULL OUTER JOIN` are supported natively. However, **every weather database engineer must know both the native syntax AND the 100% portable SQLite `< 3.39` rewrite**, as well as the advanced joins (`LATERAL`, `ASOF`) and physical join algorithms (`Hash Join`, `Merge Join`) that SQLite **still does not support**!
+
+| SQL `JOIN` Type / Feature | SQLite `< 3.39.0`<br>*(Legacy Edge Loggers)* | SQLite `3.39.0+`<br>*(Ubuntu 24.04 = `3.45.x`)* | PostgreSQL 16<br>*(Days 2–3)* | DuckDB OLAP<br>*(Day 5)* | Portable Workaround / Engineering Notes |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **`INNER JOIN`** (`JOIN`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps only rows matching the `ON` predicate in both tables. |
+| **`LEFT [OUTER] JOIN`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps 100% of left table rows; fills unmatched right columns with `NULL`. |
+| **`LEFT ANTI-JOIN`** (`LEFT JOIN ... WHERE B.id IS NULL`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes *(+ native `ANTI JOIN`)* | Finds left rows with **zero** matches in the right table (e.g., silent stations). |
+| **`RIGHT [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ✅ Yes | ✅ Yes | **Portable `< 3.39` Rewrite:** Swap table order from `A RIGHT JOIN B` to **`B LEFT JOIN A`**! |
+| **`FULL [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ✅ Yes | ✅ Yes | **Portable `< 3.39` Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
+| **`CROSS JOIN`** (Cartesian $M \times N$) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Generates every combination of rows (no `ON` clause). |
+| **`SELF JOIN`** (`FROM t AS t1 JOIN t AS t2`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Joins a table to itself using distinct table aliases (`t1`, `t2`). |
+| **`NATURAL JOIN`** / **`JOIN ... USING (col)`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ **Avoid `NATURAL JOIN` in production** (breaks silently when schemas add columns). `USING (station_id)` is safe. |
+| **`LATERAL` Join** (`CROSS / LEFT JOIN LATERAL (...)`) | ❌ **No** | ❌ **No** | ✅ **Yes** | ✅ **Yes** | Allows a subquery on the right to reference columns from the left row (e.g., *"Top 3 gusts per station"*). In SQLite, use **`ROW_NUMBER() OVER (PARTITION BY ...)`** inside a CTE instead. |
+| **`ASOF JOIN`** *(Temporal Nearest-Match Join)* | ❌ **No** | ❌ **No** | ❌ **No** *(uses `LATERAL ... LIMIT 1`)* | ✅ **Native `ASOF JOIN`!** | Matches asynchronous 1-min sensor pings to the closest prior NWP forecast timestamp (`ON s.station_id = f.station_id AND s.obs_time >= f.valid_time`). |
+| **Physical Execution Algorithms** | **Nested Loop Only** *(+ transient B-Tree auto-index)* | **Nested Loop Only** *(+ transient B-Tree auto-index)* | **1. Nested Loop**<br>**2. Parallel Hash Join**<br>**3. Sort-Merge Join** | **Vectorized SIMD Hash & Piece-wise Merge Join** | Because SQLite lacks `Hash Join` and `Merge Join`, joining two multi-million-row tables in SQLite is $10\times\text{–}50\times$ slower than in PostgreSQL or DuckDB! |
 
 > [!WARNING]
-> **Production Engineering Pitfall — Accidental Cartesian Explosion in NWP Verification Joins:**  
-> When joining `forecasts f` and `observations o`, writing only `ON f.station_id = o.station_id` while omitting `AND f.valid_time = o.obs_time` causes a **Cartesian product per station**. Because each station has 6 synoptic observations and 18 forecast rows, omitting the timestamp join predicate multiplies every station's rows into $6 \times 18 = 108$ mismatched pairs—comparing Tuesday's 12:00 UTC forecast against Monday's 06:00 UTC observation! Always verify that NWP joins include **both** spatial (`station_id`) and temporal (`valid_time = obs_time`) predicates.
+> **Production Engineering Pitfall — Accidental Cartesian Explosion in Multi-Key NWP Verification Joins:**  
+> When joining `forecasts f` and `observations o`, writing only `ON f.station_id = o.station_id` while omitting `AND f.valid_time = o.obs_time` causes a **Cartesian product per station**. Because each station has 6 synoptic observations and 9 forecast rows, omitting the timestamp join predicate multiplies each station's rows into $6 \times 9 = 54$ mismatched pairs—comparing Tuesday's `12:00 UTC` forecast against Monday's `06:00 UTC` observation! Always verify that NWP verification joins include **both** spatial (`station_id`) and temporal (`valid_time = obs_time`) predicates.
 
-### 7.3 Lab 3 Walkthrough: Daily Climatological Summaries & Sensor Quality Audit (`weather_ops.db`)
+---
+
+#### 3. Complete Runnable Examples of All 7 `JOIN` Types on `weather_ops.db`
+
+Every query below runs directly against `day1/weather_ops.db` (`sqlite3 -header -box weather_ops.db`):
+
+##### 1. `INNER JOIN` — Stations With Active Weather Alerts
+Returns **only** stations that have at least one matching row in `weather_alerts` (4 rows; stations without alerts like `Oran`, `Tlemcen`, and `Bejaia` are excluded):
+```sql
+SELECT
+    s.station_id,
+    s.station_name,
+    s.climate_zone,
+    a.phenomenon,
+    a.severity,
+    a.issued_at
+FROM stations s
+INNER JOIN weather_alerts a
+    ON s.station_id = a.station_id
+ORDER BY a.issued_at;
+```
+
+##### 2. `LEFT OUTER JOIN` — Complete Station Network Rollup (Preserving Unmatched Left Rows)
+Preserves **all 7 stations** from the left table (`stations`), even **`60402 Bejaia - Soummam`** which has `0` observations (`COUNT(o.obs_id)` returns `0`, whereas `COUNT(*)` would mistakenly return `1` for the `NULL`-padded row!):
+```sql
+SELECT
+    s.station_id,
+    s.station_name,
+    s.is_active,
+    COUNT(o.obs_id)          AS obs_count,
+    ROUND(AVG(o.temp_c), 1)  AS mean_temp_c
+FROM stations s
+LEFT JOIN observations o
+    ON s.station_id = o.station_id
+GROUP BY s.station_id, s.station_name, s.is_active
+ORDER BY obs_count ASC, s.station_id;
+```
+
+##### 3. `LEFT ANTI-JOIN` (`LEFT JOIN ... WHERE IS NULL`) — Detect Silent / Uncovered Stations
+Finds stations in `stations` that have **zero** NWP forecasts in `forecasts` (`Oran 60490`, `Tamanrasset 60680`, `Tlemcen 60531`, and `Bejaia 60402`):
+```sql
+SELECT
+    s.station_id,
+    s.station_name,
+    s.climate_zone
+FROM stations s
+LEFT JOIN forecasts f
+    ON s.station_id = f.station_id
+WHERE f.forecast_id IS NULL
+ORDER BY s.station_id;
+```
+
+##### 4. `RIGHT OUTER JOIN` — Native SQLite `3.39+` vs. Portable `< 3.39` `LEFT JOIN` Flip
+Suppose a query puts `weather_alerts` on the left and `stations` on the right, and we want **all 7 stations** even if they have no alert:
+```sql
+-- A) Native Syntax (Supported in SQLite 3.39.0+, PostgreSQL, DuckDB):
+SELECT
+    s.station_id,
+    s.station_name,
+    COALESCE(a.phenomenon, 'NO_ACTIVE_ALERT') AS alert_status,
+    a.severity
+FROM weather_alerts a
+RIGHT JOIN stations s
+    ON a.station_id = s.station_id
+ORDER BY s.station_id;
+
+-- B) 100% Portable Equivalent for Legacy SQLite (< 3.39.0) — Simply flip table order into a LEFT JOIN:
+SELECT
+    s.station_id,
+    s.station_name,
+    COALESCE(a.phenomenon, 'NO_ACTIVE_ALERT') AS alert_status,
+    a.severity
+FROM stations s
+LEFT JOIN weather_alerts a
+    ON s.station_id = a.station_id
+ORDER BY s.station_id;
+```
+
+##### 5. `FULL OUTER JOIN` — Bi-Directional Reconciliation Audit (Native `3.39+` vs. Portable `< 3.39` `UNION ALL`)
+Suppose we want to reconcile `forecasts` at `2026-10-05 12:00:00` (which exist only for `Algiers`, `Constantine`, and `Bechar`) against `weather_alerts` (which exist for `Algiers`, `Constantine`, `Bechar`, and `Tamanrasset`), returning rows present in **either** set:
+```sql
+-- A) Native FULL OUTER JOIN (SQLite 3.39.0+, PostgreSQL, DuckDB):
+WITH ecmwf_noon AS (
+    SELECT station_id, pred_temp_c
+    FROM forecasts
+    WHERE model_name = 'ECMWF-HRES' AND valid_time = '2026-10-05 12:00:00'
+)
+SELECT
+    COALESCE(f.station_id, a.station_id) AS station_id,
+    f.pred_temp_c                        AS ecmwf_noon_temp_c,
+    a.phenomenon                         AS active_alert,
+    a.severity
+FROM ecmwf_noon f
+FULL OUTER JOIN weather_alerts a
+    ON f.station_id = a.station_id
+ORDER BY station_id;
+
+-- B) 100% Portable Emulation for Legacy SQLite (< 3.39.0) using LEFT JOIN + UNION ALL + Anti-Join:
+WITH ecmwf_noon AS (
+    SELECT station_id, pred_temp_c
+    FROM forecasts
+    WHERE model_name = 'ECMWF-HRES' AND valid_time = '2026-10-05 12:00:00'
+)
+SELECT
+    f.station_id  AS station_id,
+    f.pred_temp_c AS ecmwf_noon_temp_c,
+    a.phenomenon  AS active_alert,
+    a.severity
+FROM ecmwf_noon f
+LEFT JOIN weather_alerts a ON f.station_id = a.station_id
+UNION ALL
+SELECT
+    a.station_id  AS station_id,
+    f.pred_temp_c AS ecmwf_noon_temp_c,
+    a.phenomenon  AS active_alert,
+    a.severity
+FROM weather_alerts a
+LEFT JOIN ecmwf_noon f ON a.station_id = f.station_id
+WHERE f.station_id IS NULL
+ORDER BY station_id;
+```
+
+##### 6. `CROSS JOIN` — Generating a Complete Station $\times$ NWP Model Expected Matrix
+A `CROSS JOIN` generates the Cartesian product ($7 \text{ stations} \times 3 \text{ models} = 21 \text{ expected pairs}$). Combining `CROSS JOIN` with `LEFT JOIN` is the standard data-engineering pattern to audit **missing NWP model coverage** per station:
+```sql
+WITH models AS (
+    SELECT 'ECMWF-HRES' AS model_name
+    UNION ALL SELECT 'GFS'
+    UNION ALL SELECT 'AROME'
+)
+SELECT
+    s.station_id,
+    s.station_name,
+    m.model_name,
+    COUNT(f.forecast_id) AS forecast_rows_present
+FROM stations s
+CROSS JOIN models m
+LEFT JOIN forecasts f
+    ON f.station_id = s.station_id
+   AND f.model_name = m.model_name
+GROUP BY s.station_id, s.station_name, m.model_name
+ORDER BY s.station_id, m.model_name;
+```
+*(Notice how this immediately reveals that `Bechar (60571)` has `3` `ECMWF-HRES` rows and `2` `GFS` rows, but **`0` `AROME` rows**!)*
+
+##### 7. `SELF JOIN` — Comparing Distinct Stations Within the Same Climate Zone
+By joining `stations` to itself (`stations s1 INNER JOIN stations s2`) using the inequality predicate `s1.station_id < s2.station_id` (which eliminates both self-pairs like `Algiers = Algiers` and mirror duplicates like `(Oran, Algiers)` after `(Algiers, Oran)`), we can compare elevation differences between stations sharing the same `climate_zone`:
+```sql
+SELECT
+    s1.climate_zone,
+    s1.station_name                              AS station_a,
+    s2.station_name                              AS station_b,
+    ROUND(ABS(s1.elevation_m - s2.elevation_m), 1) AS elevation_diff_m
+FROM stations s1
+INNER JOIN stations s2
+    ON s1.climate_zone = s2.climate_zone
+   AND s1.station_id < s2.station_id
+ORDER BY s1.climate_zone, station_a;
+```
+
+---
+
+### 7.4 Lab 3 Walkthrough: Daily Climatological Summaries & Sensor Quality Audit (`weather_ops.db`)
 The following queries on `weather_ops.db` compute per-station sensor uptime and diurnal temperature range, generate a daily synoptic climate rollup per station (`obs_date`, `daily_min_c`, `daily_max_c`, `avg_mslp_hpa`, `daily_rain_mm`), and isolate heavy rainfall events (`> 15.0 mm/day`) using `HAVING`:
 
 ```sql

@@ -81,6 +81,7 @@ EXPECTED_FILES=(
     "VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md"
     "ATTENDEE_SETUP_GUIDE.md"
     "start_bootcamp.py"
+    "index.html"
     "bootcamp_portal.html"
     "day1/day1_master_coursebook.md"
     "day1/weather_ops_seed_sql_course_walkthrough.md"
@@ -155,10 +156,10 @@ fi
 log_header "2. DAY 1 LIVE VERIFICATION (SQLite3 Synoptic & 250,000-Row Telemetry)"
 
 TMP_OPS_DB=$(mktemp /tmp/weather_ops_verify_XXXXXX.db)
-trap 'rm -f "$TMP_OPS_DB"' EXIT
+TMP_TELEM_BAK=$(mktemp /tmp/weather_telemetry_bak_XXXXXX.db)
+trap 'rm -f "$TMP_OPS_DB" "$TMP_TELEM_BAK"' EXIT
 
 sqlite3 "$TMP_OPS_DB" < "$BASE_DIR/day1/weather_ops_seed.sql"
-cp "$TMP_OPS_DB" "$BASE_DIR/day1/weather_ops.db"
 
 STATIONS_CNT=$(sqlite3 "$TMP_OPS_DB" "SELECT COUNT(*) FROM stations;")
 OBS_CNT=$(sqlite3 "$TMP_OPS_DB" "SELECT COUNT(*) FROM observations;")
@@ -203,14 +204,17 @@ else
     log_fail "NWP Verification JOIN Query returned empty output"
 fi
 
-# Generate and Verify 250,000-Row Synthetic AWS Telemetry Database
+# Generate and Verify 250,000-Row Synthetic AWS Telemetry Database (preserving tracked DB file)
+TELEM_DB="$BASE_DIR/day1/weather_telemetry.db"
+if [[ -f "$TELEM_DB" ]]; then
+    cp -p "$TELEM_DB" "$TMP_TELEM_BAK"
+fi
 log_info "Executing day1/generate_weather_db.py (250,000 rows across 50 AWS stations)..."
 GEN_START=$(date +%s%3N)
 (cd "$BASE_DIR/day1" && python3 generate_weather_db.py > /dev/null)
 GEN_END=$(date +%s%3N)
 GEN_MS=$((GEN_END - GEN_START))
 
-TELEM_DB="$BASE_DIR/day1/weather_telemetry.db"
 TELEM_STATIONS=$(sqlite3 "$TELEM_DB" "SELECT COUNT(*) FROM stations;")
 TELEM_OBS=$(sqlite3 "$TELEM_DB" "SELECT COUNT(*) FROM raw_telemetry;")
 
@@ -244,6 +248,10 @@ FROM cleaned;
 ")
 Q_END=$(date +%s%3N)
 Q_MS=$((Q_END - Q_START))
+
+if [[ -s "$TMP_TELEM_BAK" ]]; then
+    cp -p "$TMP_TELEM_BAK" "$TELEM_DB"
+fi
 
 if [[ -n "$WIN_QUERY_OUT" ]]; then
     log_pass "250K-row Window Function (LAG OVER PARTITION) + NULLIF query completed in ${Q_MS}ms (Result: ${WIN_QUERY_OUT})"

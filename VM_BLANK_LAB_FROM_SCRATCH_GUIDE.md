@@ -187,7 +187,7 @@ EOF
 ```bash
 cd ~/db-bootcamp/day1
 sqlite3 weather_ops.db < weather_ops_seed.sql
-sqlite3 weather_ops.db "SELECT station_id, name, elevation_m, is_active FROM stations;"
+sqlite3 weather_ops.db "SELECT station_id, station_name, elevation_m, is_active FROM stations;"
 python3 generate_weather_db.py
 ```
 
@@ -197,11 +197,11 @@ python3 generate_weather_db.py
 >
 > | Step | Resource / Interactive Tab to Open on Windows Host | What You Will Do |
 > | :---: | :--- | :--- |
-> | **1** | 📖 **[day1/weather_ops_seed_sql_course_walkthrough.md](./day1/weather_ops_seed_sql_course_walkthrough.md)** | Read the line-by-line explanation of every `PRAGMA`, `CHECK` constraint, `ON DELETE CASCADE`, and planted anomaly in `weather_ops_seed.sql`. |
-> | **2** | 📖 **[day1/day1_master_coursebook.md](./day1/day1_master_coursebook.md)** | Follow Modules 1–7 in your SSH terminal: Declarative 8-step execution order, Three-Valued Logic (`3VL`), `-9999.0` sentinel hygiene (`NULLIF`), NWP verification `JOIN`s, `WITH RECURSIVE` outage grids, and `LAG() OVER` window functions. |
+> | **1** | 📖 **[day1/weather_ops_seed_sql_course_walkthrough.md](./day1/weather_ops_seed_sql_course_walkthrough.md)** | Read the line-by-line explanation of every `PRAGMA`, `CHECK` constraint, `ON DELETE CASCADE`, `3NF` Normalization vs. Denormalization, all 7 SQL `JOIN`s, and planted anomalies in `weather_ops_seed.sql`. |
+> | **2** | 📖 **[day1/day1_master_coursebook.md](./day1/day1_master_coursebook.md)** | Follow Modules 1–7 in your SSH terminal: Declarative 8-step execution order, Three-Valued Logic (`3VL`), `-9999.0` sentinel hygiene (`NULLIF`), `1NF–3NF` Normalization vs. Denormalization, all 7 SQL `JOIN`s + SQLite `<3.39`/`3.39+` compatibility, `WITH RECURSIVE` outage grids, and `LAG() OVER` window functions. |
 > | **3** | 🧪 **[Switch to Portal Tab 03: Sentinel (`-9999.0`) & 3VL Simulator](./bootcamp_portal.html#tab-sentinel)** | Drag the sensor fault-rate slider to see how a `0.5%` `-9999.0` dropout corrupts Mediterranean temperatures into an Ice Age (`-27.7°C`) vs. `AVG(NULLIF(temp_c, -9999.0))`, and test the interactive 3VL Truth Table! |
 > | **4** | 📖 **[day1/day1_hardware_sentinels_and_qc_guide.md](./day1/day1_hardware_sentinels_and_qc_guide.md)** | Deep-dive into RS-485/Modbus/SDI-12 & Pt100 ADC hardware fault physics and WMO Code 306 quality flags. |
-> | **5** | 📋 **[day1/day1_sqlite_and_sql_cheatsheet.md](./day1/day1_sqlite_and_sql_cheatsheet.md)** | Keep open alongside your SSH terminal for `.mode`, `.timer`, date/time bucketing, and window frame syntax. |
+> | **5** | 📋 **[day1/day1_sqlite_and_sql_cheatsheet.md](./day1/day1_sqlite_and_sql_cheatsheet.md)** | Keep open alongside your SSH terminal for `.mode`, `.timer`, `JOIN` compatibility & portable `<3.39` rewrites, date/time bucketing, and window frame syntax. |
 > | **6** | 🗄️ **DB Browser for SQLite & DBeaver on Windows Host:**<br>• In **DB Browser for SQLite (`DB4S`)**: Open `db-bootcamp\day1\weather_ops.db` $\rightarrow$ inspect the **Edit Pragmas** tab (`Foreign Keys` checkbox!), the **Database Structure** tab (`CHECK` constraints & `sqlite_autoindex_*`), and the **Browse Data** tab (color-coded `NULL` vs `-9999.0` cells).<br>• In **DBeaver**: Open `weather_ops.db` to inspect the visual Entity-Relationship (ER) diagram! |
 >
 > *(Once you finish Day 1, return here and proceed to **Phase 2A** below!)*

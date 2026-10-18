@@ -235,15 +235,15 @@ db.stations.insertOne({
 
 ## Module 2: Upper-Air Radiosonde Vertical Soundings, Atomic Updates & High-Frequency Time-Series Bucketing
 
-### 2.1 Embedding vs. Referencing: Modeling Radiosonde Vertical Soundings
+### 2.1 Embedding (Denormalization) vs. Referencing (`3NF` Normalization): Modeling Radiosonde Vertical Soundings
 
-The #1 design question in MongoDB is: **When do we embed an array of sub-documents inside a parent document, and when do we separate them into another collection?**
+The #1 design question in MongoDB—directly extending our [Day 1 Normalization vs. Denormalization framework](../day1/day1_master_coursebook.md#72-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems)—is: **When do we denormalize by embedding an array of sub-documents inside a parent document, and when do we normalize by separating them into another collection?**
 
-* **When to Embed (Bounded 1-to-Many Relationships):**
+* **When to Embed / Denormalize (Bounded, Immutable 1-to-Many Relationships):**
   - *Meteorological Example:* `radiosonde_soundings`. An upper-air weather balloon launch takes ~90 minutes from surface release to stratosphere burst ($\approx 32\text{ km}$) and records 20–100 standard and significant pressure levels (`1000 hPa`, `850 hPa`, `700 hPa`, `500 hPa`, `300 hPa`).
-  - Those vertical levels belong exclusively to that single balloon launch, are always retrieved together to plot a Skew-T diagram, and **never grow unboundedly after the balloon bursts**. Embedding `vertical_levels: [ ... ]` inside the launch document is **10x faster and cleaner** than joining multiple relational tables!
-* **When NOT to Embed (Avoid Unbounded Arrays!):**
-  - **Antipattern:** Never create one `station` document for Algiers (`60390`) and `$push` every hourly surface observation into an array `observations: [ ... ]` for 10 years! That array grows forever, causes constant document reallocation in WiredTiger, and eventually crashes into the **16 MB BSON limit**. Instead, store continuous streams in a dedicated time-series or bucketed collection referencing `station_id: 60390`.
+  - Those vertical levels belong exclusively to that single balloon launch, are always retrieved together to plot a Skew-T diagram, and **never grow unboundedly after the balloon bursts**. Embedding `vertical_levels: [ ... ]` inside the launch document reads the entire vertical profile in **1 BSON seek with 0 runtime joins**!
+* **When to Reference / Normalize (Unbounded Streams or Mutable Master Entities):**
+  - **Antipattern:** Never create one `station` document for Algiers (`60390`) and `$push` every hourly surface observation into an array `observations: [ ... ]` for 10 years! That array grows forever, causes constant document reallocation in WiredTiger, and eventually crashes into the **16 MB BSON limit**. Instead, normalize `stations` into its own collection (`db.stations`) and store continuous streams in a dedicated time-series or bucketed collection referencing `station_id: 60390`.
 
 ---
 

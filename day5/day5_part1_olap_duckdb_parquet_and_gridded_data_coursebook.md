@@ -314,7 +314,7 @@ flowchart LR
 
 ## 2. Module 2: The Columnar Lakehouse: Parquet, Hive Partitioning & PostgreSQL Archival
 
-### 2.1 The Architectural Shift to Columnar Storage
+### 2.1 The Architectural Shift to Columnar Storage (And Why Parquet Flips the `3NF` Normalization Rule!)
 
 When an analytical query asks:
 ```sql
@@ -322,6 +322,9 @@ SELECT AVG(temperature) FROM observations WHERE year = 2026;
 ```
 * **Row-Store (Heap / CSV):** Must scan and deserialize every single byte on disk, including station IDs, timestamps, and pressures.
 * **Columnar Storage:** The disk controller reads **only the byte offsets containing the temperature column**. All other columns are physically bypassed at the operating system storage layer.
+* **Why Columnar Parquet Makes Denormalization Almost Free (Connecting Back to [Day 1 Section 7.2](../day1/day1_master_coursebook.md#72-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems)):**
+  - In a **Row Store (`SQLite` on Day 1 / `PostgreSQL` on Days 2–3)**, repeating `region = 'Mediterranean'` or `station_name = 'Algiers - Dar El Beida'` across 10,000,000 observation rows is an anti-pattern that wastes `>130 MB` of disk and buffer pool RAM.
+  - In **Apache Parquet**, notice line 185 of `seed_olap_data.py` above: `use_dictionary=["station_id", "region"]`. Parquet stores the string `'Mediterranean'` **only once** inside the Column Chunk Dictionary and compresses millions of contiguous integer IDs using **Run-Length Encoding (RLE)** into a few kilobytes—allowing **DuckDB** to scan wide, denormalized flat tables at AVX-512 SIMD speed with **zero runtime `JOIN` overhead** (and when you *do* join asynchronous sensor streams with NWP forecasts in DuckDB, you can use DuckDB's native **`ASOF JOIN`** introduced in our [Day 1 JOIN Compatibility Matrix](../day1/day1_master_coursebook.md#73-complete-taxonomy-of-sql-joins--sqlite-compatibility-matrix) and [Reference Card 02](../reference_cards/02_duckdb_vectorized_olap_vs_sqlite.md))!
 
 ---
 

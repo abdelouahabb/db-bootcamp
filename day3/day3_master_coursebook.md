@@ -758,10 +758,11 @@ ORDER BY climate_zone, station_name, temp_rank;
   - **Dead-Tuple Prevention Guard:** Add a `WHERE` clause on `DO UPDATE` using `IS DISTINCT FROM` so PostgreSQL **only performs an `UPDATE` if the incoming values actually changed**—avoiding useless MVCC dead tuples when an identical packet is re-transmitted!
   - **Detecting Insert vs. Update in `RETURNING`:** Check `(xmax = 0) AS is_fresh_insert`! In PostgreSQL MVCC, a freshly inserted row has `xmax = 0`, whereas an updated row has `xmax` set to the updating transaction ID.
 
-### 4.2 Pre-Computing Heavy Forecast Verification Dashboards (`MATERIALIZED VIEW`)
+### 4.2 Pre-Computing Heavy Forecast Verification Dashboards (`MATERIALIZED VIEW`) — Controlled Denormalization on a `3NF` Core
 
+- **Connecting Back to Day 1 (`3NF` Normalization vs. Denormalization):** On [Day 1 (Section 7.2)](../day1/day1_master_coursebook.md#72-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems), we normalized `stations`, `observations`, and `forecasts` into strict Third Normal Form (`3NF`) to prevent insertion, update, and deletion anomalies. However, re-executing a 3-way `INNER JOIN` across 50 million `observations` and 150 million `forecasts` every time a forecaster opens a verification dashboard burns seconds of CPU.
 - Normal `VIEW`s re-execute the underlying multi-table `JOIN` every time a forecaster opens their dashboard.
-- A **`MATERIALIZED VIEW`** stores the pre-computed query result physically on 8 KB heap pages (just like a table) and can be indexed.
+- A **`MATERIALIZED VIEW`** gives us **the best of both worlds (OLTP Normalization + OLAP Denormalization)**: our base tables remain in strict `3NF`, while `nwp.mv_daily_model_verification` stores the pre-joined, pre-aggregated result physically on 8 KB heap pages (just like a denormalized table) and can be indexed for `< 2 ms` dashboard reads.
 - **Critical Production Rule:** Always create a **`UNIQUE INDEX`** on a Materialized View and refresh it with **`REFRESH MATERIALIZED VIEW CONCURRENTLY`**. Without `CONCURRENTLY`, PostgreSQL acquires an `AccessExclusiveLock` and freezes all forecaster dashboards until the refresh finishes!
 
 > [!WARNING]

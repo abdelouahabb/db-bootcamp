@@ -2,9 +2,9 @@
 
 > [!IMPORTANT]
 > **Architected & Synthesized with Gemini 4 Argon**  
-> This repository is the unified, zero-duplication **"Best of Both"** master edition (`68 files`, `29,000+ lines` of coursebooks, SQL/MongoDB course walkthroughs, reference cards, interactive simulators, and runnable SQL/MQL/Python/Docker labs).
+> This repository is the unified, zero-duplication **"Best of Both"** master edition (`69 files`, `30,000+ lines` of coursebooks, SQL/MongoDB course walkthroughs, reference cards, interactive simulators, and runnable SQL/MQL/Python/Docker labs).
 > - 💿 **VMware Ubuntu 24.04 Blank Lab From-Scratch Installation Guide:** Read **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md](./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to create the blank Ubuntu VM in VMware and install every database, CLI tool, Python environment, and GUI client from scratch (Native + Docker alternative).
-> - 🛠️ **Attendee Tooling & Day-0 Setup Guide (Windows, macOS & Linux):** Read **[ATTENDEE_SETUP_GUIDE.md](./ATTENDEE_SETUP_GUIDE.md)** for step-by-step instructions on reading coursebooks, setting up **DBeaver Community** & **MongoDB Compass**, and launching the Docker Compose database stacks.
+> - 🛠️ **Attendee Tooling & Day-0 Setup Guide (Windows, macOS & Linux):** Read **[ATTENDEE_SETUP_GUIDE.md](./ATTENDEE_SETUP_GUIDE.md)** for step-by-step instructions on reading coursebooks, setting up **DB Browser for SQLite**, **DBeaver Community** & **MongoDB Compass**, and launching the Docker Compose database stacks.
 > - 🌐 **Interactive Web Command Center, Built-In Coursebook Reader & Simulators:** Run `python3 start_bootcamp.py` (or open [bootcamp_portal.html](./bootcamp_portal.html)) to launch the **Built-In Dark-Mode Markdown/Code Reader**, **PostgreSQL Tuple Tetris 8-Byte Alignment Visualizer**, **`-9999.0` Hardware Sentinel & 3VL Simulator**, **Multi-Engine Scaling Calculator**, **Polyglot Architecture Map**, and **15-Question Live Certification Quiz** at `http://127.0.0.1:8088/bootcamp_portal.html`.
 > - ✅ **1-Command Pre-Flight Verification:** Run [`./verify_bootcamp.sh`](./verify_bootcamp.sh) to execute automated integrity, SQLite seed, 250,000-row telemetry generation, Python AST compilation, and Docker Compose checks.
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 1. Repository Architecture & Complete File Navigator (`68 Files`)
+## 1. Repository Architecture & Complete File Navigator (`69 Files`)
 
 ```text
 alternative B/
@@ -24,7 +24,7 @@ alternative B/
 ├── start_bootcamp.py                                              # Zero-Dependency HTTP Server & Browser Launcher (Port 8088)
 ├── bootcamp_portal.html                                           # Interactive Command Center, Built-In Reader, 3 Simulators & Quiz
 ├── verify_bootcamp.sh                                             # Automated Pre-Flight & Live SQL/Python/Docker Verification Suite
-├── day1/                                                          # Day 1: SQL Foundations, Hardware Sentinels (-9999), 3VL & Window Functions (SQLite)
+├── day1/                                                          # Day 1: SQL Foundations, 1NF-3NF vs Denormalization, All 7 JOINs, Sentinels (-9999), 3VL & Window Functions
 ├── day2/                                                          # Day 2: PostgreSQL 8KB Internals, Tuple Tetris, MVCC, WAL, VACUUM & EXPLAIN
 ├── day3/                                                          # Day 3: Production PostgreSQL: Partitioning, BRIN, PostGIS Geodesy, Extensions & Patroni HA
 ├── day4/                                                          # Day 4: MongoDB: BSON/WiredTiger, Time-Series, 2dsphere Storm Polygons, Aggregations & Sharding
@@ -41,9 +41,9 @@ alternative B/
 
 | File | Type | Description |
 | :--- | :--- | :--- |
-| [day1/day1_master_coursebook.md](./day1/day1_master_coursebook.md) | **Master Coursebook (963 lines)** | Declarative 8-step query execution order, Three-Valued Logic (`3VL`), `-9999.0` hardware sentinel hygiene (`NULLIF`, `CASE WHEN`), WMO `CHECK` constraints, multi-model NWP verification `JOIN`s (`ECMWF-HRES`, `GFS`, `AROME`), CTE pipelines, `WITH RECURSIVE` gap detection, and `LAG`/`AVG OVER` window functions. |
-| [day1/weather_ops_seed_sql_course_walkthrough.md](./day1/weather_ops_seed_sql_course_walkthrough.md) | **SQL Course Walkthrough** | Complete line-by-line Markdown course explaining every pragma, DDL constraint, 3VL check guard, and planted sensor anomaly in `weather_ops_seed.sql`. |
-| [day1/day1_sqlite_and_sql_cheatsheet.md](./day1/day1_sqlite_and_sql_cheatsheet.md) | **Cheatsheet (583 lines)** | Complete `sqlite3` CLI dot-commands (`.headers`, `.mode box`, `.timer on`, `~/.sqliterc`), 3VL truth tables, temporal bucketing, and window function recipes. |
+| [day1/day1_master_coursebook.md](./day1/day1_master_coursebook.md) | **Master Coursebook (1,227 lines)** | Declarative 8-step query execution order, Three-Valued Logic (`3VL`), `-9999.0` hardware sentinel hygiene (`NULLIF`, `CASE WHEN`), WMO `CHECK` constraints, **`1NF`–`3NF` Normalization vs. Deliberate Denormalization**, **All 7 SQL `JOIN` Types & SQLite `<3.39`/`3.39+` vs. PostgreSQL/DuckDB Compatibility**, multi-model NWP verification (`ECMWF-HRES`, `GFS`, `AROME`), `WITH RECURSIVE` gap detection, and `LAG`/`AVG OVER` window functions. |
+| [day1/weather_ops_seed_sql_course_walkthrough.md](./day1/weather_ops_seed_sql_course_walkthrough.md) | **SQL Course Walkthrough** | Complete line-by-line Markdown course explaining every pragma, DDL constraint, 3VL check guard, planted sensor anomaly, `3NF` decomposition, and all 7 SQL `JOIN` recipes in `weather_ops_seed.sql`. |
+| [day1/day1_sqlite_and_sql_cheatsheet.md](./day1/day1_sqlite_and_sql_cheatsheet.md) | **Cheatsheet (645 lines)** | Complete `sqlite3` CLI dot-commands (`.headers`, `.mode box`, `.timer on`, `~/.sqliterc`), 3VL truth tables, Normalization vs. Denormalization matrix, SQL `JOIN` compatibility & `<3.39` portable rewrites, temporal bucketing, and window function recipes. |
 | [day1/day1_hardware_sentinels_and_qc_guide.md](./day1/day1_hardware_sentinels_and_qc_guide.md) | **Deep-Dive Guide (393 lines)** | Physics of RS-485/Modbus/SDI-12 & Pt100 ADC open/short-circuit `-9999.0` sentinels, WMO Code 306 flags, 3VL mean/variance contamination math, and ELT QC architecture. |
 | [day1/weather_ops_seed.sql](./day1/weather_ops_seed.sql) | **SQL Seed Script** | Builds `weather_ops.db` with WMO stations, synoptic observations (with `NULL` dropouts, `-9999.0` sentinels, and `68.5°C` spikes), NWP forecasts, and alerts. |
 | [day1/weather_ops.db](./day1/weather_ops.db) | **SQLite Database** | Pre-built WMO operational SQLite database ready for immediate CLI or DBeaver inspection. |

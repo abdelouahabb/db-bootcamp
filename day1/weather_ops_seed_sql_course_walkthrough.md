@@ -171,13 +171,19 @@ CREATE TABLE observations (
 2. **ISO-8601 UTC Timestamps in `TEXT` (`obs_time`):**
    - SQLite stores dates and timestamps using `TEXT` (ISO-8601 strings), `REAL` (Julian day numbers), or `INTEGER` (Unix epoch seconds).
    - Storing timestamps as fixed-width zero-padded ISO-8601 UTC strings (`'YYYY-MM-DD HH:MM:SS'`, e.g., `'2026-10-05 06:00:00'`) guarantees that **lexicographical byte-order sorting (`ORDER BY obs_time`) is identical to chronological sorting**, while remaining human-readable and compatible with SQLite's built-in date/time functions (`datetime()`, `strftime()`, `julianday()`).
-3. **Three-Valued Logic (`3VL`) Inside `CHECK` Constraints (`humidity_pct` and `wind_speed_kt`):**
-   - Look closely at Lines 32 and 34:
-     - `humidity_pct REAL CHECK (humidity_pct IS NULL OR (humidity_pct >= 0.0 AND humidity_pct <= 100.0))`
-     - `wind_speed_kt REAL CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)`
-   - In ANSI SQL and SQLite, boolean expressions operate under **Three-Valued Logic (`TRUE`, `FALSE`, `UNKNOWN`)**.
-   - When a sensor drops offline and reports `NULL`, an expression like `NULL >= 0.0` evaluates to `UNKNOWN` (neither `TRUE` nor `FALSE`).
-   - While SQL `WHERE` and `HAVING` clauses only pass rows where the predicate evaluates to `TRUE` (discarding both `FALSE` and `UNKNOWN`), **SQL `CHECK` constraints only reject a row when the predicate evaluates strictly to `FALSE`**. However, writing `IS NULL OR (...)` explicitly converts the `NULL` sensor case from `UNKNOWN` to `TRUE` (`TRUE OR UNKNOWN` $\equiv$ `TRUE`), making the nullable telemetry contract self-documenting to engineers and preventing bugs if the predicate is ever copied into a `WHERE` filter or application validator.
+3. **`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK` & Three-Valued Logic (`3VL`) Inside `CHECK` Constraints:**
+   - Look closely at how constraints vary across `stations`, `observations`, and `forecasts`:
+     - **Pattern 1 (`NOT NULL` only):** `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL` — enforces **Presence** (rejects `NULL`), while permitting any value of the column's type.
+     - **Pattern 2 (`NOT NULL CHECK (...)`):** `latitude REAL NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0)`, `pred_wind_kt REAL NOT NULL CHECK (pred_wind_kt >= 0.0)`, `qc_flag TEXT NOT NULL DEFAULT 'VALID' CHECK (...)` — enforces **both Presence and Domain Bounds**.
+     - **Pattern 3 (Nullable + `CHECK`):** `humidity_pct REAL CHECK (humidity_pct IS NULL OR (humidity_pct >= 0.0 AND humidity_pct <= 100.0))` and `wind_speed_kt REAL CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` — allows `NULL` when a field sensor drops offline, **but if a reading is present**, enforces physical bounds.
+     - **Pattern 4 (Nullable with NO `CHECK`):** `precip_1h_mm REAL`, `temp_c REAL` — raw landing columns that permit `NULL` as well as raw in-band wire sentinels (`-9999.0`) or uncalibrated spikes (`68.5°C`) so they can be audited via `qc_flag` and sanitized with `NULLIF`.
+   - **Why `CHECK (col >= 0.0)` Alone NEVER Prevents `NULL`s (The `WHERE` vs. `CHECK` 3VL Asymmetry):**
+     - In ANSI SQL, when a column is `NULL`, `NULL >= 0.0` evaluates to **`UNKNOWN`**.
+     - **`WHERE` / `HAVING` clauses require `TRUE`** (discarding both `FALSE` and `UNKNOWN`).
+     - **`CHECK` constraints only reject `FALSE`** (allowing both `TRUE` **and `UNKNOWN` (`NULL`)**!).
+     - Consequently, declaring `latitude REAL CHECK (latitude BETWEEN -90.0 AND 90.0)` *without* `NOT NULL` allows `latitude = NULL` to be inserted! Whenever a column is mandatory *and* range-bounded, you **must** combine `NOT NULL CHECK (...)`.
+   - **Why Write `IS NULL OR (...)` on Nullable Sensor Columns (`humidity_pct` and `wind_speed_kt`)?**
+     - Although `CHECK (wind_speed_kt >= 0.0)` and `CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` accept the same rows in DDL, writing `IS NULL OR (...)` explicitly converts the `NULL` sensor case from `UNKNOWN` to `TRUE` (`TRUE OR UNKNOWN` $\equiv$ `TRUE`). This documents to every engineer that `NULL` is intentionally valid for offline sensors, and prevents silent row loss if the validation expression is ever copied into a `WHERE` filter or `dbt` quality test.
 4. **Why `precip_1h_mm` Intentionally Omits `CHECK (precip_1h_mm >= 0.0)` (Line 35):**
    - Notice the inline comment on Line 35: `-- 1h Precipitation (mm) - includes legacy -9999.0 in raw rows for cleaning lab!`.
    - In legacy meteorological ingestion pipelines, raw landing tables often lack lower-bound `CHECK` constraints so that raw telemetry frames containing hardware diagnostic sentinels (`-9999.0` or `-999.0`) are not rejected before reaching the staging table. Leaving `precip_1h_mm` unconstrained in the Day 1 seed table allows Line 105 (`Constantine - El Khroub` at `2026-10-06 12:00:00`) to insert `-9999.0`, demonstrating why unconstrained raw tables require `NULLIF(precip_1h_mm, -9999.0)` during queries—and why on Day 2 (`weather_ops_pg.sql` Line 45) the production PostgreSQL table enforces `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` at the database gate.

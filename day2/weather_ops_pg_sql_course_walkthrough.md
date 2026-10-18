@@ -148,11 +148,15 @@ CREATE TABLE synoptic.observations (
    - In SQLite, `'2026-10-05 06:00:00'` was stored as 19 ASCII characters (`19 bytes` of `TEXT`).
    - In PostgreSQL, `TIMESTAMPTZ` (`timestamp with time zone`) occupies **strictly 8 bytes** (`int64`), representing the number of microseconds elapsed since the PostgreSQL epoch (`2000-01-01 00:00:00 UTC`).
    - Upon `INSERT`, PostgreSQL parses any input ISO-8601 string and its offset (e.g., `'2026-06-01 00:00:00+00'` or `'2026-06-01 01:00:00+01'`), converts it to UTC microseconds, and stores the pure 8-byte integer. It does **not** store the input timezone string on disk. This makes chronological range scans (`WHERE obs_time BETWEEN ...`), `INTERVAL` arithmetic, and B-Tree comparisons fast 64-bit integer operations.
-3. **Production Gate Against `-9999.0` Sentinels (`precip_1h_mm NUMERIC(5,1) CHECK (...)`):**
+3. **Production Gate Against `-9999.0` Sentinels & `NOT NULL` vs. `CHECK` (`precip_1h_mm NUMERIC(5,1) CHECK (...)`):**
    - Notice Line 45: `precip_1h_mm NUMERIC(5,1) CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)`.
    - Both constraints now block the Day 1 `-9999.0` Fortran rain-gauge sentinel at the database boundary:
-     1. `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` rejects any negative value immediately.
+     1. `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` rejects any negative value immediately (`FALSE`), while allowing `NULL` when a rain gauge is offline.
      2. Even without the `CHECK` constraint, `NUMERIC(5,1)` allows at most $5 - 1 = 4$ digits to the left of the decimal point, blocking 5-digit `-99999.0` overflows.
+   - **Why `synoptic.observations` uses `CHECK (col IS NULL OR ...)` while `nwp.forecasts` uses `NOT NULL CHECK (col >= 0.0)`:**
+     - In SQL Three-Valued Logic (`3VL`), a `CHECK` constraint only rejects `FALSE` and **silently allows `UNKNOWN` (`NULL`)**.
+     - Therefore, on `synoptic.stations` (`latitude`, `longitude`, `elevation_m`) and `nwp.forecasts` (`pred_wind_kt`, `pred_precip_mm`), where `NULL` is physically invalid, we **must** combine `NOT NULL CHECK (...)`—because `CHECK (...)` alone would allow `NULL`s!
+     - On `synoptic.observations` (`humidity_pct`, `wind_speed_kt`, `precip_1h_mm`), where an offline sensor legitimately reports `NULL`, we omit `NOT NULL` and write `CHECK (col IS NULL OR (...))` so the nullable physical contract is explicit and portable to `WHERE` clauses.
 
 ---
 

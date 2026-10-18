@@ -193,7 +193,7 @@ SQL is not executed top-to-bottom. The query planner evaluates statements in eig
 
 ---
 
-### 2. DDL & Physical Meteorology Constraints (`CREATE TABLE`)
+### 2. DDL & Physical Meteorology Constraints (`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK`)
 
 ```sql
 -- CRITICAL: SQLite disables Foreign Keys by default on every new connection!
@@ -202,14 +202,27 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE stations (
     station_id   INTEGER PRIMARY KEY,               -- Natural key (5-digit WMO ID)
-    station_name TEXT    NOT NULL UNIQUE,
-    latitude     REAL    NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0),
-    longitude    REAL    NOT NULL CHECK (longitude BETWEEN -180.0 AND 180.0),
+    station_name TEXT    NOT NULL UNIQUE,           -- Pattern 1: Mandatory presence + unique
+    latitude     REAL    NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0),          -- Pattern 2: Mandatory + range
+    longitude    REAL    NOT NULL CHECK (longitude BETWEEN -180.0 AND 180.0),       -- Pattern 2: Mandatory + range
     elevation_m  REAL    NOT NULL CHECK (elevation_m BETWEEN -500.0 AND 9000.0),
     climate_zone TEXT    NOT NULL CHECK (climate_zone IN ('Mediterranean', 'Arid', 'Semi-Arid', 'Highland', 'Maritime')),
     is_active    INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
 );
 ```
+
+#### The 4 Column Constraint Patterns (`NOT NULL` vs. `CHECK`)
+* **`NOT NULL` enforces Presence (Existence):** Rejects `NULL`, but allows *any* value of that type (`-9999.0`, `145.0`, or empty string `''`).
+* **`CHECK (expr)` enforces Domain Validity (Physics/Enums):** Rejects `FALSE`, **but silently allows `NULL`** because `NULL` evaluates to `UNKNOWN`, and `CHECK` only blocks `FALSE`!
+
+| Pattern | SQL Syntax | Allows `NULL`? | Enforces Range / Enum? | When to Use | Example in `weather_ops.db` |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| **1. `NOT NULL` only** | `col TYPE NOT NULL` | ❌ No | ❌ No | Mandatory timestamp, ID, or unbounded metric where `NULL` is forbidden. | `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL` |
+| **2. `NOT NULL CHECK (...)`** | `col TYPE NOT NULL CHECK (...)` | ❌ No | ✅ Yes | Mandatory attribute that **must exist** AND **must obey physical bounds or an enum**. (`CHECK` alone is NOT enough to block `NULL`!) | `latitude`, `elevation_m`, `pred_wind_kt`, `qc_flag` |
+| **3. Nullable + `CHECK`** | `col TYPE CHECK (col IS NULL OR (...))` | ✅ Yes | ✅ Yes (if not `NULL`) | Field sensor reading that can be `NULL` when offline, **but if reported**, must obey physics. (`IS NULL OR` makes nullability explicit and safe for `WHERE` clauses). | `humidity_pct` (`0–100%`), `wind_speed_kt` (`>= 0.0`) |
+| **4. Raw Nullable (No `CHECK`)** | `col TYPE` | ✅ Yes | ❌ No | Raw/Bronze staging column that must ingest in-band hardware sentinels (`-9999.0`) or raw spikes (`68.5°C`) for downstream `NULLIF` / QC auditing. | `precip_1h_mm` (Day 1 raw `-9999.0`), `temp_c` |
+
+> **The Empty-String Trap (`''` $\neq$ `NULL`):** `station_name TEXT NOT NULL` blocks `NULL` but allows `''`. To block both `NULL` and blank strings: `station_name TEXT NOT NULL CHECK (LENGTH(TRIM(station_name)) > 0)`.
 
 ---
 
@@ -225,12 +238,17 @@ SQL implements Three-Valued Logic: `TRUE`, `FALSE`, and `UNKNOWN` (represented b
 | `FALSE` | `NULL` | `FALSE` | `UNKNOWN` | `TRUE` |
 | `NULL` | `NULL` | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 
-#### Comparison Propagation & Row Filtering Gate
+#### Comparison Propagation & The `WHERE` vs. `CHECK` Asymmetry Gate
 * `val = NULL` $\implies$ `UNKNOWN` (never evaluates to `TRUE`).
 * `val != NULL` $\implies$ `UNKNOWN` (never evaluates to `TRUE`).
 * `NULL = NULL` $\implies$ `UNKNOWN` (never evaluates to `TRUE`).
 * **Always use** `IS NULL` or `IS NOT NULL`.
-* **Row Filtering Gate:** A `WHERE` or `HAVING` filter admits rows **if and only if** the expression evaluates strictly to `TRUE`. Rows evaluating to `FALSE` or `UNKNOWN` are discarded silently.
+
+| 3VL Evaluation Result | `WHERE` / `HAVING` / `JOIN ON` Gate | `CHECK (...)` Constraint Gate | Why It Matters |
+| :--- | :--- | :--- | :--- |
+| **`TRUE`** | ✅ **Row Kept** | ✅ **Insert Allowed** | Valid data passes both filters and constraints |
+| **`FALSE`** | ❌ **Row Discarded** | ❌ **Insert Rejected** | Violating data is blocked by both |
+| **`UNKNOWN` (`NULL`)** | ❌ **Row Discarded** | ✅ **Insert ALLOWED!** | `CHECK (col >= 0)` **allows `NULL`!** Add `NOT NULL` if `NULL` must be rejected |
 
 ---
 

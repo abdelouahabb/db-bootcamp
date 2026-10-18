@@ -182,15 +182,15 @@ erDiagram
 1. **Tables, Rows, and Primary Keys (Natural vs. Surrogate):**
    - In `weather_ops.db`, `stations` uses `station_id` (the official 5-digit WMO station number, e.g., `60390` for Algiers - Dar El Beida) as a **Natural Primary Key**.
    - `observations` uses `obs_id INTEGER PRIMARY KEY AUTOINCREMENT` (a **Surrogate Key**) paired with a composite `UNIQUE (station_id, obs_time)` constraint so a station can never log two conflicting synoptic reports for the same timestamp.
-2. **Physical Integrity via `CHECK` Constraints:**
-   - Weather sensors fail and transmit corrupted packets (e.g., relative humidity of `145%`, negative wind speed, or latitude `115.0`).
-   - Defining declarative `CHECK` constraints directly on the table forces the storage engine to reject physically impossible measurements at insert time:
+2. **Physical Integrity via `NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK`:**
+   - Weather sensors fail and transmit corrupted packets (e.g., relative humidity of `145%`, negative wind speed, or latitude `115.0`), or drop offline entirely (`NULL`).
+   - Defining declarative constraints directly on the table forces the storage engine to reject invalid measurements at `INSERT` / `UPDATE` time:
      ```sql
      CREATE TABLE stations (
          station_id   INTEGER PRIMARY KEY,               -- WMO 5-digit station identifier
-         station_name TEXT    NOT NULL UNIQUE,           -- Official station name
-         latitude     REAL    NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0),
-         longitude    REAL    NOT NULL CHECK (longitude BETWEEN -180.0 AND 180.0),
+         station_name TEXT    NOT NULL UNIQUE,           -- Pattern 1: Mandatory presence + uniqueness
+         latitude     REAL    NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0),          -- Pattern 2: Mandatory + range
+         longitude    REAL    NOT NULL CHECK (longitude BETWEEN -180.0 AND 180.0),       -- Pattern 2: Mandatory + range
          elevation_m  REAL    NOT NULL CHECK (elevation_m >= -500.0 AND elevation_m <= 9000.0),
          climate_zone TEXT    NOT NULL CHECK (climate_zone IN ('Mediterranean', 'Arid', 'Semi-Arid', 'Highland', 'Maritime')),
          is_active    INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
@@ -199,18 +199,71 @@ erDiagram
      CREATE TABLE observations (
          obs_id         INTEGER PRIMARY KEY AUTOINCREMENT,
          station_id     INTEGER NOT NULL,
-         obs_time       TEXT    NOT NULL,                -- ISO-8601 UTC: YYYY-MM-DD HH:MM:SS
-         temp_c         REAL,                            -- 2m Air Temperature (°C); NULL if sensor offline
-         dewpoint_c     REAL,                            -- 2m Dewpoint Temperature (°C)
-         humidity_pct   REAL    CHECK (humidity_pct IS NULL OR (humidity_pct >= 0.0 AND humidity_pct <= 100.0)),
-         pressure_hpa   REAL,                            -- Mean Sea Level Pressure (hPa)
-         wind_speed_kt  REAL    CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0),
-         precip_1h_mm   REAL,                            -- 1h Precipitation (mm)
-         qc_flag        TEXT    NOT NULL DEFAULT 'VALID' CHECK (qc_flag IN ('VALID', 'SUSPECT', 'ERRONEOUS')),
+         obs_time       TEXT    NOT NULL,                -- Pattern 1: Mandatory timestamp
+         temp_c         REAL,                            -- Pattern 4: Nullable raw reading (can hold 68.5°C spike w/ ERRONEOUS flag)
+         dewpoint_c     REAL,                            -- Pattern 4: Nullable raw reading
+         humidity_pct   REAL    CHECK (humidity_pct IS NULL OR (humidity_pct >= 0.0 AND humidity_pct <= 100.0)), -- Pattern 3: Nullable + range
+         pressure_hpa   REAL,                            -- Pattern 4: Nullable raw reading
+         wind_speed_kt  REAL    CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0),   -- Pattern 3: Nullable + range
+         precip_1h_mm   REAL,                            -- Pattern 4: Nullable raw landing (accepts -9999.0 sentinel for Day 1 lab)
+         qc_flag        TEXT    NOT NULL DEFAULT 'VALID' CHECK (qc_flag IN ('VALID', 'SUSPECT', 'ERRONEOUS')), -- Pattern 2
          FOREIGN KEY (station_id) REFERENCES stations(station_id) ON DELETE CASCADE,
          UNIQUE (station_id, obs_time)
      );
      ```
+
+   #### 2a. Why Do Some Columns Use `NOT NULL`, Some Use `CHECK`, and Some Use `NOT NULL CHECK`?
+   A common source of confusion in SQL schema design is assuming that `CHECK (latitude BETWEEN -90.0 AND 90.0)` automatically forbids `NULL`, or that `NOT NULL` protects against garbage values. In SQL, **`NOT NULL` and `CHECK` enforce two completely orthogonal dimensions of data integrity**:
+   - **`NOT NULL` enforces Existence (Presence):** It asks: *"Is a value present?"* It rejects `NULL`, but happily accepts `-9999.0`, `99999.0`, or an empty string `''`.
+   - **`CHECK (expression)` enforces Domain Validity (Physics/Business Rules):** It asks: *"If a value is present, does it obey the rule?"* It rejects any value where `expression` evaluates to `FALSE`—**but in ANSI SQL, a `CHECK` constraint silently ALLOWS `NULL`!**
+
+   #### 2b. The Three-Valued Logic (`3VL`) Surprise: Why `WHERE` Rejects `NULL` While `CHECK` Accepts `NULL`!
+   When a column is `NULL`, any comparison like `NULL >= 0.0` or `NULL BETWEEN -90.0 AND 90.0` evaluates to neither `TRUE` nor `FALSE`—it evaluates to **`UNKNOWN`**.
+   Here is the critical asymmetry in the ANSI SQL standard (implemented identically across **SQLite**, **PostgreSQL**, **DuckDB**, and **MySQL 8.0.16+**):
+   - **`WHERE` and `HAVING` clauses are "Strict Inclusion Filters" (Require `TRUE`):** A row is returned **only if** the predicate evaluates to `TRUE`. Both `FALSE` and `UNKNOWN` (`NULL`) are rejected.
+   - **`CHECK` constraints are "Conflict Exclusion Guards" (Reject Only `FALSE`):** A row insertion is aborted **only if** the constraint evaluates strictly to `FALSE`. Both `TRUE` **and `UNKNOWN` (`NULL`) pass!**
+
+   | Inserted Column Value | Expression (`col >= 0.0`) Result | `WHERE col >= 0.0` (Query Filter) | `CHECK (col >= 0.0)` Alone (No `NOT NULL`) | `NOT NULL CHECK (col >= 0.0)` (Combined) |
+   | :--- | :--- | :--- | :--- | :--- |
+   | `15.0` (Valid reading) | **`TRUE`** | Kept in query result | **Allowed** | **Allowed** |
+   | `-5.0` (Unphysical value) | **`FALSE`** | Filtered out | **REJECTED** (`CHECK` failed) | **REJECTED** (`CHECK` failed) |
+   | `NULL` (Missing value) | **`UNKNOWN`** | Filtered out (`UNKNOWN` $\neq$ `TRUE`) | **ALLOWED!** (`UNKNOWN` $\neq$ `FALSE`) | **REJECTED** (`NOT NULL` failed) |
+
+   > [!WARNING]
+   > **The #1 Schema Design Trap (`CHECK` Without `NOT NULL`):**  
+   > If you declare `latitude REAL CHECK (latitude BETWEEN -90.0 AND 90.0)` **without** `NOT NULL`, a buggy ingestion script can insert `latitude = NULL` and the database will accept it without complaint—because `NULL BETWEEN -90.0 AND 90.0` evaluates to `UNKNOWN`, which passes `CHECK`!  
+   > **Golden Rule:**
+   > - If a column **must never be `NULL`** *and* **must obey a range or enum**, you **must** write **`NOT NULL CHECK (...)`**.
+   > - Neither `NOT NULL` alone nor `CHECK (...)` alone is sufficient!
+
+   #### 2c. Why Write `CHECK (col IS NULL OR (...))` on Nullable Sensor Columns?
+   Look at `observations.wind_speed_kt` above:
+   ```sql
+   wind_speed_kt REAL CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)
+   ```
+   Wait: if `CHECK (wind_speed_kt >= 0.0)` already allows `NULL` (because `NULL >= 0.0` is `UNKNOWN`), why did we explicitly write `wind_speed_kt IS NULL OR wind_speed_kt >= 0.0`?
+   While both forms accept the exact same rows inside a `CREATE TABLE` definition, writing `col IS NULL OR (...)` explicitly on nullable columns is a **production engineering best practice** for three reasons:
+   1. **Self-Documenting Architectural Intent:** When another engineer reviews your DDL, seeing `REAL CHECK (wind_speed_kt >= 0.0)` looks like a bug where the author forgot `NOT NULL`. Writing `REAL CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` documents unmistakably that **`NULL` is intentionally allowed** (because a physical cup anemometer can drop offline during an icing event), while negative numbers are forbidden.
+   2. **Safe Copy-Pasting Between `CHECK` and `WHERE` / `dbt` Tests:** If an engineer copies `wind_speed_kt >= 0.0` from a `CHECK` constraint into a SQL `WHERE` filter (`SELECT * FROM observations WHERE wind_speed_kt >= 0.0`), the `WHERE` clause will **silently drop all rows where `wind_speed_kt IS NULL`** because `WHERE` rejects `UNKNOWN`! By contrast, `wind_speed_kt IS NULL OR wind_speed_kt >= 0.0` evaluates to `TRUE` (`TRUE OR UNKNOWN` $\equiv$ `TRUE`) when `wind_speed_kt` is `NULL`, behaving identically in both `CHECK` constraints and `WHERE` filters.
+   3. **Protection Against `CHECK (col IS NOT NULL AND ...)` Edits:** It makes the nullability rule explicit right inside the boolean expression.
+
+   #### 2d. The 4-Pattern Decision Matrix: When to Use What
+   Every column across our 5-day bootcamp follows one of four deliberate constraint patterns:
+
+   | Pattern | SQL Declaration Syntax | Allows `NULL`? | Restricts Domain / Range? | When to Use It in Telemetry & Forecasting | Examples in `weather_ops.db` |
+   | :--- | :--- | :---: | :---: | :--- | :--- |
+   | **Pattern 1: Mandatory Presence Only** | `col TYPE NOT NULL` | ❌ No | ❌ No (any value of `TYPE` accepted) | Mandatory identity, timestamp, free-text, or unbounded continuous variables where `NULL` is invalid, and any value of the data type is acceptable. | `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL`, `message TEXT NOT NULL` |
+   | **Pattern 2: Mandatory + Domain Rule** | `col TYPE NOT NULL CHECK (...)` | ❌ No | ✅ Yes | Mandatory attributes that **must always be present** AND **must fall within a strict physical range or enumeration**. | `latitude`, `longitude`, `elevation_m`, `climate_zone`, `pred_wind_kt`, `qc_flag` |
+   | **Pattern 3: Nullable Sensor + Physical Guard** | `col TYPE CHECK (col IS NULL OR (...))` | ✅ Yes | ✅ Yes (when non-null) | Real-world field sensor readings that **can legitimately be `NULL`** when a probe drops offline, **but if a number is reported**, it must obey physical laws. | `humidity_pct` (`0–100%`), `wind_speed_kt` (`>= 0.0`), Day 2 `precip_1h_mm` (`>= 0.0`) |
+   | **Pattern 4: Raw Landing / Unconstrained Nullable** | `col TYPE` *(no `NOT NULL`, no `CHECK`)* | ✅ Yes | ❌ No | **Bronze / Raw staging columns** that must ingest raw wire frames containing in-band hardware sentinels (`-9999.0`) or uncalibrated spikes (`68.5°C`) without aborting the batch, so downstream SQL (`NULLIF` / `qc_flag`) can audit and clean them. | Day 1 `precip_1h_mm` (holds `-9999.0` sentinel), `temp_c` (holds `68.5°C` spike marked `'ERRONEOUS'`) |
+
+   > [!TIP]
+   > **The Text Empty-String Trap (`NOT NULL` $\neq$ Non-Empty `''`) & Multi-Engine `CHECK` Support:**  
+   > - **`NULL` vs. Empty String `''`:** In SQLite, PostgreSQL, DuckDB, and MySQL, an empty string `''` or whitespace `'   '` is **not `NULL`**—it is a valid 0-character `TEXT` value! Therefore, `station_name TEXT NOT NULL` rejects `NULL`, but **allows `''`**. To forbid both `NULL` and blank strings on free-text columns, combine `NOT NULL` with a `CHECK` constraint:
+   >   ```sql
+   >   station_name TEXT NOT NULL CHECK (LENGTH(TRIM(station_name)) > 0)
+   >   ```
+   > - **Cross-Engine Compatibility Note:** **SQLite**, **PostgreSQL**, and **DuckDB** have enforced `CHECK` constraints for decades. **MySQL** famously parsed and *silently ignored* `CHECK` constraints prior to **MySQL 8.0.16** (released 2019); in **MySQL 8.0.16+ and 8.4 LTS** (and **MariaDB 10.2.1+**), `CHECK` constraints are fully enforced using this exact same Three-Valued Logic! (See [Reference Card 14: MySQL & MariaDB Complete Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)).
 3. **SQLite Dynamic Typing & Type Affinity vs. PostgreSQL Strict Typing:**
    - Unlike PostgreSQL (where a column's type is rigidly enforced on every row), standard SQLite uses **Dynamic Typing (Manifest Typing)**: the data type is associated with the *individual value* rather than the column container (unless a table is explicitly declared `STRICT` in SQLite 3.37+).
    - Every value stored in an SQLite database belongs to one of **5 Fundamental Storage Classes**:
@@ -361,6 +414,7 @@ In SQL, `NULL` does not mean zero or blank space—it means **unknown/missing**.
 | `NULL` | `NULL` | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 
 * **The `= NULL` Trap:** `temp_c = NULL` and `temp_c != NULL` **always** evaluate to `UNKNOWN`. Because `WHERE` only admits rows that evaluate strictly to `TRUE`, `WHERE temp_c = NULL` returns 0 rows! Always use `WHERE temp_c IS NULL` or `WHERE temp_c IS NOT NULL`.
+* **`WHERE` / `HAVING` / `JOIN ON` vs. `CHECK` Constraint Gate:** Query filters (`WHERE`, `HAVING`, `JOIN ON`) require **`TRUE`** and reject `UNKNOWN`. Table `CHECK (...)` constraints only reject **`FALSE`** and **accept `UNKNOWN` (`NULL`)**—which is why `CHECK (col >= 0.0)` never prevents `NULL` insertions unless paired with `NOT NULL` (`NOT NULL CHECK (col >= 0.0)`).
 
 > [!IMPORTANT]
 > **Production Engineering Pitfall — The `NOT IN (..., NULL)` Silent Zero-Row Bug:**  

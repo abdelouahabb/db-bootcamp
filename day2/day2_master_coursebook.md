@@ -663,18 +663,18 @@ sequenceDiagram
     participant WAL as "pg_wal (WAL & Full-Page Writes)"
 
     Note over SB,WAL: Checkpoint just completed (Page 0 is clean in RAM)
-    TA->>SB: BEGIN; UPDATE synoptic.observations SET qc_flag='VALID' WHERE obs_id=1;
+    TA->>SB: BEGIN — UPDATE synoptic.observations SET qc_flag='VALID' WHERE obs_id=1
     SB->>WAL: First touch after Checkpoint -> Write 8 KB Full-Page Image (FPW) + WAL Delta (LSN)
     Note over SB: Old Tuple (0,1): t_xmin=100, t_xmax=110, t_ctid=(0,2)<br/>New HOT Tuple (0,2): t_xmin=110, t_xmax=0 (Same 8KB Page, 0 B-Tree Writes!)
 
-    TB->>SB: SELECT qc_flag FROM synoptic.observations WHERE obs_id=1;
+    TB->>SB: SELECT qc_flag FROM synoptic.observations WHERE obs_id=1
     Note over TB,SB: Snapshot S = 110:111:[110] -> XID 110 is uncommitted!<br/>Reader follows visibility rules and serves Tuple (0,1) ('SUSPECT') with zero lock wait
     SB-->>TB: Returns 'SUSPECT' (Dirty Read Prevented)
 
-    TA->>WAL: COMMIT; (Flushes Commit Record to /data/pgwal)
+    TA->>WAL: COMMIT (Flushes Commit Record to /data/pgwal)
     WAL-->>TA: Commit Acknowledged
 
-    TB->>SB: SELECT qc_flag FROM synoptic.observations WHERE obs_id=1; (Read Committed)
+    TB->>SB: SELECT qc_flag FROM synoptic.observations WHERE obs_id=1 (Read Committed)
     Note over SB: Reader checks pg_xact(110)=COMMITTED, sets HEAP_XMIN_COMMITTED Hint Bit on (0,2)
     SB-->>TB: Follows HOT chain (0,1) -> (0,2) and returns 'VALID'
 ```

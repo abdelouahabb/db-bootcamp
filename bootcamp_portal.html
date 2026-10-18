@@ -3090,9 +3090,13 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
         return;
       }
 
+      // Remove any stray error containers left at the bottom of body by Mermaid
+      document.querySelectorAll('[id^="dmermaid-svg-"]').forEach(el => el.remove());
+
       const currentTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
       window.mermaid.initialize({
         startOnLoad: false,
+        suppressErrorRendering: true,
         theme: currentTheme,
         securityLevel: 'loose',
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
@@ -3103,8 +3107,8 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
         idx++;
         const rawSrc = container.getAttribute('data-mermaid-src');
         if (!rawSrc) continue;
+        const svgId = `mermaid-svg-${Date.now()}-${idx}`;
         try {
-          const svgId = `mermaid-svg-${Date.now()}-${idx}`;
           const { svg } = await window.mermaid.render(svgId, rawSrc);
           container.innerHTML = svg;
           container.style.display = 'block';
@@ -3116,6 +3120,9 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
             if (pre) pre.style.display = 'block';
           }
           container.style.display = 'none';
+        } finally {
+          const stray = document.getElementById('d' + svgId);
+          if (stray) stray.remove();
         }
       }
     }

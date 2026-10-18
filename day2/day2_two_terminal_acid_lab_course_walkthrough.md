@@ -23,15 +23,15 @@ sequenceDiagram
     participant TB as Terminal B (Backend PID 2)
 
     Note over TA,TB: Lab 1: MVCC Snapshot Isolation (Readers Never Block Writers)
-    TA->>PG: BEGIN; UPDATE AWS-001 (new tuple @ ctid (0,4), XID in-progress)
+    TA->>PG: BEGIN — UPDATE AWS-001 (new tuple @ ctid (0,4), XID in-progress)
     TB->>PG: SELECT AWS-001
     PG-->>TB: Returns committed tuple @ ctid (0,1) instantly (0ms lock wait)
-    TA->>PG: ROLLBACK; (O(1) bit-flip in pg_xact -> ABORTED)
+    TA->>PG: ROLLBACK (O(1) bit-flip in pg_xact -> ABORTED)
 
     Note over TA,TB: Lab 2: Row-Level Exclusive Lock (Writers Block Writers)
-    TA->>PG: BEGIN; UPDATE AWS-002 (acquires Exclusive Row Lock)
-    TB->>PG: BEGIN; UPDATE AWS-002 (requests lock -> BLOCKED on TA's XID!)
-    TA->>PG: COMMIT; (releases XID lock)
+    TA->>PG: BEGIN — UPDATE AWS-002 (acquires Exclusive Row Lock)
+    TB->>PG: BEGIN — UPDATE AWS-002 (requests lock -> BLOCKED on TA's XID!)
+    TA->>PG: COMMIT (releases XID lock)
     PG-->>TB: Unblocks immediately (<1ms) and completes UPDATE 1
 ```
 

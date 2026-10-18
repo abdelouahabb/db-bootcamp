@@ -27,10 +27,10 @@ flowchart TD
         C["Collection: cap_alerts\n• String _id (DZ-ONM-...)\n• affected_stations: [int]\n• updates: [] Audit Trail"]
     end
 
-    T -->|Automatic Bucketing| B
-    S -.->|Referenced by station_id| R
-    S -.->|Referenced by station_meta.station_id| T
-    S -.->|Referenced by affected_stations[]| C
+    T -->|"Automatic Bucketing"| B
+    S -.->|"Referenced by station_id"| R
+    S -.->|"Referenced by station_meta.station_id"| T
+    S -.->|"Referenced by affected_stations[]"| C
 ```
 
 ---

@@ -1117,7 +1117,7 @@
             <span class="pill pill-emerald">PostgreSQL 16 Internals</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            <code>TIMESTAMPTZ</code> vs. <code>TIMESTAMP</code> (8B UTC math); <code>NUMERIC(p,s)</code> vs. IEEE-754 floats; <code>PRIMARY KEY</code> vs. <code>UNIQUE NULLS DISTINCT</code>; 8KB Heap Page anatomy &amp; CPU 8-byte Tuple Tetris; MVCC <code>xmin</code>/<code>xmax</code> vs. MySQL InnoDB.
+            <code>TIMESTAMPTZ</code> vs. <code>TIMESTAMP</code> (8B UTC math); <code>NUMERIC(p,s)</code> vs. IEEE-754 floats; <code>PRIMARY KEY</code> vs. <code>UNIQUE NULLS DISTINCT</code>; 8KB Heap Page &amp; Tuple Tetris; MVCC <code>xmin</code>/<code>xmax</code> vs. MySQL InnoDB &amp; Dual-Log (<code>Redo</code> + <code>binlog</code>) Replication.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
@@ -1146,7 +1146,7 @@
             </li>
             <li class="file-item">
               <a href="./day2/day2_postgres_vs_mysql_mvcc_guide.md">day2/day2_postgres_vs_mysql_mvcc_guide.md</a>
-              <span class="file-desc">PG vs MySQL InnoDB MVCC</span>
+              <span class="file-desc">PG vs MySQL MVCC &amp; Replicas</span>
             </li>
             <li class="file-item">
               <a href="./day2/day2_postgres_tuning_and_internals_cheatsheet.md">day2/day2_postgres_tuning_and_internals_cheatsheet.md</a>
@@ -1166,16 +1166,16 @@
         <!-- DAY 3 -->
         <div class="card curr-card" data-category="days">
           <div class="card-header">
-            <div class="card-title">Day 3 — Partitioning, BRIN, Window Functions &amp; PostGIS</div>
+            <div class="card-title">Day 3 — Partitioning, BRIN, PostGIS &amp; Patroni HA Failover</div>
             <span class="pill pill-amber">PostGIS 3.4 + 5M Rows</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Declarative Range Partitioning (Partitioned PK rules &amp; half-open <code>[A, B)</code> bounds); why <code>BRIN</code> uses lossy <code>Bitmap Heap Scan + Recheck Cond</code> vs. <code>B-Tree</code>/<code>GIN</code>; PostGIS <code>GEOGRAPHY(Point, 4326)</code> &amp; <code>ST_DWithin</code>; 5M-row benchmark.
+            Declarative Range Partitioning (Partitioned PK rules &amp; half-open <code>[A, B)</code> bounds); why <code>BRIN</code> uses lossy <code>Bitmap Heap Scan + Recheck Cond</code>; PostGIS <code>GEOGRAPHY(Point, 4326)</code>; <code>Patroni</code> + <code>etcd</code> Split-Brain fencing &amp; <code>synchronous_commit</code> matrix.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day3/day3_master_coursebook.md">day3/day3_master_coursebook.md</a>
-              <span class="file-desc">Full Day 3 Coursebook (1,019 lines)</span>
+              <span class="file-desc">Full Day 3 Coursebook (1,044 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day3/day3_weather_advanced_pg_sql_course_walkthrough.md">day3/day3_weather_advanced_pg_sql_course_walkthrough.md</a>
@@ -1215,16 +1215,16 @@
         <!-- DAY 4 -->
         <div class="card curr-card" data-category="days">
           <div class="card-header">
-            <div class="card-title">Day 4 — MongoDB BSON, Time-Series, 2dsphere &amp; ESR Rule</div>
+            <div class="card-title">Day 4 — MongoDB BSON, 2dsphere, Replica Failover &amp; Sharding</div>
             <span class="pill pill-purple">MongoDB 7.0 + 50k Docs</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            <code>$jsonSchema</code> (<code>required</code> vs. <code>bsonType</code>) &amp; the <code>{ field: null }</code> vs. <code>$type: 10</code> query trap; WiredTiger BSON &amp; Time-Series buckets; <code>$unwind</code> silent empty-array drop vs. <code>preserveNullAndEmptyArrays</code>; <code>2dsphere</code> &amp; the <strong>ESR Rule</strong>.
+            <code>$jsonSchema</code> &amp; <code>{ field: null }</code> vs. <code>$type: 10</code>; Time-Series buckets; <code>$unwind</code> empty-array drop vs. <code>preserveNullAndEmptyArrays</code>; <code>2dsphere</code> &amp; <strong>ESR Rule</strong>; PG vs. MongoDB Failover (<code>w: 1</code> rollback trap) &amp; Shard Key selection (<code>MaxKey</code> hotspot).
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day4/day4_master_coursebook.md">day4/day4_master_coursebook.md</a>
-              <span class="file-desc">Full Day 4 Coursebook (1,116 lines)</span>
+              <span class="file-desc">Full Day 4 Coursebook (1,154 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day4/day4_weather_ops_mongo_js_course_walkthrough.md">day4/day4_weather_ops_mongo_js_course_walkthrough.md</a>
@@ -1337,7 +1337,7 @@
             <span class="pill pill-emerald">14 Deep-Dive Cards</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Turn-key Docker Compose environments (<code>PostgreSQL 16 + PostGIS 3.4</code>, <code>MongoDB 7.0 3-Node Replica Set</code>, <code>MinIO S3</code>, <code>Mosquitto MQTT</code>) plus 14 standalone reference cards (including dedicated MySQL 8.0/8.4 &amp; MariaDB engineering guide).
+            Turn-key Docker Compose environments (<code>PostgreSQL 16 + PostGIS 3.4</code>, <code>MongoDB 7.0 3-Node Replica Set</code>, <code>MinIO S3</code>, <code>Mosquitto MQTT</code>) plus 14 standalone reference cards (including MySQL 8.0/8.4 InnoDB, Dual-Log <code>2PC</code> &amp; 3-Engine Failover Matrix).
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item"><a href="./reference_cards/README.md">reference_cards/README.md</a><span class="file-desc">21-Symptom Diagnostic Index</span></li>
@@ -1357,7 +1357,7 @@
             <li class="file-item"><a href="./reference_cards/11_python_database_drivers_for_weather_engineers.md">reference_cards/11_python_database_drivers_for_weather_engineers.md</a><span class="file-desc">psycopg2, PyMongo, DuckDB, Arrow</span></li>
             <li class="file-item"><a href="./reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md">reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md</a><span class="file-desc">DBeaver PostGIS &amp; Compass GUI</span></li>
             <li class="file-item"><a href="./reference_cards/13_database_observability_prometheus_grafana_and_alerts.md">reference_cards/13_database_observability_prometheus_grafana_and_alerts.md</a><span class="file-desc">Prometheus &amp; Grafana Alerts</span></li>
-            <li class="file-item"><a href="./reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md">reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md</a><span class="file-desc">MySQL 8.0/8.4 &amp; MariaDB Guide</span></li>
+            <li class="file-item"><a href="./reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md">reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md</a><span class="file-desc">MySQL 8.0/8.4, 2PC &amp; Replicas</span></li>
           </ul>
           <div class="code-box">
             <button class="copy-btn" onclick="copyCode(this)">Copy Command</button>

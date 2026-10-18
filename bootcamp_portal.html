@@ -1068,12 +1068,12 @@
             <span class="pill pill-cyan">SQLite 3 + QC Lab</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Declarative execution order; <code>1NF–3NF</code> Normalization vs. Denormalization; all 7 SQL <code>JOIN</code> types &amp; SQLite <code>&lt;3.39</code>/<code>3.39+</code> compatibility; Three-Valued Logic (<code>3VL</code>), and neutralizing <code>-9999.0</code> / <code>-999.0</code> hardware sentinels with <code>NULLIF()</code>.
+            Declarative execution order; <code>NOT NULL</code> vs. <code>CHECK</code> 3VL asymmetry; <code>1NF–3NF</code> vs. Denormalization; all 7 SQL <code>JOIN</code>s &amp; <code>LEFT JOIN ON</code> vs. <code>WHERE</code> trap; Window Frame defaults (<code>ROWS</code> vs. <code>RANGE</code>); and <code>NULLIF(-9999.0)</code> sentinel hygiene.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day1/day1_master_coursebook.md" title="./day1/day1_master_coursebook.md">day1/day1_master_coursebook.md</a>
-              <span class="file-desc">Full Day 1 Coursebook</span>
+              <span class="file-desc">Full Day 1 Coursebook (1,335 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day1/weather_ops_seed_sql_course_walkthrough.md" title="./day1/weather_ops_seed_sql_course_walkthrough.md">day1/weather_ops_seed_sql_course_walkthrough.md</a>
@@ -1117,12 +1117,12 @@
             <span class="pill pill-emerald">PostgreSQL 16 Internals</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Process &amp; memory architecture (<code>shared_buffers</code>, <code>work_mem</code>, WAL); 8KB Heap Page anatomy (<code>PageHeaderData</code>, <code>lp_off</code>, 23-byte <code>HeapTupleHeaderData</code>); CPU 8-byte alignment; MVCC <code>xmin</code>/<code>xmax</code> vs MySQL InnoDB.
+            <code>TIMESTAMPTZ</code> vs. <code>TIMESTAMP</code> (8B UTC math); <code>NUMERIC(p,s)</code> vs. IEEE-754 floats; <code>PRIMARY KEY</code> vs. <code>UNIQUE NULLS DISTINCT</code>; 8KB Heap Page anatomy &amp; CPU 8-byte Tuple Tetris; MVCC <code>xmin</code>/<code>xmax</code> vs. MySQL InnoDB.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day2/day2_master_coursebook.md">day2/day2_master_coursebook.md</a>
-              <span class="file-desc">Full Day 2 Coursebook</span>
+              <span class="file-desc">Full Day 2 Coursebook (1,155 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day2/weather_ops_pg_sql_course_walkthrough.md">day2/weather_ops_pg_sql_course_walkthrough.md</a>
@@ -1170,12 +1170,12 @@
             <span class="pill pill-amber">PostGIS 3.4 + 5M Rows</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Window Functions (<code>LAG</code> 3h pressure tendency, 24h rolling thermal frames); Declarative Range Partitioning; <code>BRIN</code> vs <code>B-Tree</code> vs <code>GIN</code>; PostGIS <code>GEOGRAPHY(Point, 4326)</code>, <code>ST_DWithin</code>, and 5M-row benchmark.
+            Declarative Range Partitioning (Partitioned PK rules &amp; half-open <code>[A, B)</code> bounds); why <code>BRIN</code> uses lossy <code>Bitmap Heap Scan + Recheck Cond</code> vs. <code>B-Tree</code>/<code>GIN</code>; PostGIS <code>GEOGRAPHY(Point, 4326)</code> &amp; <code>ST_DWithin</code>; 5M-row benchmark.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day3/day3_master_coursebook.md">day3/day3_master_coursebook.md</a>
-              <span class="file-desc">Full Day 3 Coursebook</span>
+              <span class="file-desc">Full Day 3 Coursebook (1,019 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day3/day3_weather_advanced_pg_sql_course_walkthrough.md">day3/day3_weather_advanced_pg_sql_course_walkthrough.md</a>
@@ -1219,12 +1219,12 @@
             <span class="pill pill-purple">MongoDB 7.0 + 50k Docs</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Polymorphic radiosonde soundings (<code>vertical_levels</code> arrays) &amp; 3D ultrasonic anemometers; WiredTiger BSON &amp; <code>zstd</code> compression; <code>$elemMatch</code>, <code>$unwind</code>, <code>2dsphere</code> GeoJSON (<code>[lon, lat]</code>), and the <strong>ESR Rule</strong>.
+            <code>$jsonSchema</code> (<code>required</code> vs. <code>bsonType</code>) &amp; the <code>{ field: null }</code> vs. <code>$type: 10</code> query trap; WiredTiger BSON &amp; Time-Series buckets; <code>$unwind</code> silent empty-array drop vs. <code>preserveNullAndEmptyArrays</code>; <code>2dsphere</code> &amp; the <strong>ESR Rule</strong>.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day4/day4_master_coursebook.md">day4/day4_master_coursebook.md</a>
-              <span class="file-desc">Full Day 4 Coursebook</span>
+              <span class="file-desc">Full Day 4 Coursebook (1,116 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day4/day4_weather_ops_mongo_js_course_walkthrough.md">day4/day4_weather_ops_mongo_js_course_walkthrough.md</a>
@@ -1272,16 +1272,16 @@
             <span class="pill pill-cyan">DuckDB + Parquet + Zarr</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Row vs Columnar physics; Apache Parquet Row Groups &amp; ZSTD; DuckDB vectorized SIMD execution; Hive partitioning &amp; compaction; <code>COG</code>, <code>Zarr</code>, <code>NetCDF4</code>, <code>GRIB2</code>, <code>BUFR</code> on Ceph RGW S3; Edge-to-Core MQTT/Kafka Polyglot Lakehouse.
+            DuckDB 3-Gate Parquet pruning without B-Trees (Hive + Row Group Zone Maps + Column Projection); <code>NetCDF4</code>/<code>COG</code> <code>UInt16</code> quantization (<code>scale_factor</code> &amp; <code>_FillValue</code> masking); Edge-to-Core MQTT/Kafka Polyglot Lakehouse.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
             <li class="file-item">
               <a href="./day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md">day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md</a>
-              <span class="file-desc">Part 1: OLAP, Parquet &amp; 4D Grids</span>
+              <span class="file-desc">Part 1: OLAP, Parquet &amp; 4D Grids (988 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md">day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md</a>
-              <span class="file-desc">Part 2: Polyglot Lakehouse Capstone</span>
+              <span class="file-desc">Part 2: Polyglot Lakehouse Capstone (951 lines)</span>
             </li>
             <li class="file-item">
               <a href="./day5/seed_olap_data.py">day5/seed_olap_data.py</a>

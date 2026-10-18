@@ -108,6 +108,17 @@ operationProfiling:
 | **Positional Array Update** | `UPDATE launch_levels SET dewpoint = -7.9 WHERE ...` | `db.radiosonde_soundings.updateOne({ station_id: 60680, "vertical_levels.pressure_hpa": 700 }, { $set: { "vertical_levels.$.dewpoint_c": -7.9 } })` |
 | **Idempotent Upsert** | `INSERT ... ON CONFLICT DO UPDATE` | `db.stations.updateOne({ _id: 60390 }, { $set: { ... } }, { upsert: true })` |
 
+### 3.1 Demystifying the `{ field: null }` Query Trap & `$jsonSchema` (Black Box 4A)
+* **`$jsonSchema` Validation Rule:** Just like SQL's `NOT NULL` vs. `CHECK`, MongoDB separates **Key Presence** (`required: ["station_id", "temp_c"]`) from **Value Type/Domain** (`properties: { temp_c: { bsonType: "double" } }`). If a field is in `properties` with `bsonType: "double"` (and no `"null"` in `bsonType`), omitting the key entirely **passes** validation unless it is in `required`, whereas sending `{ temp_c: null }` **fails** validation (`null` is BSON Type `10`, not `"double"`).
+* **The 4-Pattern MQL Null vs. Missing Field Query Matrix:**
+
+| Query Pattern | Matches `{ temp_c: 24.5 }`? | Matches `{ temp_c: null }` (Explicit Null)? | Matches `{}` (Missing Key)? | Meteorological Use Case |
+| :--- | :---: | :---: | :---: | :--- |
+| **`{ temp_c: null }`** *(Ambiguous Default!)* | ❌ No | **✅ YES** | **✅ YES** | Catching all records lacking a temperature reading (whether omitted or explicitly `null`). |
+| **`{ temp_c: { $type: 10 } }`** *(or `bsonType: "null"`)* | ❌ No | **✅ YES** | ❌ No | Finding stations that **have** a thermistor installed (`temp_c` key exists) but experienced a **sensor dropout (`null`)**. |
+| **`{ temp_c: { $exists: false } }`** | ❌ No | ❌ No | **✅ YES** | Finding polymorphic stations (e.g., rain-only gauges) that **never send** a `temp_c` key. |
+| **`{ temp_c: { $exists: true, $ne: null } }`** | **✅ YES** | ❌ No | ❌ No | Filtering for **present, non-null** readings before running math in `$project`. |
+
 ---
 
 ## 4. Native Time-Series Collection, Manual Buckets & TTL Quick Reference
@@ -158,6 +169,12 @@ db.hourly_sensor_buckets.updateOne(
 | **`$lookup`** | `LEFT JOIN` | Join time-series observations with `stations` collection metadata |
 | **`$sort` / `$limit`** | `ORDER BY` / `LIMIT` | `{ $sort: { wind_speed_kt: -1 } }, { $limit: 10 }` |
 | **`$merge`** | `MATERIALIZED VIEW` | Save aggregated climatology into a target collection (`{ $merge: { into: "upper_air_climatology" } }`) |
+
+### 5.1 Demystifying `$unwind`: Default `INNER JOIN` vs. `preserveNullAndEmptyArrays` `LEFT JOIN` (Black Box 4B)
+| `$unwind` Syntax | SQL Equivalent | Document with `[A, B]` | Document with `[]` (Empty) or `null` / Missing | When to Use |
+| :--- | :--- | :--- | :--- | :--- |
+| **`{ $unwind: "$hardware_faults" }`** | `INNER JOIN UNNEST(...)` | Emits 2 docs | **SILENTLY DROPPED (`0` docs)** | Fault-only reports where healthy stations (`[]`) should be excluded. |
+| **`{ $unwind: { path: "$hardware_faults", preserveNullAndEmptyArrays: true } }`** | `LEFT JOIN UNNEST(...)` | Emits 2 docs | **PRESERVED (`1` doc with `hardware_faults: null`)** | **Fleet-wide health dashboards** where healthy stations (`0` faults) must remain in the denominator! |
 
 ---
 

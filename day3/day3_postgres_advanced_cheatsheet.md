@@ -56,6 +56,10 @@ ALTER TABLE synoptic.observations_part
 DROP TABLE synoptic.obs_y2026m06;
 ```
 
+### 1.1 Partitioning Black Boxes Quick Reference (Black Box 3A)
+* **Why `PRIMARY KEY (obs_id)` Fails on a Partitioned Table (`0A000`):** PostgreSQL does not maintain a single global B-Tree across all partitions (which would break $O(1)$ `DETACH PARTITION`). Every child partition owns an independent local B-Tree. Therefore, every `PRIMARY KEY` or `UNIQUE` constraint **must include the partition key** (`PRIMARY KEY (obs_time, station_id)`).
+* **Why `FOR VALUES FROM (A) TO (B)` Is a Half-Open Interval $[A, B)$:** Lower bound `A` is **inclusive** ($\ge A$) and upper bound `B` is **strictly exclusive** ($< B$). Because timestamps are continuous microsecond points (`2026-06-30 23:59:59.999999+00`), setting `TO ('2026-07-01 00:00:00+00')` guarantees zero microsecond gaps between months and deterministic routing of exact midnight `00:00:00` to the new month.
+
 ---
 
 ## 2. Index Selection Matrix for Meteorological Data
@@ -68,6 +72,10 @@ DROP TABLE synoptic.obs_y2026m06;
 | **Covering (`INCLUDE`)** | Appends non-key payload columns directly into B-Tree leaf pages | `~35 MB` | Frequent dashboard queries needing `temp_c`, `pressure_hpa` with **`Index Only Scan` (`Heap Fetches: 0`)** | `CREATE INDEX idx_cov ON synoptic.observations (station_id, obs_time) INCLUDE (temp_c, pressure_hpa);` |
 | **GiST** *(Spatial)* | Balanced tree of 2D/spherical bounding boxes (R-Tree) | Small | PostGIS spatial proximity (`ST_DWithin`), polygon containment (`ST_Intersects`), range overlaps (`&&`) | `CREATE INDEX idx_geog ON synoptic.stations USING GIST (geog);` |
 | **GIN** *(Inverted)* | Maps each internal key/element/trigram to a posting list of row `ctid`s | Moderate | Searching inside `JSONB` sensor payloads (`@>`, `?`, `?&`) or trigram fuzzy text (`pg_trgm`) | `CREATE INDEX idx_gin ON synoptic.observations_part USING GIN (sensor_payload);` |
+
+### 2.1 Why `BRIN` Always Uses `Bitmap Heap Scan + Recheck Cond` (Black Box 3B)
+* **Lossy Block Summary vs. Exact Row Pointer:** A B-Tree leaf node stores exact 6-byte `ctid = (block, offset)` pointers to individual rows. A `BRIN` index stores **zero row pointers**—only `[min_value, max_value]` per range of `pages_per_range` (e.g., 8 or 128) physical 8 KB heap blocks.
+* **Two-Step Execution:** `Bitmap Index Scan` checks the tiny `BRIN` summary in RAM and marks matching 8 KB block ranges as *"might contain target rows."* Then `Bitmap Heap Scan` reads those sequential 8 KB blocks from disk and runs `Recheck Cond` on each tuple inside the block to discard non-matching rows. Because `BRIN` does not know individual row values, it **cannot enforce `UNIQUE`** and degrades to a full scan if rows are inserted out of chronological order (`correlation` near `0.0`).
 
 ---
 

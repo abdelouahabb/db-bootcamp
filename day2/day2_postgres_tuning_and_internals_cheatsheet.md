@@ -197,6 +197,36 @@ shared_preload_libraries = 'pg_stat_statements'
 | **2-Byte Aligned** (Offsets `0, 2, 4...`) | `'s'` (`short`) | `SMALLINT` (`int2`) |
 | **1-Byte / Packed** (Any offset) | `'c'` (`char`) | `BOOLEAN`, `"char"`, and short variable-length (`NUMERIC`, `VARCHAR`, `TEXT`, `JSONB` with 1B `varlena` header) |
 
+### 4.1 Data Type & Uniqueness Decision Matrices (Black Boxes 2A, 2B, 2C)
+
+#### A. Temporal Types (`TIMESTAMPTZ` vs. `TIMESTAMP` — Both Are 8 Bytes on Disk!)
+> **The Hardware Secret:** Neither `TIMESTAMPTZ` nor `TIMESTAMP` stores a timezone string or offset in its 8 bytes on disk. Both store a `BIGINT` count of microseconds since `2000-01-01 00:00:00`. The difference is **Boundary Normalization**: `TIMESTAMPTZ` converts any input offset to **UTC** on `INSERT` and converts back to the session's `timezone` on `SELECT`, whereas `TIMESTAMP` strips the offset and stores raw wall-clock numbers (causing 1-hour duplicate collisions during Autumn DST fallback).
+
+| Pattern | SQL Declaration | Disk Size | UTC Normalized? | DST-Safe? | When to Use |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. Absolute Physical Instant** | `TIMESTAMPTZ NOT NULL` | `8 bytes` | **YES** | **YES** | **99% of meteorological timestamps:** `obs_time`, `init_time`, `valid_time`, `issued_at`. |
+| **2. Local Wall-Clock + IANA Zone** | `TIMESTAMPTZ` + `TEXT` (`'Africa/Algiers'`) | `8B + varlena` | **YES** | **YES** | Solar-noon climatology or legal local-time reporting across DST rules. |
+| **3. Abstract Calendar Date/Time** | `DATE` (`4B`) / `TIME` (`8B`) | `4B / 8B` | N/A | N/A | Daily climatological summaries (`valid_date DATE`) or scheduled launch times (`00:00`, `12:00`). |
+| **4. Naive `TIMESTAMP` *(Anti-Pattern)*** | `TIMESTAMP WITHOUT TIME ZONE` | `8 bytes` | **NO** | **NO** | **Avoid for physical events.** Only acceptable for synthetic simulation clocks with no real-world timezone. |
+
+#### B. Exact Decimal (`NUMERIC(p,s)`) vs. IEEE-754 Binary Float (`REAL` / `DOUBLE PRECISION`)
+> **The `(p, s)` Trap:** In `NUMERIC(p, s)`, $p$ is **total digits** (left + right of decimal) and $s$ is **fractional digits**. Maximum integer digits = $p - s$. Thus `NUMERIC(4,1)` holds `-999.9` to `999.9` (inserting `1013.2` raises `22003: numeric field overflow`; pressure requires `NUMERIC(6,1)`).
+
+| Pattern | SQL Declaration | Disk Size | Math Representation | `0.1 + 0.2 = 0.3`? | When to Use |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. Exact Base-10 Contract** | `NUMERIC(p, s)` | `5–11 bytes` (`varlena`) | Base-10000 exact digits | **YES (`TRUE`)** | Official WMO synoptic archives (`temp_c NUMERIC(4,1)`), station `latitude NUMERIC(7,4)`, `precip_1h_mm NUMERIC(5,1)` where `= 0.3` must never fail due to binary float drift. |
+| **2. High-Speed 64-Bit Scientific Float** | `DOUBLE PRECISION` (`float8`) | `8 bytes` (fixed) | IEEE-754 binary64 ($\approx 15–17$ digits) | **NO (`0.30000000000000004`)** | High-frequency 10 Hz ultrasonic turbulence, NWP perturbation matrices, and hardware-accelerated CPU math. |
+| **3. Compact 32-Bit Sensor Float** | `REAL` (`float4`) | `4 bytes` (fixed) | IEEE-754 binary32 ($\approx 6–7$ digits) | **NO** | Massive 5M–1B row raw IoT tables (`day3` benchmark) where saving 4 bytes/column in Tuple Tetris is paramount. |
+| **4. Scaled Integer Quantization** | `SMALLINT` (`int2`) / `INTEGER` (`int4`) | `2B / 4B` (fixed) | Integer $\times \text{scale\_factor}$ | **YES** | Satellite rasters (`COG`/`NetCDF4` `UInt16` with `scale_factor = 0.01`) and ultra-compact wire protocols. |
+
+#### C. `PRIMARY KEY` vs. `UNIQUE NOT NULL` vs. Nullable `UNIQUE` (`NULLS DISTINCT`)
+| Constraint Pattern | Implicitly Adds `NOT NULL`? | Multiple `NULL`s Allowed? | When to Use |
+| :--- | :--- | :--- | :--- |
+| **`PRIMARY KEY (col)`** | **YES** | **NO** (`0` `NULL`s) | Every table's canonical row identity (`station_id`, `obs_id`, or partitioned `(obs_time, station_id)`). |
+| **`UNIQUE NOT NULL`** | Explicit | **NO** (`0` `NULL`s) | Secondary mandatory natural keys (`icao_code VARCHAR(4) UNIQUE NOT NULL`, `station_id, obs_time`). |
+| **`UNIQUE` (Default `NULLS DISTINCT`)** | **NO** | **YES (Unlimited `NULL`s!)** | Optional external identifiers (`wigos_id VARCHAR(32) UNIQUE`) where unassigned stations are `NULL`, but every assigned ID must be unique. |
+| **`UNIQUE NULLS NOT DISTINCT` *(PG 15+)*** | **NO** | **At most ONE `NULL`** | Composite keys with optional dimensions where `(60390, NULL)` must not be inserted twice. |
+
 ---
 
 ## 5. WAL, Crash Recovery & High-Speed Ingestion Summary Matrix

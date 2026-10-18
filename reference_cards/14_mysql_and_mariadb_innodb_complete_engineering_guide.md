@@ -441,7 +441,111 @@ WHERE s.station_id IS NULL;
 
 ## 9. High Availability: GTID Replication, MySQL InnoDB Cluster (Group Replication) & ProxySQL
 
-Just as PostgreSQL uses **Patroni + `etcd` + HAProxy + PgBouncer** (covered on Day 3), enterprise MySQL deployments achieve automated High Availability, split-brain prevention, and connection pooling using **MySQL InnoDB Cluster** (or **Percona XtraDB Cluster / MariaDB Galera**) paired with **MySQL Router** or **ProxySQL**:
+> [!IMPORTANT]
+> **Black Box Demystified: How MySQL & MariaDB Replicas Actually Work Under the Hood (Why MySQL Has TWO Separate Logs & 3 Replication Threads)**
+>
+> Engineers moving between **PostgreSQL** and **MySQL / MariaDB** are often surprised to discover that MySQL replication works completely differently from PostgreSQL Streaming Replication:
+> - In **PostgreSQL**, there is only **ONE log** (`pg_wal`): it serves as **both** the physical crash-recovery log *and* the byte-stream sent to Standby replicas.
+> - In **MySQL**, because of its **Pluggable Storage Engine Architecture** (Section 2), there are **TWO completely separate logs** on the Primary:
+>   1. **The `InnoDB Redo Log` (`#ib_redo*` — Storage Engine Layer):** Records low-level physical/physiological page modifications (`Space ID`, `Page No`, byte offset) used **only for local InnoDB crash recovery**. Replicas **never** receive the InnoDB Redo Log!
+>   2. **The `Binary Log` (`binlog` / `mysql-bin.00000X` — MySQL Server Layer):** Records logical/row-level data changes (`Write_rows`, `Update_rows`, `Delete_rows` + `GTID` header) across *all* storage engines. This is the **stream shipped to Replicas** and CDC consumers (`Debezium` / Kafka).
+
+### 9.1 The "Two-Log Problem" & Internal XA Two-Phase Commit (`2PC`) on Every `COMMIT`
+
+If a meteorological ingestion worker executes `COMMIT;` on the MySQL Primary, what prevents the row from being written to the `InnoDB Redo Log` while crashing *before* it is written to the `binlog` (which would leave the Primary with the row, but every Replica missing the row forever)?
+
+MySQL solves this by executing an **Internal XA Two-Phase Commit (`2PC`)** between the Server Layer (`binlog`) and the Storage Engine Layer (`InnoDB`) on **every single transaction**:
+
+```
+   CLIENT: COMMIT;
+      │
+      ▼
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: InnoDB PREPARE Phase (Storage Engine Layer)                               │
+│ • InnoDB writes the transaction's dirty-page changes to the InnoDB Redo Log       │
+│   buffer, marks the Undo/Redo record state as TRX_STATE_PREPARED (with the XID),  │
+│   and flushes to disk if innodb_flush_log_at_trx_commit = 1.                      │
+└─────────────────────────────────────────┬─────────────────────────────────────────┘
+                                          │
+                                          ▼
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Binary Log WRITE & FSYNC Phase (MySQL Server Layer — The Commit Point!)   │
+│ • The MySQL Server assigns a GTID (e.g., UUID:14521), writes the transaction's    │
+│   row events + XID into mysql-bin.000042, and calls fsync() to NVMe disk          │
+│   if sync_binlog = 1.                                                             │
+│ ★ ARCHITECTURAL RULE: Once the XID hits the binlog on disk, the transaction is    │
+│   officially COMMITTED! Even if power fails 1 microsecond later, upon reboot      │
+│   MySQL scans the binlog, sees XID 14521, and tells InnoDB to roll it forward!    │
+└─────────────────────────────────────────┬─────────────────────────────────────────┘
+                                          │
+                                          ▼
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: InnoDB COMMIT Phase (Storage Engine Layer)                                │
+│ • InnoDB changes the transaction status from PREPARED to COMMITTED in the Undo    │
+│   header, releases row/gap locks, and returns "Query OK" to the client.           │
+└───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **The Mandatory "Dual-1" Production Rule (`innodb_flush_log_at_trx_commit = 1` + `sync_binlog = 1`):**
+  - If you set `sync_binlog = 0` (leaving `binlog` flushing to the OS page cache), an OS kernel panic or power loss can lose up to 1 second of `binlog` events that InnoDB already committed—causing **permanent silent divergence between Primary and Replicas**!
+  - Modern MySQL 8.0/8.4 uses **Binary Log Group Commit** to batch dozens of concurrent client `COMMIT`s into a single `fsync()` call, preserving high throughput even with `Dual-1` enabled.
+
+---
+
+### 9.2 The 3-Pattern `binlog_format` Decision Matrix (`STATEMENT` vs. `ROW` vs. `MIXED`)
+
+What actually gets written inside `mysql-bin.000042`? MySQL supports 3 formats, and choosing the wrong one can silently corrupt weather replicas:
+
+| `binlog_format` | What Is Written to the `binlog` | What Happens on the Replica | Failure Mode / Why It Matters for Weather Telemetry |
+| :--- | :--- | :--- | :--- |
+| **1. `STATEMENT`**<br>*(Legacy SQL-level replication)* | The raw SQL text string:<br>`UPDATE station_live_status SET last_ping_utc = NOW() WHERE status = 'ONLINE' LIMIT 10;` | The Replica's SQL thread re-executes the exact SQL string against its own local tables. | **CRITICAL DATA DRIFT RISK:** Any non-deterministic SQL (`UUID()`, `SYSDATE()`, `RAND()`, `LIMIT` without `ORDER BY`, or triggers) evaluates to **different values or different rows on the Replica**! |
+| **2. `ROW` (`RBR`)**<br>*(MySQL 8.0+ Default — **Production Gold Standard**)* | The exact **binary before-image and after-image of every modified row** (`Table_map_log_event` + `Write_rows` / `Update_rows` / `Delete_rows`). | The Replica applies the exact column byte values directly to the target PK row without re-evaluating SQL functions. | **100% Deterministic:** Replicas are guaranteed to have the exact same row values as the Primary, and Change Data Capture (`Debezium` $\rightarrow$ Kafka/Parquet) can stream every before/after state. *(Caution: a single `DELETE FROM observations WHERE obs_time < '2020-01-01'` deleting 10M rows writes 10M row events into the `binlog`—always chunk mass deletes!)* |
+| **3. `MIXED`**<br>*(Hybrid fallback)* | Uses `STATEMENT` for deterministic queries and switches to `ROW` when MySQL detects `UUID()` or non-deterministic functions. | Replicas execute statements normally and apply row images for flagged queries. | Rarely used in modern setups; **`binlog_format = ROW`** with `binlog_row_image = FULL` (or `MINIMAL` to log only changed columns) is the universal enterprise standard. |
+
+---
+
+### 9.3 Anatomy of the MySQL 3-Thread Replication Pipeline & Parallel Workers (`MTS`)
+
+Unlike PostgreSQL (where a single `walreceiver` streams physical blocks into `pg_wal` and the Startup process replays them), classic MySQL/MariaDB replication uses a **3-Thread Pipeline with an intermediate `Relay Log` on the Replica**:
+
+```mermaid
+flowchart LR
+    subgraph PrimaryNode["MySQL Primary (Source — Port 3306)"]
+        Commit["Client Transaction COMMIT\n(Internal XA 2PC)"]
+        Binlog[("Binary Log\nmysql-bin.000042\n(GTID + Row Events)")]
+        DumpThread["1. Binlog Dump Thread\n(Streams GTID Events over TCP)"]
+        Commit --> Binlog --> DumpThread
+    end
+
+    subgraph ReplicaNode["MySQL Replica (super_read_only = ON)"]
+        IOThread["2. Replica I/O Receiver Thread\n(Writes immediately to Relay Log)"]
+        RelayLog[("Relay Log on NVMe\nrelay-bin.000019\n(Decouples Network from Replay)")]
+        Coordinator["3a. SQL Coordinator Thread\n(Reads Relay Log & Schedules\nNon-Conflicting Transactions)"]
+        Workers["3b. Parallel Applier Workers\n(replica_parallel_workers = 8)\nWRITESET Dependency Tracking"]
+        ReplicaInnoDB[("Replica InnoDB\n16KB Clustered B+Trees\n+ Executed_Gtid_Set")]
+
+        IOThread --> RelayLog --> Coordinator --> Workers --> ReplicaInnoDB
+    end
+
+    DumpThread ==>|"Async / Semi-Sync TCP Stream\n(SOURCE_AUTO_POSITION = 1)"| IOThread
+```
+
+1. **Thread 1 — Primary `Binlog Dump Thread` (`Binlog Dump GTID`):**
+   - Spawned on the Primary for each connected Replica. It reads committed `GTID` transactions from `mysql-bin.000042` and pushes them over TCP to the Replica.
+2. **Thread 2 — Replica `I/O Receiver Thread` (`Replica_IO_Running: Yes`) + `Relay Log`:**
+   - Receives binlog events from the Primary and appends them sequentially into the Replica's local **`Relay Log` (`relay-bin.000019`)** on disk, updating `Retrieved_Gtid_Set`.
+   - **Why does the `Relay Log` exist?** It decouples **network receipt** from **storage engine execution**! Even if the Replica's InnoDB Buffer Pool is busy running a heavy analytical query (delaying replay), the `I/O Thread` still captures every transaction onto the Replica's disk in sub-milliseconds so zero data is lost if the Primary catches fire!
+3. **Thread 3 — Replica `SQL Applier Coordinator` + Parallel Worker Threads (`Replica_SQL_Running: Yes`):**
+   - **The Historical MySQL Bottleneck:** Before MySQL 5.7/8.0, the Primary executed writes across **64 concurrent CPU threads**, while the Replica had only **1 single-threaded SQL Applier**—causing massive replication lag (`Seconds_Behind_Source` climbing to hours) during burst weather ingestion!
+   - **The Modern Fix (`WRITESET` Multi-Threaded Applier — Default in MySQL 8.0.27+ / 8.4):**
+     - By setting `replica_parallel_workers = 8` (or `16`), `binlog_transaction_dependency_tracking = WRITESET`, and `replica_preserve_commit_order = ON`, the Primary hashes the Primary Keys modified by each transaction (`WriteSet`).
+     - Any two transactions touching **different weather stations (`station_id = 60390` vs. `station_id = 60580`)** have non-overlapping WriteSets and are replayed **in parallel across all 8 worker threads on the Replica** while preserving exact commit order for readers!
+
+---
+
+### 9.4 The 4-Pattern MySQL & MariaDB Replication & Failover Decision Matrix
+
+When a Primary crashes or is isolated by a network partition, how does MySQL prevent data loss (`RPO = 0`) and `Split-Brain`?
 
 ```mermaid
 flowchart LR
@@ -460,15 +564,73 @@ flowchart LR
     Proxy -.->|"SELECT Queries\n(Port 6447 R/O)"| Sec1 & Sec2
 ```
 
-### 9.1 Core MySQL HA Concepts
-1. **`GTID` (Global Transaction Identifiers — `gtid_mode = ON`):**
-   - Every transaction committed on the Primary is assigned a globally unique ID (`server_uuid:transaction_id`, e.g., `3E11FA47-71CA-11E1-9E33-C80AA9429562:1-14520`).
-   - Eliminates fragile legacy binlog file+offset (`mysql-bin.000042` pos `10482`) positioning during replica promotion (`CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION = 1;`).
-2. **Semi-Synchronous Replication vs. Group Replication (Paxos):**
-   - **Semi-Sync (`rpl_semi_sync_source_wait_for_replica_count = 1`):** Primary waits for at least 1 replica to acknowledge receipt of the binlog event to its Relay Log before returning `COMMIT` to the client (**Zero Data Loss `RPO = 0`**).
-   - **MySQL Group Replication (InnoDB Cluster):** Built-in distributed **Paxos** state machine across 3, 5, or 7 nodes. Automatically detects Primary failure, elects a new Primary in seconds without external `etcd`/`ZooKeeper`, and fences minority partitions via **`super_read_only = ON`**.
-3. **ProxySQL vs. PgBouncer:**
-   - **ProxySQL** is the gold-standard Layer-7 proxy for MySQL: it provides **Connection Multiplexing** (like PgBouncer's transaction pooling), **SQL-aware Read/Write Splitting** (routing `SELECT` to Secondaries and `INSERT/UPDATE` to the Primary on a single port), **Query Caching**, and **Live Query Rewriting** without restarting application servers!
+| Replication Topology | How `COMMIT` Acknowledgement Works | Data Loss Risk on Primary Crash (`RPO`) | The "Phantom Read" Anomaly on Failover | Automatic Failover & Split-Brain Protection |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Asynchronous GTID Replication**<br>*(Default MySQL Replication)* | Primary commits locally (`2PC` between `Redo` + `binlog`) and returns `OK` immediately. `Dump Thread` ships events later. | **$\text{RPO} > 0$** (Transactions in flight not yet written to Replica's `Relay Log` are lost if Primary NVMe dies). | None on Primary before crash, but acknowledged writes vanish after failover. | **External Orchestrator Required:** (`Orchestrator`, `MHA`, or Cloud RDS controller) + `ProxySQL`. |
+| **2. Semi-Synchronous (`AFTER_COMMIT`)**<br>*(Legacy MySQL 5.5/5.6 Semi-Sync)* | Primary commits inside InnoDB (**Step 3** of `2PC`), **then** waits for 1 Replica I/O thread to ACK `Relay Log` write before returning `OK` to client. | **$\text{RPO} = 0$** (Replica has the event in its `Relay Log`). | **YES — Phantom Read Trap!** Because InnoDB committed *before* waiting for the Replica ACK, *other* clients on the Primary can already read the new row even if the Primary crashes before the Replica ever receives it! | External Orchestrator + `super_read_only = ON`. |
+| **3. Lossless Semi-Sync (`AFTER_SYNC`)**<br>*(MySQL 5.7 / 8.0+ Default Semi-Sync)* | Primary writes to `binlog` (**Step 2** of `2PC`), **waits for 1+ Replica I/O thread to ACK `Relay Log` receipt**, and **only then** executes **Step 3** (InnoDB commit + lock release)! | **$\text{RPO} = 0$ (True Lossless)** | **ZERO Phantom Reads!** No other session on the Primary can see the uncommitted row until at least 1 Replica safely holds the transaction in its `Relay Log`. | External Orchestrator / Kubernetes Operator + `ProxySQL`. |
+| **4. MySQL InnoDB Cluster (`Paxos Group Replication`) / MariaDB `Galera` (`wsrep`)**<br>*(Enterprise Built-In HA)* | At `COMMIT`, the transaction's `WriteSet` is broadcast to a **3- or 5-node Paxos Group**. Majority quorum certifies there are no conflicting concurrent row updates before committing. | **$\text{RPO} = 0$** across the quorum. | **Zero.** (Can even enforce cluster-wide synchronous reads via `group_replication_consistency = BEFORE_ON_PRIMARY_FAILOVER`). | **100% Built-In Automatic Election (< 5–10s):** Minority nodes automatically fence themselves via **`super_read_only = ON`**, and **MySQL Router / ProxySQL** switches traffic automatically! |
+
+> [!WARNING]
+> **Critical MySQL DBA Rule: Always Set `super_read_only = ON` on Every Replica!**
+> In MySQL, setting `read_only = ON` only blocks regular application users—it **still allows `SUPER` / `root` users (or misconfigured cron jobs/migration scripts using admin credentials) to accidentally run `INSERT`/`UPDATE` directly on a Replica**! A single stray write on a Replica injects an errant `GTID` (`gtid_executed`) that immediately halts replication or corrupts failover. Always enforce **both** `read_only = ON` and **`super_read_only = ON`** on every Replica so even `root` cannot write to a Secondary until it is explicitly promoted!
+
+---
+
+### 9.5 Essential MySQL 8.0/8.4 Replica Setup & Live Diagnostic SQL Commands
+
+```sql
+-- 1. ON THE REPLICA: Configure GTID Auto-Positioning & Start the 3-Thread Pipeline
+CHANGE REPLICATION SOURCE TO
+    SOURCE_HOST = '10.20.1.10',
+    SOURCE_PORT = 3306,
+    SOURCE_USER = 'repl_weather',
+    SOURCE_PASSWORD = 'StrongReplPassword!',
+    SOURCE_AUTO_POSITION = 1,          -- Uses GTID sets instead of fragile binlog file/pos!
+    SOURCE_SSL = 1;
+
+START REPLICA;
+
+-- 2. Inspect Replica Health, Lag & GTID Sets (Classic CLI View)
+SHOW REPLICA STATUS\G
+-- Key fields to verify:
+--   Replica_IO_Running: Yes
+--   Replica_SQL_Running: Yes
+--   Seconds_Behind_Source: 0
+--   Retrieved_Gtid_Set: 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-89410
+--   Executed_Gtid_Set:  3e11fa47-71ca-11e1-9e33-c80aa9429562:1-89410
+--   Auto_Position: 1
+
+-- 3. Modern MySQL 8.0+ Structured Replication Forensics via performance_schema
+SELECT
+    c.CHANNEL_NAME,
+    c.HOST AS source_host,
+    c.SERVICE_STATE AS io_receiver_state,
+    s.SERVICE_STATE AS sql_coordinator_state,
+    w.WORKER_ID,
+    w.SERVICE_STATE AS worker_state,
+    w.LAST_APPLIED_TRANSACTION,
+    w.LAST_ERROR_MESSAGE
+FROM performance_schema.replication_connection_status c
+JOIN performance_schema.replication_applier_status s USING (CHANNEL_NAME)
+LEFT JOIN performance_schema.replication_applier_status_by_worker w USING (CHANNEL_NAME);
+```
+
+---
+
+### 9.6 The Grand 3-Engine Replication & Failover Comparison Matrix (PostgreSQL vs. MySQL vs. MongoDB)
+
+To tie together **Day 3 (PostgreSQL HA)**, **Day 4 (MongoDB Replica Sets)**, and **Reference Card 14 (MySQL HA)**, here is how all three engines solve replication, durability, and failover side-by-side:
+
+| Architectural Dimension | PostgreSQL 16 (`Streaming Replication` + `Patroni`) | MySQL 8.0 / 8.4 (`GTID` + `Semi-Sync` / `InnoDB Cluster`) | MongoDB 7.0 (`Replica Set`) |
+| :--- | :--- | :--- | :--- |
+| **Replication Stream Source** | **Single Unified Physical Log (`pg_wal`)** — exact 8 KB page byte-deltas (`XLogRecord`). | **Dual-Log Architecture:** `InnoDB Redo Log` (local crash recovery) + **`Server Binary Log` (`binlog_format = ROW`)** synced via Internal XA `2PC`. | **Idempotent Logical Operation Log (`local.oplog.rs`)** — 5% disk capped collection inside WiredTiger. |
+| **Intermediate Buffer on Replica** | Standby `walreceiver` writes directly into the Standby's own `pg_wal/` directory. | Replica `I/O Thread` writes into an intermediate **`Relay Log` (`relay-bin.00000X`)**, decoupled from the `SQL Applier`. | Secondary pulls batches via `oplog` cursor into memory/WiredTiger journal and applies in parallel batches. |
+| **Parallel Replay on Replica** | Single Startup redo process *(PostgreSQL 16+ prefetches blocks via `recovery_prefetch = on`)*. | **Multi-Threaded Applier (`MTS`):** `replica_parallel_workers = 8+` using **`WRITESET`** Primary Key dependency hashing. | **Multi-Threaded Oplog Applier:** Replays document writes in parallel across 16 worker threads. |
+| **How `RPO = 0` (Zero Data Loss) Is Configured** | `synchronous_commit = on` (or `remote_apply`) + `synchronous_standby_names = 'ANY 1 (...)'` | **Lossless Semi-Sync** (`rpl_semi_sync_source_wait_point = AFTER_SYNC` + `Dual-1`) or **InnoDB Cluster Paxos**. | Client Write Concern **`{ w: "majority", j: true }`** across a 3-node Replica Set. |
+| **What Happens to Unreplicated Writes if Primary Crashes in Async Mode?** | Old Primary diverges; **`pg_rewind`** rolls back uncommitted WAL blocks after the divergence `LSN` so the node can rejoin as Standby. | If using Async/`AFTER_COMMIT`, unreplicated binlog events are lost on failover (or require manual flashback). | When the old `{ w: 1 }` Primary rejoins, it rolls back unreplicated `oplog` entries into **`rollback/<collection>.bson`** files on disk! |
+| **Built-In vs. External Consensus & Failover** | **External Mandatory:** Requires **Patroni + 3-node `etcd` (Raft) + `/dev/watchdog` + `HAProxy`**. | **Choice of Both:** Classic Async/Semi-Sync uses external **`Orchestrator` + `ProxySQL`**; **MySQL InnoDB Cluster** has **built-in Paxos Group Replication** + `MySQL Router`. | **100% Built-In:** Native **Raft-like election** inside `mongod` + topology-aware `mongodb+srv://` smart drivers (zero external `etcd` or proxy required!). |
+| **How Split-Brain Old Primaries Are Fenced** | Patroni `etcd` leader lease expiry $\rightarrow$ `pg_ctl stop -m immediate` or Linux kernel **`/dev/watchdog` hardware reset**. | InnoDB Cluster minority partition immediately enforces **`super_read_only = ON`** (blocking even `root` writes!). | Stepdown hook closes client sockets and rejects all writes with `NotWritablePrimary` in $< 1\text{ ms}$. |
 
 ---
 

@@ -235,6 +235,21 @@ Every clustered index row in InnoDB contains three hidden system fields:
 | **Idempotent `UPSERT`** | `INSERT ... ON CONFLICT (station_id, obs_time) DO UPDATE SET ... WHERE ... RETURNING *;` | `INSERT ... ON DUPLICATE KEY UPDATE ...` (no `WHERE` guard on update) | `INSERT ... ON CONFLICT(...) DO UPDATE SET ... WHERE ...` | PostgreSQL's `WHERE` guard avoids creating dead tuples when an identical synoptic bulletin is re-transmitted! |
 | **Identifier Quoting & Concat** | `"station_id"` and `'A' \|\| 'B'` (ANSI SQL) | `` `station_id` `` and `CONCAT('A', 'B')` | `"station_id"` and `'A' \|\| 'B'` | PostgreSQL follows strict ANSI SQL standards. |
 
+### 5.3 Replication, High Availability & Failover Mechanics (PostgreSQL vs. MySQL InnoDB)
+
+> [!IMPORTANT]
+> **Black Box Demystified: Why PostgreSQL Has 1 Log (`pg_wal`) While MySQL Has 2 Logs (`InnoDB Redo` + `Server binlog`) & 3 Replication Threads**
+> - **PostgreSQL Streaming Replication:** Uses a **single physical log (`pg_wal`)** for *both* crash recovery and replication. The Primary's `walsender` streams raw 8 KB page changes over TCP to the Standby's `walreceiver`, which writes directly to `pg_wal/` and replays them via the Startup process.
+> - **MySQL / MariaDB Replication:** Because MySQL supports pluggable storage engines (`InnoDB`, `MyRocks`, `MEMORY`), the **`InnoDB Redo Log` (`#ib_redo*`) is strictly local and is NEVER sent to replicas**! Instead, the MySQL Server Layer maintains a separate logical/row **`Binary Log` (`binlog` / `mysql-bin.00000X`)**, coordinated with InnoDB on every `COMMIT` via an **Internal XA Two-Phase Commit (`2PC`)** (`innodb_flush_log_at_trx_commit = 1` + `sync_binlog = 1`).
+> - See **[Reference Card 14 — Section 9](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md#9-high-availability-gtid-replication-mysql-innodb-cluster-group-replication--proxysql)** for the full step-by-step `2PC` diagram, `binlog_format` matrix, and 3-engine comparison!
+
+| Replication / HA Dimension | PostgreSQL 16 (`Streaming Replication` + `Patroni`) | MySQL 8.0 / 8.4 (`GTID` + `Semi-Sync` / `InnoDB Cluster`) | Architectural Impact on Weather Operations |
+| :--- | :--- | :--- | :--- |
+| **Log Shipped to Replicas** | **Physical WAL (`pg_wal`)** — exact 8 KB page byte offsets (`LSN`). | **Server Binary Log (`binlog_format = ROW`)** — logical before/after row images identified by **`GTID`** (`server_uuid:tx_id`). | PostgreSQL Standby is a byte-for-byte physical clone; MySQL Replica re-executes row events against its own InnoDB B+Trees. |
+| **Replica Thread Pipeline & Buffer** | **2 Processes:** `walreceiver` (writes directly to `pg_wal`) $\rightarrow$ `startup` redo process. | **3 Threads + `Relay Log`:** Primary `Binlog Dump Thread` $\rightarrow$ Replica `I/O Thread` $\rightarrow$ **`Relay Log` (`relay-bin.00000X`)** $\rightarrow$ `SQL Coordinator` + **`WRITESET` Parallel Worker Threads** (`replica_parallel_workers = 8`). | MySQL's `Relay Log` decouples network capture from B+Tree replay; `WRITESET` parallel workers prevent single-threaded replica lag. |
+| **Zero Data Loss (`RPO = 0`) Mode** | `synchronous_commit = on` (or `remote_apply`) | **Lossless Semi-Sync** (`rpl_semi_sync_source_wait_point = AFTER_SYNC`, which waits for Replica `Relay Log` ACK *before* InnoDB commits and releases locks!) or **InnoDB Cluster Paxos**. | Legacy MySQL `AFTER_COMMIT` allowed phantom reads on the Primary before crash; `AFTER_SYNC` guarantees true lossless failover. |
+| **Automatic Failover & Split-Brain Fencing** | **External Orchestrator Required:** **Patroni + 3-node `etcd` (Raft) + `/dev/watchdog` + `HAProxy`**. | **Choice of External (`Orchestrator` + `ProxySQL`) OR Built-In (`MySQL InnoDB Cluster` Paxos Group Replication + `MySQL Router`)** with **`super_read_only = ON`** fencing. | On MySQL Replicas, always set **both** `read_only = ON` and **`super_read_only = ON`** so even `root` scripts cannot inject errant `GTID`s! |
+
 ---
 
 ## 6. If You Must Operate MySQL InnoDB: Production Tuning & Diagnostics Reference

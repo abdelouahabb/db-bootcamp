@@ -8,7 +8,7 @@
 ---
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 13** | [Next Card ➡️](./06_dbt_for_meteorological_telemetry_engineering.md)
+> **Card Sequence:** [⬅️ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card ➡️](./06_dbt_for_meteorological_telemetry_engineering.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -947,4 +947,4 @@ ceph osd set-full-ratio 0.95
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 13** | [Next Card ➡️](./06_dbt_for_meteorological_telemetry_engineering.md) | [⬆️ Back to Top](#sovereign-on-premises-ceph-distributed-storage--proxmox-ve-hyperconverged-architecture-reference-card)
+> **Card Sequence:** [⬅️ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card ➡️](./06_dbt_for_meteorological_telemetry_engineering.md) | [⬆️ Back to Top](#sovereign-on-premises-ceph-distributed-storage--proxmox-ve-hyperconverged-architecture-reference-card)

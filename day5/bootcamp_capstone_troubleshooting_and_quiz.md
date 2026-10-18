@@ -32,8 +32,8 @@ Each operational scenario below details the observed production symptom, the und
 - **Root Cause & Fix:** Under SQL **Three-Valued Logic (3VL)**, `x NOT IN (60390, NULL)` expands to `x <> 60390 AND x <> NULL`. Since `x <> NULL` evaluates to `UNKNOWN`, and `TRUE AND UNKNOWN` is `UNKNOWN`, the `WHERE` clause rejects every single row!
   - **Fix:** Use `NOT EXISTS` (which uses two-valued boolean existence checks) or filter `WHERE station_id IS NOT NULL` inside the subquery.
 
-### Scenario 3: The Vanishing Silent Weather Station (Day 1 — `JOIN`s)
-- **Symptom:** An engineer wants a list of all stations and their observation counts, including stations under maintenance (`0` observations). They write:
+### Scenario 3: The Vanishing Silent Weather Station & Cross-Engine `JOIN` Trap (Day 1 — `3NF` & `JOIN` Compatibility)
+- **Symptom:** Because `stations` (`7` rows) and `observations` (`36` rows) are normalized into **Third Normal Form (`3NF`)** to prevent insertion/update/deletion anomalies, an engineer queries all stations and their valid observation counts using:
   ```sql
   SELECT s.station_id, COUNT(o.obs_id)
   FROM stations s
@@ -41,9 +41,11 @@ Each operational scenario below details the observed production symptom, the und
   WHERE o.qc_flag = 'VALID'
   GROUP BY s.station_id;
   ```
-  Station `60402` (`Bejaia`, which has `0` observations) completely disappears from the output!
-- **Diagnostic Question:** Why did `WHERE o.qc_flag = 'VALID'` turn the `LEFT JOIN` into an `INNER JOIN`, and how do you fix it?
-- **Root Cause & Fix:** For a station with `0` observations, all `o.*` columns after the `LEFT JOIN` are `NULL`. Filtering `WHERE o.qc_flag = 'VALID'` eliminates those `NULL` rows! Move the condition into the `ON` clause: `LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'`.
+  Station `60402` (`Bejaia`, which has `0` observations) completely disappears! Worse, when they try `FULL OUTER JOIN` to reconcile `forecasts` and `weather_alerts` on an edge SQLite `< 3.39` datalogger or a MySQL `8.0` server, the query crashes with a syntax error!
+- **Diagnostic Question:** Why did `WHERE o.qc_flag = 'VALID'` turn the `LEFT JOIN` into an `INNER JOIN`, and how do you write a portable `FULL OUTER JOIN` across SQLite `< 3.39` and MySQL `8.0/8.4`?
+- **Root Cause & Fix:**
+  1. For a station with `0` observations, all `o.*` columns after `LEFT JOIN` are `NULL`. Filtering `WHERE o.qc_flag = 'VALID'` evaluates to `UNKNOWN` and eliminates the preserved row! Move the filter into the `ON` clause: `LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'`.
+  2. Neither **SQLite `< 3.39.0`** nor **MySQL `8.0/8.4`** supports native `FULL OUTER JOIN`. Emulate it portably using `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL` (see [Day 1 Master Coursebook Section 6.2](../day1/day1_master_coursebook.md#62-the-complete-taxonomy-of-sql-joins--sqlite-compatibility-matrix) and [Reference Card 14 Section 7.1](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md#71-mysql-80--84-join-capabilities--4-engine-compatibility-matrix)).
 
 ### Scenario 4: The 24 GB "Tuple Tetris" Alignment Tax (Day 2 — PostgreSQL Physical Byte Alignment)
 - **Symptom:** A database architect designs a 1-billion-row telemetry table with columns ordered as:
@@ -53,11 +55,12 @@ Each operational scenario below details the observed production symptom, the und
 - **Root Cause & Fix:** 64-bit CPUs require 8-byte types (`TIMESTAMPTZ`, `BIGINT`) to sit at memory offsets divisible by 8. Placing a 1-byte `BOOLEAN` before an 8-byte column forces PostgreSQL to insert **7 bytes of zero-padding** after each boolean ($3 \times 7 = 21\text{ wasted bytes/row} = 21\text{ GB}$ across 1B rows!).
   - **Fix ("Tuple Tetris" Rule):** Order columns from largest alignment requirement to smallest: `(station_uuid UUID, obs_time TIMESTAMPTZ, pressure_pa BIGINT, flag1 BOOLEAN, flag2 BOOLEAN, flag3 BOOLEAN)`.
 
-### Scenario 5: The Bloated Synoptic Table After QC Scripts (Day 2 — PostgreSQL MVCC & Vacuum)
+### Scenario 5: The Bloated Synoptic Table After QC Scripts (Day 2 — PostgreSQL Heap MVCC vs. MySQL InnoDB Undo MVCC)
 - **Symptom:** Your `synoptic.observations` table has 40 million rows (~4 GB). A quality-control script runs 5 times a day updating `qc_flag` on millions of rows. Within two weeks, the table size on disk balloons to **28 GB** and queries slow down, even though `COUNT(*)` is still 40 million!
-- **Diagnostic Question:** Why did `UPDATE` cause the table to grow 7x on disk, and what `ALTER TABLE` setting prevents this?
-- **Root Cause & Fix:** Under PostgreSQL **MVCC**, every `UPDATE` marks the old tuple's `xmax` (creating a **Dead Tuple**) and inserts a brand-new tuple version at a new `ctid`. Default `autovacuum_vacuum_scale_factor = 0.20` waits until 20% (8 million rows!) change before vacuuming.
-  - **Fix:** Run `VACUUM (ANALYZE) synoptic.observations;` and lower the table's scale factor: `ALTER TABLE synoptic.observations SET (autovacuum_vacuum_scale_factor = 0.01);`.
+- **Diagnostic Question:** Why did `UPDATE` cause the PostgreSQL table to grow 7x on disk, what `ALTER TABLE` setting prevents this, and how does MySQL InnoDB handle high-frequency in-place `UPDATE`s differently?
+- **Root Cause & Fix:** Under PostgreSQL **Heap MVCC**, every `UPDATE` marks the old tuple's `xmax` (creating a **Dead Tuple**) and appends a brand-new tuple version at a new `ctid`. Default `autovacuum_vacuum_scale_factor = 0.20` waits until 20% (8 million rows!) change before vacuuming.
+  - **PostgreSQL Fix:** Run `VACUUM (ANALYZE) synoptic.observations;` and lower the table's scale factor: `ALTER TABLE synoptic.observations SET (autovacuum_vacuum_scale_factor = 0.01);`.
+  - **MySQL InnoDB Comparison:** By contrast, MySQL InnoDB updates non-indexed columns **in place** inside its `16 KB` Clustered PK leaf page and writes the old image to the **Undo Log** (`History List Length`), making InnoDB ideal for 5-second `station_live_status` heartbeat tables (`ON DUPLICATE KEY UPDATE` — see [Reference Card 14](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)).
 
 ### Scenario 6: The 00Z ECMWF Ingestion I/O Freeze (Day 2 — PostgreSQL WAL & Checkpoints)
 - **Symptom:** Every night at `02:00 UTC` when your pipeline loads 5 million ECMWF forecast rows, PostgreSQL logs `checkpoints are occurring too frequently (18 seconds apart)` and forecaster dashboards stall.

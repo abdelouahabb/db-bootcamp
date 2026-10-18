@@ -2428,9 +2428,9 @@ cd day5
 python3 stream_router.py --batch-size 500`
       },
       {
-        title: 'Stage 04A: Hot Relational & Spatial Core (PostgreSQL 16 + PostGIS 3.4)',
+        title: 'Stage 04A: Hot Relational & Spatial Core (PostgreSQL 16 + PostGIS 3.4 | MySQL 8.0 Reference)',
         sla: 'SLA: 99.99% Availability (Patroni HA, RPO=0) | < 15ms Spatial Joins',
-        desc: 'Stores strict WMO synoptic observations, station metadata, and hydro-basin/wilaya polygons. Uses Tuple Tetris column ordering (64B/row), Declarative Monthly Range Partitioning (PARTITION BY RANGE (obs_time)), BRIN indexes on obs_time, and PostGIS GiST indexes on GEOGRAPHY(Point, 4326).',
+        desc: 'Stores strict 3NF normalized WMO synoptic observations, station metadata, and hydro-basin/wilaya polygons in PostgreSQL 16 + PostGIS 3.4 (with controlled Materialized View denormalization for dashboards). Uses Tuple Tetris column ordering (64B/row), Declarative Monthly Range Partitioning, BRIN indexes on obs_time, and PostGIS GiST indexes on GEOGRAPHY(Point, 4326). (For high-churn 5-second station_live_status heartbeat tables or web registries, see Reference Card 14 on MySQL 8.0/8.4 InnoDB in-place MVCC & Clustered PKs.)',
         failure: 'MVCC Dead Tuple bloat after frequent QC updates or checkpoint I/O spikes during 00Z/12Z NWP loads. Mitigated via per-table autovacuum_vacuum_scale_factor = 0.01 and max_wal_size = 16GB.',
         code: `ALTER TABLE synoptic.observations SET (
     autovacuum_vacuum_scale_factor = 0.01,
@@ -2441,7 +2441,7 @@ CREATE INDEX idx_obs_brin ON synoptic.observations USING brin(obs_time) WITH (pa
       {
         title: 'Stage 04B: Hot Polymorphic & Upper-Air Store (MongoDB 7.0 3-Node Replica Set)',
         sla: 'SLA: < 10ms Write Acknowledgment (w: "majority") | 70% WiredTiger zstd Savings',
-        desc: 'Ingests variable-depth upper-air radiosonde soundings (vertical_levels arrays with 40–150 pressure levels), 20Hz 3D ultrasonic turbulence vectors, and CAP severe weather polygons. Uses native Time-Series collections, 2dsphere GeoJSON indexes ([lon, lat]), and ESR (Equality -> Sort -> Range) compound indexes.',
+        desc: 'Ingests variable-depth upper-air radiosonde soundings (deliberately denormalized vertical_levels arrays with 40–150 pressure levels), 20Hz 3D ultrasonic turbulence vectors, and CAP severe weather polygons. Uses native Time-Series collections, 2dsphere GeoJSON indexes ([lon, lat]), and ESR (Equality -> Sort -> Range) compound indexes.',
         failure: 'Monotonic Shard Key hotspot if sharded purely on { obs_time: 1 }. Mitigated by prefixing the shard key with high-cardinality station ID: { "station_meta.station_id": 1, obs_time: 1 }.',
         code: `// ESR Compound Index (Equality -> Sort -> Range) + $elemMatch
 db.radiosonde_soundings.createIndex({ station_id: 1, launch_time: -1, cape_j_kg: 1 });
@@ -2452,7 +2452,7 @@ db.radiosonde_soundings.find({
       {
         title: 'Stage 05: Cold Analytical Lakehouse & 4D Grids (DuckDB + Parquet + Zarr on Ceph S3)',
         sla: 'SLA: 50M+ Row Climatology Scans in < 0.4s | 90% ZSTD Storage Compression',
-        desc: 'Nightly compaction jobs (compact_hot_to_cold.py & export_pg_to_parquet.py) stream aged partitions via zero-OOM server-side cursors into Hive-partitioned Apache Parquet files (year=YYYY/month=MM/*.parquet, 128MB–512MB target size) on On-Premises Ceph RGW S3. 4D NWP model grids and satellite rasters are stored as Cloud-Native Zarr and Cloud-Optimized GeoTIFFs (COG).',
+        desc: 'Nightly compaction jobs (compact_hot_to_cold.py & export_pg_to_parquet.py) stream aged 3NF partitions via zero-OOM server-side cursors into deliberately denormalized, Hive-partitioned Apache Parquet files (year=YYYY/month=MM/*.parquet, where Dictionary Encoding + RLE compress repeated station strings to near-zero bytes) on On-Premises Ceph RGW S3. 4D NWP model grids and satellite rasters are stored as Cloud-Native Zarr and Cloud-Optimized GeoTIFFs (COG).',
         failure: 'The "Small Files Problem" (writing thousands of 4KB Parquet files every 10 seconds). Mitigated by compacting into 128MB–512MB ZSTD Parquet blocks with 100k–250k rows per Row Group.',
         code: `SELECT station_id, AVG(NULLIF(temp_c, -9999.0)) AS mean_summer_temp_c
 FROM read_parquet('s3://meteo-cold-lake/synoptic/year=2026/month=07/*.parquet', hive_partitioning = true)
@@ -2572,7 +2572,7 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           "C) MySQL stores timestamps as ASCII text"
         ],
         ans: 0,
-        exp: "PostgreSQL TIMESTAMPTZ is an 8-byte (64-bit) microsecond counter spanning 4713 BC to 294276 AD, whereas MySQL's 4-byte TIMESTAMP suffers from the 1970–2038 32-bit Unix epoch bounds."
+        exp: "PostgreSQL TIMESTAMPTZ is an 8-byte (64-bit) microsecond counter spanning 4713 BC to 294276 AD, whereas MySQL's 4-byte TIMESTAMP suffers from the 1970–2038 32-bit Unix epoch bounds (use 5–8 byte DATETIME in MySQL with time_zone = '+00:00'; see Reference Card 14)."
       },
       {
         q: "10. In MongoDB, which update operator updates max_observed_gust_kt ONLY if the newly arrived wind gust is higher than the current value?",

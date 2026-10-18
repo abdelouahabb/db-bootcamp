@@ -1,6 +1,7 @@
 # Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide — InnoDB Internals, Pluggable Engines, Next-Key Locking, Spatial SQL, GTID HA & Production Tuning
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)
+> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
+> **Card Sequence:** [⬅️ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* ➡️
 
 ---
 
@@ -633,4 +634,7 @@ GROUP BY s.station_id, s.station_name;
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)
+### 🔗 Reference Library Navigation
+
+> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
+> **Card Sequence:** [⬅️ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* ➡️ | [⬆️ Back to Top](#reference-card-14-mysql-8084--mariadb-complete-engineering-guide--innodb-internals-pluggable-engines-next-key-locking-spatial-sql-gtid-ha--production-tuning)

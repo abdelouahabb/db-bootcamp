@@ -6,7 +6,7 @@
 ---
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 13** | *Last Card* ➡️
+> **Card Sequence:** [⬅️ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card ➡️](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -164,4 +164,4 @@ db.synoptic_timeseries.aggregate([
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 13** | *Last Card* ➡️ | [⬆️ Back to Top](#weather-database-observability--monitoring-cheatsheet-prometheus-grafana--meteorological-health-checks)
+> **Card Sequence:** [⬅️ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card ➡️](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [⬆️ Back to Top](#weather-database-observability--monitoring-cheatsheet-prometheus-grafana--meteorological-health-checks)

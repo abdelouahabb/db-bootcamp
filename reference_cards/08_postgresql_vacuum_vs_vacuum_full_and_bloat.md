@@ -3,7 +3,7 @@
 ## Storage Engine Page Forensics, MVCC Dead Tuples, Locking Hierarchies, and Zero-Downtime Bloat Reclamation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 13** | [Next Card ➡️](./09_acid_transactions_and_two_terminal_lock_debugging.md)
+> **Card Sequence:** [⬅️ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card ➡️](./09_acid_transactions_and_two_terminal_lock_debugging.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -404,4 +404,4 @@ SELECT pg_size_pretty(pg_total_relation_size('bloat_lab')) AS size_after_vacuum_
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 13** | [Next Card ➡️](./09_acid_transactions_and_two_terminal_lock_debugging.md) | [⬆️ Back to Top](#postgresql-vacuum-mechanics-vacuum-vs-vacuum-full-reference-card)
+> **Card Sequence:** [⬅️ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card ➡️](./09_acid_transactions_and_two_terminal_lock_debugging.md) | [⬆️ Back to Top](#postgresql-vacuum-mechanics-vacuum-vs-vacuum-full-reference-card)

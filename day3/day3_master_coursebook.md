@@ -757,6 +757,7 @@ ORDER BY climate_zone, station_name, temp_rank;
   - Atomically inserts new rows, and if `(station_id, obs_time)` already exists, updates the meteorological measurements using the special `EXCLUDED` pseudo-table.
   - **Dead-Tuple Prevention Guard:** Add a `WHERE` clause on `DO UPDATE` using `IS DISTINCT FROM` so PostgreSQL **only performs an `UPDATE` if the incoming values actually changed**—avoiding useless MVCC dead tuples when an identical packet is re-transmitted!
   - **Detecting Insert vs. Update in `RETURNING`:** Check `(xmax = 0) AS is_fresh_insert`! In PostgreSQL MVCC, a freshly inserted row has `xmax = 0`, whereas an updated row has `xmax` set to the updating transaction ID.
+  - **Cross-Engine Comparison (`PostgreSQL` vs. `MySQL InnoDB`):** In MySQL 8.0.19+, the equivalent syntax is `INSERT INTO ... VALUES (...) AS new_obs ON DUPLICATE KEY UPDATE temp_c = new_obs.temp_c` (which mutates the Clustered PK leaf page in place and pushes the old values to the Undo Log without creating heap dead tuples — see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide (Section 8.2)](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md#82-runnable-mysql-80-telemetry-queries-spatial-radius-lateral--json_table)**).
 
 ### 4.2 Pre-Computing Heavy Forecast Verification Dashboards (`MATERIALIZED VIEW`) — Controlled Denormalization on a `3NF` Core
 

@@ -4,7 +4,7 @@
 
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Database Administrators, Site Reliability Engineers  
 **Bootcamp Context:** Designing, deploying, securing, pooling, and backing up 24/7 multi-node PostgreSQL clusters with **CAP/PACELC Theory**, **Streaming & Logical Replication**, **`Patroni` + `etcd` Raft Consensus**, **`HAProxy`**, **`PgBouncer`**, **RBAC**, and **PITR Backups**  
-**Companion to:** [day3_master_coursebook.md](./day3_master_coursebook.md)
+**Companion to:** [day3_master_coursebook.md](./day3_master_coursebook.md) | [Reference Card 14: MySQL GTID, InnoDB Cluster (Paxos) & ProxySQL HA](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md#9-high-availability-gtid-replication-mysql-innodb-cluster-group-replication--proxysql)
 
 ---
 

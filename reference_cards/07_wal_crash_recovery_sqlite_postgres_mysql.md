@@ -3,7 +3,7 @@
 ## A Comparative Architectural Study Across SQLite, PostgreSQL, and MySQL / MariaDB
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 13** | [Next Card ➡️](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md)
+> **Card Sequence:** [⬅️ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card ➡️](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -518,6 +518,9 @@ MyRocks (integrated into MariaDB and Percona Server) replaces B-Trees with a **L
 | **Zero-Log Fast Alternative** | `PRAGMA journal_mode = OFF;` | `PRAGMA synchronous = OFF;` | `UNLOGGED TABLES` / `synchronous_commit = off` | `innodb_flush_log_at_trx_commit = 2` | `TRANSACTIONAL=0` | Bypass WAL via direct SSTable bulk load | 
 | **Network Storage Safety (NFS)** | Unsafe | **Extremely Unsafe (mmap corruption)** | Safe (Handles standard POSIX filesystem calls) | Safe (Handles direct I/O locking) | Safe | Safe | 
 
+> [!TIP]
+> **Complete MySQL & MariaDB Engineering Reference:** For a dedicated deep-dive into InnoDB 16 KB Clustered Index pages, Undo Tablespaces (`History List Length`), Change Buffering, `MyRocks` LSM-Tree compaction, and `my.cnf` production tuning, see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**.
+
 ## 6. Hands-On Operational Profiling Labs
 
 Run these hands-on benchmarks to observe the mechanical throughput and latency differences across WAL implementations.
@@ -704,4 +707,4 @@ ls -la weather_monitoring.db*
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 13** | [Next Card ➡️](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | [⬆️ Back to Top](#deep-dive-engineering-guide-write-ahead-logging-wal--crash-recovery-mechanics)
+> **Card Sequence:** [⬅️ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card ➡️](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | [⬆️ Back to Top](#deep-dive-engineering-guide-write-ahead-logging-wal--crash-recovery-mechanics)

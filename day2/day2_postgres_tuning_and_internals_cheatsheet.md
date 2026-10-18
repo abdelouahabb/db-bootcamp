@@ -2,7 +2,7 @@
 
 # Day 2 Master Cheatsheet: PostgreSQL Installation, Storage Internals, WAL, Vacuum, Locking & `EXPLAIN` Forensics
 
-**Companion to:** [day2_master_coursebook.md](./day2_master_coursebook.md) | [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) | [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) | [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql)
+**Companion to:** [day2_master_coursebook.md](./day2_master_coursebook.md) | [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) | [Reference Card 14 (MySQL/MariaDB Guide)](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) | [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql)
 
 ---
 

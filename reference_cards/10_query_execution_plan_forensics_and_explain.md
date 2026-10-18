@@ -3,7 +3,7 @@
 ## Cost Modeling, Physical Access Methods, Join Algorithms, Memory Forensics, and Cross-Engine Plan Debugging
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 13** | [Next Card ➡️](./11_python_database_drivers_for_weather_engineers.md)
+> **Card Sequence:** [⬅️ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card ➡️](./11_python_database_drivers_for_weather_engineers.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -571,6 +571,8 @@ GROUP BY s.station_name;
 
 * Node displays: `cost=Estimated Cost`, `rows=Estimated Rows`, followed by `actual time=startup..total`, `rows=Actual Rows`, and `loops=Iteration Count`.
 
+* **MySQL Join & Index Forensics:** Remember that MySQL 8.0.18+ supports `Hash Join` alongside `Nested Loop`, but does **not** implement `Sort-Merge Join`, and every non-covering secondary index lookup requires a second B+Tree traversal into the Clustered Primary Key (`PRIMARY`). See **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md)** for full InnoDB optimizer & `sys.statement_analysis` diagnostics.
+
 ### 8.3 DuckDB: Vectorized SIMD Execution Plans
 
 DuckDB displays columnar operators, SIMD vector timings, and predicate pushdown status:
@@ -761,4 +763,4 @@ Execution Time: 0.075 ms
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 13** | [Next Card ➡️](./11_python_database_drivers_for_weather_engineers.md) | [⬆️ Back to Top](#query-execution-plan-forensics-the-explain--performance-optimization-reference-card)
+> **Card Sequence:** [⬅️ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card ➡️](./11_python_database_drivers_for_weather_engineers.md) | [⬆️ Back to Top](#query-execution-plan-forensics-the-explain--performance-optimization-reference-card)

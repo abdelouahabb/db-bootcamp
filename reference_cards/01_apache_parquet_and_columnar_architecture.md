@@ -8,7 +8,7 @@
 ---
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** ⬅️ *First Card* | **Card 01 of 13** | [Next Card ➡️](./02_duckdb_vectorized_olap_vs_sqlite.md)
+> **Card Sequence:** ⬅️ *First Card* | **Card 01 of 14** | [Next Card ➡️](./02_duckdb_vectorized_olap_vs_sqlite.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -829,4 +829,4 @@ DROP TABLE synoptic.obs_y2026m06;
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** ⬅️ *First Card* | **Card 01 of 13** | [Next Card ➡️](./02_duckdb_vectorized_olap_vs_sqlite.md) | [⬆️ Back to Top](#apache-parquet-columnar-storage-architecture--postgresql-to-parquet-archival-reference-card)
+> **Card Sequence:** ⬅️ *First Card* | **Card 01 of 14** | [Next Card ➡️](./02_duckdb_vectorized_olap_vs_sqlite.md) | [⬆️ Back to Top](#apache-parquet-columnar-storage-architecture--postgresql-to-parquet-archival-reference-card)

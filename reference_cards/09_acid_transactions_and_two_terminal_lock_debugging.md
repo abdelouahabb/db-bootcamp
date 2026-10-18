@@ -3,7 +3,7 @@
 ## A Hands-On Guide to Concurrency, Snapshot Isolation, Lock Waits, and Deadlocks
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 13** | [Next Card ➡️](./10_query_execution_plan_forensics_and_explain.md)
+> **Card Sequence:** [⬅️ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card ➡️](./10_query_execution_plan_forensics_and_explain.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -435,8 +435,10 @@ SELECT pg_terminate_backend(12345);
 
 ### 4. MySQL InnoDB Lock Monitoring Equivalent
 
-```
--- Inspect waiting transactions in MySQL 8.0+:
+> **Deep-Dive Reference:** For a complete explanation of InnoDB `Record Locks`, `Gap Locks`, `Next-Key Locks` (under `REPEATABLE READ`), and why unindexed `WHERE` updates lock every gap in the table, see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide (Sections 6 & 10)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#6-innodb-concurrency-locking-mechanics--the-next-key-lock-trap)**.
+
+```sql
+-- Inspect waiting transactions in MySQL 8.0+ (or query SELECT * FROM sys.innodb_lock_waits;):
 SELECT 
     r.trx_id waiting_trx_id,
     r.trx_mysql_thread_id waiting_thread,
@@ -449,7 +451,6 @@ JOIN information_schema.innodb_trx b
   ON b.trx_id = w.blocking_engine_transaction_id
 JOIN information_schema.innodb_trx r 
   ON r.trx_id = w.requesting_engine_transaction_id;
-
 ```
 
 ## 7. Summary Checklist: Transaction Debugging Rules
@@ -478,4 +479,4 @@ JOIN information_schema.innodb_trx r
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 13** | [Next Card ➡️](./10_query_execution_plan_forensics_and_explain.md) | [⬆️ Back to Top](#database-transactions--acid-internals-two-terminal-debugging-reference-card)
+> **Card Sequence:** [⬅️ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card ➡️](./10_query_execution_plan_forensics_and_explain.md) | [⬆️ Back to Top](#database-transactions--acid-internals-two-terminal-debugging-reference-card)

@@ -7,9 +7,10 @@
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Systems Administrators, Environmental Data Scientists  
 **Curriculum Scope:** 5 Core Architectural Modules + 7 Hands-On Forensics Labs  
 **Execution Environment:** PostgreSQL 16+ running on Linux/macOS or Docker (`postgres:16`), `psql` CLI + DBeaver  
-**Companion Files in `day2/`:**
+**Companion Files in `day2/` & `reference_cards/`:**
 - [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md) — Complete Installation, `postgresql.conf` Weather Tuning, WAL, Vacuum, Lock Debugging & `EXPLAIN` Reference Card
 - [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) — Definitive Comparative Guide: PostgreSQL Heap/MVCC vs. MySQL InnoDB Clustered B+Tree/Undo Logs
+- [../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) — **Dedicated MySQL 8.0/8.4 & MariaDB Complete Engineering Guide** (InnoDB 16 KB Clustered B+Trees, `MyRocks` LSM-Tree, In-Place MVCC, Change Buffer, Next-Key Locking, GTID/InnoDB Cluster HA, and `my.cnf` production reference)
 - [weather_ops_pg.sql](./weather_ops_pg.sql) ([📖 Course Walkthrough](./weather_ops_pg_sql_course_walkthrough.md)) — Multi-schema PostgreSQL DDL (`synoptic`, `nwp`, `alerts`) + `generate_series()` synthetic time-series generator (18,000+ synoptic observations & 9,000+ NWP forecasts) + table-level autovacuum tuning
 - [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) ([📖 Course Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md)) — Standalone Runnable Forensics Lab: Tuple Tetris (`pg_column_size`), `pageinspect` 8KB Block & MVCC Header Inspection, `pgstattuple` Vacuum Lab, and 1,000,000-Row `EXPLAIN (ANALYZE, BUFFERS)` Row-Store Penalty Lab
 - [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) ([📖 Course Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md)) — Standalone Two-Terminal ACID Concurrency, Snapshot Isolation, Row Lock Contention, Deadlock Circular Wait & `pg_blocking_pids()` Lab
@@ -314,6 +315,10 @@ To understand PostgreSQL's physical design, compare its storage engine with MySQ
 
 * **MySQL InnoDB:** The table *is* the Primary Key B+Tree (16 KB pages). Leaf nodes contain the full row. Secondary indexes store a copy of the Primary Key value, requiring **two B+Tree lookups** for every secondary index query.
 * **PostgreSQL:** Data tuples are appended into unordered **8 KB heap blocks** wherever free space exists. Every row receives a 6-byte physical coordinate called a **`ctid` = `(block_number, line_pointer_index)`**. Every index in PostgreSQL (including the Primary Key) is a direct pointer to the 6-byte `ctid` in the heap (1 hop to fetch the row).
+
+> [!TIP]
+> **When MySQL (`InnoDB` / `MyRocks`) Beats PostgreSQL — Dedicated Engineering Reference:**  
+> While PostgreSQL (`+ PostGIS`) is our primary relational engine in the live VM labs, **MySQL 8.0/8.4 & MariaDB** remain ubiquitous in external meteorological web portals, IAM registries, and high-churn station heartbeat tables (`station_live_status` updated every 5 seconds via `ON DUPLICATE KEY UPDATE`, where InnoDB's **in-place MVCC via Undo Logs** avoids PostgreSQL heap bloat, and **Clustered Composite PKs `(station_id, obs_time)`** provide contiguous 1-tree range scans). For a complete architectural & operational reference, inspect **[day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md)** and **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**.
 
 ### 4.4 Inside an 8 KB Heap Page (`block_size = 8192` bytes)
 

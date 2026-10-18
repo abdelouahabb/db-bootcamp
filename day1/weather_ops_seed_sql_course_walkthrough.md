@@ -514,8 +514,8 @@ By contrast, in later days of the bootcamp we intentionally **denormalize** when
 - **Day 4 (MongoDB Embedded Arrays):** `radiosonde_soundings.vertical_levels` embeds ~80 pressure levels inside a single BSON document because balloon soundings are immutable and always fetched as a single vertical profile.
 - **Day 5 (Apache Parquet Columnar Lakehouse):** Wide denormalized Parquet files compress repeated `'Mediterranean'` strings via **Dictionary Encoding + Run-Length Encoding (RLE)** into a few bytes while eliminating runtime `JOIN`s.
 
-#### 2. Testing All SQL `JOIN` Types & SQLite Version Compatibility on `weather_ops.db`
-Historically, **SQLite `< 3.39.0` (prior to July 2022)** supported only `INNER JOIN`, `LEFT JOIN`, and `CROSS JOIN`, raising `Parse error: RIGHT and FULL OUTER JOINs are not currently supported` on `RIGHT` or `FULL OUTER JOIN`. While **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`) supports `RIGHT` and `FULL OUTER JOIN` natively, embedded field dataloggers often run older SQLite builds—making the portable `< 3.39` rewrites below essential:
+#### 2. Testing All SQL `JOIN` Types & Cross-Engine (`SQLite < 3.39` / `3.39+` / `MySQL 8.0` / `PostgreSQL`) Compatibility on `weather_ops.db`
+Historically, **SQLite `< 3.39.0` (prior to July 2022)** supported only `INNER JOIN`, `LEFT JOIN`, and `CROSS JOIN`, raising `Parse error: RIGHT and FULL OUTER JOINs are not currently supported` on `RIGHT` or `FULL OUTER JOIN`. While **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`), **PostgreSQL 16**, and **DuckDB** support `RIGHT` and `FULL OUTER JOIN` natively, embedded field dataloggers often run older SQLite builds—and **MySQL `8.0` / `8.4` still does not support native `FULL OUTER JOIN`** (see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**). That makes the portable `< 3.39` / MySQL rewrites below essential in production:
 
 ```sql
 -- 1. INNER JOIN: Only stations that have active weather alerts (4 rows)
@@ -537,7 +537,7 @@ LEFT JOIN forecasts f ON s.station_id = f.station_id
 WHERE f.forecast_id IS NULL;
 
 -- 4. RIGHT OUTER JOIN:
--- A) Native in SQLite 3.39+:
+-- A) Native in SQLite 3.39+, MySQL 8.0+, PostgreSQL & DuckDB:
 SELECT s.station_id, s.station_name, COALESCE(a.phenomenon, 'NONE') AS alert
 FROM weather_alerts a
 RIGHT JOIN stations s ON a.station_id = s.station_id
@@ -549,7 +549,7 @@ LEFT JOIN weather_alerts a ON s.station_id = a.station_id
 ORDER BY s.station_id;
 
 -- 5. FULL OUTER JOIN:
--- A) Native in SQLite 3.39+:
+-- A) Native in SQLite 3.39+, PostgreSQL & DuckDB:
 WITH ecmwf_noon AS (
     SELECT station_id, pred_temp_c FROM forecasts
     WHERE model_name = 'ECMWF-HRES' AND valid_time = '2026-10-05 12:00:00'
@@ -559,7 +559,7 @@ SELECT COALESCE(f.station_id, a.station_id) AS station_id,
 FROM ecmwf_noon f
 FULL OUTER JOIN weather_alerts a ON f.station_id = a.station_id
 ORDER BY station_id;
--- B) Portable rewrite for SQLite < 3.39 (LEFT JOIN + UNION ALL + Anti-Join):
+-- B) Portable rewrite for SQLite < 3.39 AND MySQL 8.0/8.4 (LEFT JOIN + UNION ALL + Anti-Join):
 WITH ecmwf_noon AS (
     SELECT station_id, pred_temp_c FROM forecasts
     WHERE model_name = 'ECMWF-HRES' AND valid_time = '2026-10-05 12:00:00'

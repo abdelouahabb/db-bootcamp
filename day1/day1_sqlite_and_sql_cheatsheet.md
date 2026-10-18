@@ -353,23 +353,25 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 
 ---
 
-### 4. SQL `JOIN` Compatibility Matrix (`SQLite < 3.39` vs. `3.39+` vs. `PostgreSQL` vs. `DuckDB`)
+### 4. SQL `JOIN` Compatibility Matrix (`SQLite < 3.39` vs. `3.39+` vs. `MySQL 8.0/8.4` vs. `PostgreSQL` vs. `DuckDB`)
 
 > [!IMPORTANT]
-> **SQLite `3.39.0` Version Boundary:** Prior to **SQLite `3.39.0` (July 2022)**, SQLite threw `Parse error: RIGHT and FULL OUTER JOINs are not currently supported`. Modern **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`) supports `RIGHT` and `FULL OUTER JOIN` natively, but embedded Linux dataloggers often run older SQLite versions—use the portable rewrites below when targeting edge hardware!
+> **Cross-Engine `JOIN` Boundaries (`SQLite < 3.39` & `MySQL 8.0/8.4`):**
+> - **SQLite `< 3.39.0` (prior to July 2022):** Throws `Parse error: RIGHT and FULL OUTER JOINs are not currently supported`. Modern **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`) supports both natively, but embedded Linux dataloggers often run older SQLite versions.
+> - **MySQL `8.0` / `8.4` (`InnoDB`):** Supports `RIGHT JOIN`, `LATERAL` (`8.0.14+`), and `Hash Join` (`8.0.18+`), **but still does NOT support native `FULL OUTER JOIN`**! The `LEFT JOIN ... UNION ALL ... LEFT JOIN WHERE IS NULL` rewrite below works identically on both **SQLite `< 3.39`** and **MySQL `8.0/8.4`** (see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**).
 
-| `JOIN` Type | SQLite `< 3.39` | SQLite `3.39+` | PostgreSQL 16 | DuckDB | Portable Emulation / Engine Note |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **`INNER JOIN`** | ✅ | ✅ | ✅ | ✅ | Returns only matching rows ($A \cap B$). |
-| **`LEFT [OUTER] JOIN`** | ✅ | ✅ | ✅ | ✅ | All left rows + matching right rows ($A \cup (A \cap B)$). |
-| **`LEFT ANTI-JOIN`** | ✅ | ✅ | ✅ | ✅ | `A LEFT JOIN B ON ... WHERE B.id IS NULL` ($A \setminus B$). |
-| **`RIGHT [OUTER] JOIN`** | ❌ | ✅ | ✅ | ✅ | **Portable `< 3.39` Rewrite:** Flip table order to `B LEFT JOIN A`. |
-| **`FULL [OUTER] JOIN`** | ❌ | ✅ | ✅ | ✅ | **Portable `< 3.39` Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
-| **`CROSS JOIN`** | ✅ | ✅ | ✅ | ✅ | Cartesian product ($M \times N$ rows; no `ON` clause). |
-| **`SELF JOIN`** | ✅ | ✅ | ✅ | ✅ | `FROM stations s1 JOIN stations s2 ON s1.climate_zone = s2.climate_zone AND s1.station_id < s2.station_id`. |
-| **`LATERAL` Join** | ❌ | ❌ | ✅ | ✅ | Correlated subquery per left row. In SQLite, use `ROW_NUMBER() OVER (PARTITION BY ...)` in a CTE. |
-| **`ASOF JOIN`** | ❌ | ❌ | ❌ *(use `LATERAL`)* | ✅ | Time-series nearest-timestamp match (`ON a.id = b.id AND a.ts >= b.ts`). |
-| **Join Algorithms** | Nested Loop only | Nested Loop only | Nested Loop, Parallel Hash, Merge Join | Vectorized Hash & Merge Join | SQLite has no `Hash Join` or `Merge Join`. |
+| `JOIN` Type | SQLite `< 3.39` | SQLite `3.39+` | MySQL `8.0 / 8.4` | PostgreSQL 16 | DuckDB | Portable Emulation / Engine Note |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`INNER JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | Returns only matching rows ($A \cap B$). |
+| **`LEFT [OUTER] JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | All left rows + matching right rows ($A \cup (A \cap B)$). |
+| **`LEFT ANTI-JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | `A LEFT JOIN B ON ... WHERE B.id IS NULL` ($A \setminus B$). |
+| **`RIGHT [OUTER] JOIN`** | ❌ | ✅ | ✅ | ✅ | ✅ | **Portable `< 3.39` Rewrite:** Flip table order to `B LEFT JOIN A`. |
+| **`FULL [OUTER] JOIN`** | ❌ | ✅ | ❌ | ✅ | ✅ | **Portable `< 3.39` & MySQL Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
+| **`CROSS JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | Cartesian product ($M \times N$ rows; no `ON` clause). |
+| **`SELF JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | `FROM stations s1 JOIN stations s2 ON s1.climate_zone = s2.climate_zone AND s1.station_id < s2.station_id`. |
+| **`LATERAL` Join** | ❌ | ❌ | ✅ *(8.0.14+)* | ✅ | ✅ | Correlated subquery per left row. In SQLite, use `ROW_NUMBER() OVER (PARTITION BY ...)` in a CTE. |
+| **`ASOF JOIN`** | ❌ | ❌ | ❌ *(use `LATERAL`)* | ❌ *(use `LATERAL`)* | ✅ | Time-series nearest-timestamp match (`ON a.id = b.id AND a.ts >= b.ts`). |
+| **Join Algorithms** | Nested Loop only | Nested Loop only | Nested Loop & Hash Join *(8.0.18+; no Merge Join)* | Nested Loop, Parallel Hash, Merge Join | Vectorized Hash & Merge Join | SQLite has no `Hash`/`Merge Join`; MySQL lacks `Sort-Merge Join`. |
 
 ---
 

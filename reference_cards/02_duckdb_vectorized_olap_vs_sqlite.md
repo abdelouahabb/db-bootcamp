@@ -8,7 +8,7 @@
 ---
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 13** | [Next Card ➡️](./03_hive_partitioning_and_lakehouse_compaction.md)
+> **Card Sequence:** [⬅️ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card ➡️](./03_hive_partitioning_and_lakehouse_compaction.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -421,15 +421,17 @@ GROUP BY region;
 
 ---
 
-## 7. Ultimate 4-Engine Decision Matrix & Operational Checklist
+## 7. Ultimate 5-Engine Decision Matrix & Operational Checklist
 
-### 7.1 Ultimate Decision Matrix: SQLite vs. DuckDB vs. PostgreSQL vs. MongoDB
+### 7.1 Ultimate Decision Matrix: SQLite vs. DuckDB vs. PostgreSQL vs. MySQL vs. MongoDB
 
-| Question | SQLite | DuckDB | PostgreSQL | MongoDB |
-| :--- | :--- | :--- | :--- | :--- |
-| **Is there a server daemon?** | No (Single file `.db`) | No (Single file `.duckdb` or `.parquet`) | Yes (`postgres` server) | Yes (`mongod` cluster) |
-| **Storage orientation** | Row-oriented | **Column-oriented** | Row-oriented (+ BRIN/JSONB) | Document BSON (+ Columnar Time-Series) |
-| **Best for...** | **Local transactional apps & edge weather station buffers** | **Local fast analytics on Parquet/CSV files & data science notebooks** | **Shared multi-user relational DB, WMO archives & NWP verification** | **Shared multi-user polymorphic telemetry, radiosonde arrays & GeoJSON alerts** |
+| Question | SQLite 3 | DuckDB | PostgreSQL 16 (`+ PostGIS`) | MySQL 8.0/8.4 (`InnoDB` / `MyRocks`) | MongoDB 7.0 (`WiredTiger`) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Is there a server daemon?** | No (Single file `.db`) | No (Single file `.duckdb` or `.parquet`) | Yes (`postgres` process model) | Yes (`mysqld` multi-threaded daemon) | Yes (`mongod` replica set / sharded cluster) |
+| **Storage orientation** | Row-oriented (`rowid` B-Tree) | **Column-oriented** (Row Groups + SIMD) | Row-oriented Unclustered `8 KB` Heap (+ `BRIN`/`JSONB`) | Row-oriented **Clustered `16 KB` PK B+Tree** (or `MyRocks` LSM-Tree) | Document BSON (+ Columnar Time-Series buckets) |
+| **Normalization vs. Denormalization** | **Strict `3NF`** (`stations` $\leftrightarrow$ `observations`) | **Deliberate Denormalization** (Wide Parquet + Dictionary/RLE encoding) | **`3NF` Core** + Denormalized `MATERIALIZED VIEW` / `INCLUDE` Covering Indexes | **`3NF` Core** + Clustered Composite PK `(station_id, obs_time)` | **Deliberate Embedding** (bounded `vertical_levels` arrays) + Bucketing |
+| **SQL `JOIN` Support** | `<3.39`: `INNER`/`LEFT`/`CROSS` only; `3.39+`: adds `RIGHT` & `FULL OUTER` | All 7 SQL `JOIN`s + `LATERAL` + `ASOF JOIN` | All 7 SQL `JOIN`s + `LATERAL` (Nested Loop, Hash, Merge) | `INNER`, `LEFT`, `RIGHT`, `CROSS`, `LATERAL` (**No native `FULL OUTER JOIN`** or Merge Join) | `$lookup` (avoid in hot paths via embedding) |
+| **Best for...** | **Local transactional apps & edge weather station buffers** | **Local fast analytics on Parquet/CSV files & data science notebooks** | **Shared multi-user relational DB, PostGIS geodesy, WMO archives & NWP verification** | **High-churn in-place `UPDATE` heartbeat tables (`station_live_status`), web portals & PK range scans ([Card 14](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md))** | **Shared multi-user polymorphic telemetry, radiosonde arrays & GeoJSON alerts** |
 
 ### 7.2 Summary Checklist: DuckDB Operational Rules
 
@@ -455,4 +457,4 @@ GROUP BY region;
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 13** | [Next Card ➡️](./03_hive_partitioning_and_lakehouse_compaction.md) | [⬆️ Back to Top](#duckdb-vectorized-olap-architecture-vs-sqlite-row-oltp-reference-card)
+> **Card Sequence:** [⬅️ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card ➡️](./03_hive_partitioning_and_lakehouse_compaction.md) | [⬆️ Back to Top](#duckdb-vectorized-olap-architecture-vs-sqlite-row-oltp-reference-card)

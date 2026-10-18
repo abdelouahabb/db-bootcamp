@@ -6,7 +6,7 @@
 ---
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 13** | [Next Card ➡️](./12_dbeaver_and_mongodb_compass_gui_workflows.md)
+> **Card Sequence:** [⬅️ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card ➡️](./12_dbeaver_and_mongodb_compass_gui_workflows.md)
 
 ## 🧭 Quick-Jump Table of Contents
 
@@ -222,4 +222,4 @@ sonde_500hpa_docs = list(db.radiosonde_soundings.aggregate(pipeline))
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 13** | [Next Card ➡️](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | [⬆️ Back to Top](#python-database-integration-cheatsheet-for-weather-engineers-sqlite3-duckdb-psycopg3-geopandas-pymongo)
+> **Card Sequence:** [⬅️ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card ➡️](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | [⬆️ Back to Top](#python-database-integration-cheatsheet-for-weather-engineers-sqlite3-duckdb-psycopg3-geopandas-pymongo)

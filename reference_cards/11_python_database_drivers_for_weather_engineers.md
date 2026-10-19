@@ -529,6 +529,95 @@ gdf.to_parquet("stations_climatology_geoparquet.parquet")
 
 ---
 
+### 5.5 Generating & Binding Time-Ordered `UUIDv7` (RFC 9562) in Python (`psycopg3` vs. `sqlite3`)
+
+When remote Saharan automatic weather stations (`AWS`) or mobile radiosonde units record observations while offline, they cannot ask a central PostgreSQL server for the next `BIGINT IDENTITY` sequence value. However, generating random **`uuid.uuid4()`** values on the edge and inserting them into PostgreSQL destroys B-Tree page locality, causes 50/50 index page splits, and triggers **$500\times$ `pg_wal` Full-Page Write (`FPW`) amplification** (see [Day 2 Coursebook — Black Box 2D](../day2/day2_master_coursebook.md)).
+
+Instead, edge Python daemons should generate **IETF RFC 9562 `UUIDv7`** (`48-bit` big-endian Unix millisecond timestamp + `4-bit` version `7` + `12-bit` sub-millisecond counter/random + `2-bit` variant + `62-bit` random payload):
+- **Python 3.14+** includes `uuid.uuid7()` in the standard library; on **Python 3.10–3.13**, you can either install `uuid6` (`from uuid6 import uuid7`) or use the **10-line zero-dependency standard-library `uuid7()` generator** below.
+- **How Drivers Adapt `uuid.UUID` Under the Hood:**
+  - **`psycopg` v3:** Natively adapts Python `uuid.UUID` objects to PostgreSQL's `16-byte` binary `UUID` type (and decodes PostgreSQL `UUID` columns back into `uuid.UUID` objects automatically!). In binary `COPY`, specify `"uuid"` in `copy.set_types([...])`.
+  - **`sqlite3` / `APSW`:** SQLite has no dedicated `UUID` storage class. Calling `cur.execute("INSERT ... VALUES (?)", (u,))` with a raw `uuid.UUID` object raises `ProgrammingError: Error binding parameter 1: type 'UUID' is not supported`! You must explicitly pass either:
+    1. **`u.bytes` (`16-byte BLOB`)** — **Fastest & smallest** (`16 bytes` on disk vs. `36 bytes` for text; preserves big-endian chronological byte sorting in SQLite B-Trees!).
+    2. **`str(u)` (`36-byte TEXT`)** — Human-readable in `sqlite3` CLI (`'01925a6b-9c00-7e42-...'`) and also sorts chronologically because big-endian hex strings are lexicographically ordered!
+
+```python
+import os
+import sqlite3
+import time
+import uuid
+from contextlib import closing
+from datetime import datetime, timezone
+
+
+# 1. Zero-Dependency RFC 9562 UUIDv7 Generator (Works in Python 3.8–3.14+ with Stdlib Only!)
+def generate_uuidv7() -> uuid.UUID:
+    """
+    Constructs a 128-bit RFC 9562 time-ordered UUIDv7:
+    - Bits  0..47 : 48-bit big-endian Unix Epoch timestamp in milliseconds
+    - Bits 48..51 : 4-bit version = 0b0111 (7)
+    - Bits 52..63 : 12-bit sub-ms / random_a
+    - Bits 64..65 : 2-bit RFC 9562 variant = 0b10
+    - Bits 66..127: 62-bit cryptographic randomness (random_b)
+    """
+    unix_ts_ms = time.time_ns() // 1_000_000
+    rand_bytes = int.from_bytes(os.urandom(10), byteorder="big")
+    rand_a = (rand_bytes >> 62) & 0x0FFF
+    rand_b = rand_bytes & ((1 << 62) - 1)
+
+    uuid_int = (
+        ((unix_ts_ms & 0xFFFFFFFFFFFF) << 80)
+        | (0x7 << 76)
+        | (rand_a << 64)
+        | (0x2 << 62)
+        | rand_b
+    )
+    return uuid.UUID(int=uuid_int)
+
+
+def extract_uuidv7_utc_datetime(u: uuid.UUID) -> datetime:
+    """Extracts the exact millisecond UTC creation timestamp embedded in a UUIDv7's top 48 bits."""
+    unix_ts_ms = u.int >> 80
+    return datetime.fromtimestamp(unix_ts_ms / 1000.0, tz=timezone.utc)
+
+
+# 2. Verify Monotonic B-Tree Sorting & Timestamp Extraction:
+batch_ids = [generate_uuidv7() for _ in range(3)]
+assert batch_ids == sorted(batch_ids), "UUIDv7s are strictly time-ordered!"
+print(f"Sample UUIDv7 : {batch_ids[0]} (ver={batch_ids[0].version})")
+print(f"Embedded Time : {extract_uuidv7_utc_datetime(batch_ids[0]).isoformat()}")
+
+# 3. Binding UUIDv7 as Compact 16-Byte BLOB in SQLite (Saves 20 Bytes/Row vs. 36-Char TEXT!):
+with closing(sqlite3.connect(":memory:", isolation_level=None)) as sqlite_conn:
+    sqlite_conn.execute("""
+        CREATE TABLE edge_packet_buffer (
+            packet_id  BLOB PRIMARY KEY CHECK (length(packet_id) = 16),
+            station_id INTEGER NOT NULL,
+            temp_c     REAL    NOT NULL
+        ) STRICT;
+    """)
+    with sqlite_conn:
+        for pkt_uuid in batch_ids:
+            # Bind `pkt_uuid.bytes` (16-byte big-endian BLOB) -> B-Tree appends strictly to rightmost leaf!
+            sqlite_conn.execute(
+                "INSERT INTO edge_packet_buffer VALUES (?, ?, ?);",
+                (pkt_uuid.bytes, 60680, 38.4),
+            )
+    # Read back and reconstruct `uuid.UUID(bytes=row[0])`:
+    for raw_blob, stn_id, temp_c in sqlite_conn.execute("SELECT * FROM edge_packet_buffer ORDER BY packet_id;"):
+        recovered_uuid = uuid.UUID(bytes=raw_blob)
+        assert recovered_uuid in batch_ids
+
+# 4. Binding UUIDv7 Natively in PostgreSQL (`psycopg3` adapts `uuid.UUID` -> 16-Byte PG `UUID` directly!):
+# with psycopg.connect(PG_DSN) as pg_conn:
+#     pg_conn.execute(
+#         "INSERT INTO synoptic.edge_packets (packet_id, station_id, temp_c) VALUES (%s, %s, %s);",
+#         (generate_uuidv7(), 60680, 38.4),  # <-- Pass `uuid.UUID` object directly!
+#     )
+```
+
+---
+
 ## 6. Days 4 & 5: Python + MongoDB (`PyMongo` Replica-Set Driver Internals)
 
 Unlike relational engines, MongoDB uses a binary BSON wire protocol (`OP_MSG` over TCP `:27017`), so **`PyMongo`** (`pip install pymongo`) does **not** use PEP 249 `Connection`/`Cursor` semantics.
@@ -626,6 +715,7 @@ with analytics_coll.aggregate(pipeline, batch_size=1000) as cursor:
 | **Parameter Placeholder** | `?` or `:name` | `?` or `:name` | `%s` or `%(name)s` | `?`, `$1`, or `$name` | Native Python `dict` |
 | **Default Transaction Mode** | Quirky DML-only implicit `BEGIN` (`isolation_level=""`); use `isolation_level=None` or Python 3.12 `autocommit=True` | Native SQLite autocommit (no hidden `BEGIN`) | Strict PEP 249 (`autocommit=False`, starts transaction on first statement) | Autocommit unless `BEGIN` executed | Single-document atomic (`w="majority"`); multi-doc via `with client.start_session() as s:` |
 | **Does `with conn:` close the connection?** | ❌ **NO!** (Only commits/rolls back; wrap in `contextlib.closing()`) | ❌ **NO!** (Manages nestable `BEGIN` / `SAVEPOINT`s) | ✅ **YES!** (Commits/rolls back **and** closes socket; `with conn.transaction():` for savepoints) | ✅ **YES!** (`with duckdb.connect() as con:` closes on exit) | ✅ **YES!** (`with MongoClient() as client:` closes pools on exit) |
+| **UUID (`UUIDv7` RFC 9562) Binding** | Pass `u.bytes` (`16B BLOB`) or `str(u)` (`36B TEXT`) | Pass `u.bytes` (`16B BLOB`) or `str(u)` (`36B TEXT`) | Pass `uuid.UUID` directly (`16B` native PG `UUID`) | Pass `uuid.UUID` or `str(u)` (`16B` `UUID` type) | Native `bson.ObjectId` (`12B`) or `Binary.from_uuid(u)` (`16B`) |
 | **Fastest Bulk Write Method** | `BEGIN IMMEDIATE;` + `cur.executemany()` | `with conn:` + `cur.executemany()` | `with cur.copy("COPY ... FROM STDIN (FORMAT BINARY)")` | `INSERT INTO tbl SELECT * FROM arrow_or_polars_df` | `coll.bulk_write(ops, ordered=False)` |
 | **Fastest Million-Row Read Method** | `pd.read_sql_query()` or `APSW` | `cur.execute()` generator | Named Server-Side Cursor (`conn.cursor(name="...")`) or `COPY TO STDOUT` | **Zero-Copy `.pl()` / `.arrow()`** (Never `.fetchall()`!) | `coll.find(..., batch_size=5000)` |
 

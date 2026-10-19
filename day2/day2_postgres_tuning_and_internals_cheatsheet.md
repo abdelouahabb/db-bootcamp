@@ -195,9 +195,9 @@ shared_preload_libraries = 'pg_stat_statements'
 | **8-Byte Aligned** (Offsets `0, 8, 16...`) | `'d'` (`double`) | `BIGINT` (`int8`), `BIGSERIAL`, `TIMESTAMPTZ`, `TIMESTAMP`, `DOUBLE PRECISION` (`float8`), `INTERVAL` (16B) |
 | **4-Byte Aligned** (Offsets `0, 4, 8...`) | `'i'` (`int`) | `INTEGER` (`int4`), `SERIAL`, `REAL` (`float4`), `DATE`, `TIME` |
 | **2-Byte Aligned** (Offsets `0, 2, 4...`) | `'s'` (`short`) | `SMALLINT` (`int2`) |
-| **1-Byte / Packed** (Any offset) | `'c'` (`char`) | `BOOLEAN`, `"char"`, and short variable-length (`NUMERIC`, `VARCHAR`, `TEXT`, `JSONB` with 1B `varlena` header) |
+| **1-Byte / Packed** (Any offset) | `'c'` (`char`) | `UUID` (**16B fixed, zero alignment padding!**), `BOOLEAN` (1B), `"char"`, and short variable-length (`NUMERIC`, `VARCHAR`, `TEXT`, `JSONB` with 1B `varlena` header) |
 
-### 4.1 Data Type & Uniqueness Decision Matrices (Black Boxes 2A, 2B, 2C)
+### 4.1 Data Type & Uniqueness Decision Matrices (Black Boxes 2A, 2B, 2C, 2D)
 
 #### A. Temporal Types (`TIMESTAMPTZ` vs. `TIMESTAMP` — Both Are 8 Bytes on Disk!)
 > **The Hardware Secret:** Neither `TIMESTAMPTZ` nor `TIMESTAMP` stores a timezone string or offset in its 8 bytes on disk. Both store a `BIGINT` count of microseconds since `2000-01-01 00:00:00`. The difference is **Boundary Normalization**: `TIMESTAMPTZ` converts any input offset to **UTC** on `INSERT` and converts back to the session's `timezone` on `SELECT`, whereas `TIMESTAMP` strips the offset and stores raw wall-clock numbers (causing 1-hour duplicate collisions during Autumn DST fallback).
@@ -226,6 +226,16 @@ shared_preload_libraries = 'pg_stat_statements'
 | **`UNIQUE NOT NULL`** | Explicit | **NO** (`0` `NULL`s) | Secondary mandatory natural keys (`icao_code VARCHAR(4) UNIQUE NOT NULL`, `station_id, obs_time`). |
 | **`UNIQUE` (Default `NULLS DISTINCT`)** | **NO** | **YES (Unlimited `NULL`s!)** | Optional external identifiers (`wigos_id VARCHAR(32) UNIQUE`) where unassigned stations are `NULL`, but every assigned ID must be unique. |
 | **`UNIQUE NULLS NOT DISTINCT` *(PG 15+)*** | **NO** | **At most ONE `NULL`** | Composite keys with optional dimensions where `(60390, NULL)` must not be inserted twice. |
+
+#### D. Surrogate Primary Keys (`BIGINT IDENTITY` vs. `UUIDv7` RFC 9562 vs. `UUIDv4`)
+> **The B-Tree & WAL Secret:** Random `UUIDv4` (`gen_random_uuid()`) scatters `INSERT`s uniformly across all B-Tree leaf pages, causing **50/50 page splits** (~55% fill density), `shared_buffers` cache thrashing, and **$500\times$ `pg_wal` Full-Page Write (`FPW`) amplification** (dirtying 1,000 random 8 KB pages after a checkpoint logs $8\text{ MB}$ of WAL instead of $16\text{ KB}$!). **`UUIDv7` (RFC 9562)** places a **48-bit big-endian Unix millisecond timestamp** in the top 6 bytes (`[48b unix_ts_ms][4b ver=7][12b rand_a][2b var=10][62b rand_b]`), restoring 100% rightmost B-Tree leaf append locality while allowing offline edge weather stations to generate globally unique IDs without central sequence coordination.
+
+| Identifier Strategy | SQL Declaration | Disk Size | B-Tree Locality | WAL FPW Cost | When to Use |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **1. `BIGINT IDENTITY`** | `BIGINT GENERATED ALWAYS AS IDENTITY` | **`8B`** (`typalign='d'`) | ✅ **Rightmost Append** | ⚡ **Minimal** | Default for centralized DB-generated surrogate keys (`obs_id`). |
+| **2. `UUIDv7` (RFC 9562)** | `UUID DEFAULT uuid_generate_v7()` *(PG 18+: `uuidv7()`)* | **`16B`** (`typalign='c'`) | ✅ **Rightmost Append** | ⚡ **Minimal** | Distributed/offline edge stations, microservices, multi-region ingest. |
+| **3. `UUIDv4` (Random)** | `UUID DEFAULT gen_random_uuid()` | **`16B`** (`typalign='c'`) | ❌ **Random Scatter!** | 🔥 **$500\times$ Bloat** | **Avoid for large indexed PKs!** Use only for unindexed tokens or tiny tables. |
+| **4. Text UUID *(Anti-Pattern)*** | `VARCHAR(36)` / `TEXT` | **`37B`** (`1B varlena + 36B`) | ❌ Wastes `21B`/row | 🔥 High | **Never!** Always use PostgreSQL's native `16-byte` binary `UUID` type. |
 
 ---
 

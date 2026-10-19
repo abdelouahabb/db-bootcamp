@@ -382,7 +382,7 @@ When engineers convert a normal PostgreSQL table (`synoptic.observations` with `
 
 | Partition DDL Feature | What Happens If Omitted / Misused | Production Engineering Rule |
 | :--- | :--- | :--- |
-| **`PRIMARY KEY (obs_time, station_id)`** | `PRIMARY KEY (obs_id)` fails with `ERROR: unique constraint ... must include all partitioning columns` | Always include the partition key (`obs_time`) in every `PRIMARY KEY` and `UNIQUE` constraint on a partitioned table. |
+| **`PRIMARY KEY (obs_time, station_id)`** | `PRIMARY KEY (obs_id)` fails with `ERROR: unique constraint ... must include all partitioning columns` | Always include the partition key (`obs_time`) in every `PRIMARY KEY` and `UNIQUE` constraint on a partitioned table (or if using distributed **RFC 9562 `UUIDv7`** from [Day 2 Black Box 2D](../day2/day2_master_coursebook.md), use `PRIMARY KEY (obs_time, packet_id)` so both columns sort monotonically inside each monthly partition!). |
 | **`FOR VALUES FROM (A) TO (B)`** | Using `'2026-10-31 23:59:59'` leaves a 1-second gap where sub-second telemetry crashes | Always set `TO (B)` equal to the exact `00:00:00+00` start of the **next** partition ($[A, B)$). |
 | **`PARTITION OF ... DEFAULT`** | Out-of-order edge telemetry for next month crashes the entire batch if next month's partition wasn't created yet | Always attach a `DEFAULT` partition (`obs_default`) to catch unexpected timestamps without dropping packets. |
 

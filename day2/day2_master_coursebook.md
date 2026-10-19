@@ -293,6 +293,7 @@ WHERE datname = current_database();
 | **Forecast Lead Time** | Integer hours (`lead_hr INT`) | **`INTERVAL`** + Generated `valid_time` | **16 Bytes** (`INTERVAL`) | Allows native temporal arithmetic (`init_time + lead_interval`) for sub-hourly radar (`INTERVAL '15 minutes'`) or synoptic steps (`INTERVAL '6 hours'`). In `nwp.forecasts`, `valid_time` is computed automatically via `GENERATED ALWAYS AS (...) STORED`. |
 | **Calibrated Synoptic & WMO Reporting (`temp_c`, `pressure_hpa`, `latitude`)** | `REAL` / `FLOAT` with binary rounding artifacts (`22.10000038`) | **`NUMERIC(p, s)`** (e.g., `NUMERIC(4,1)`, `NUMERIC(6,1)`, `NUMERIC(7,4)`) | **Variable** (~5–8 Bytes) | Base-10 exact decimal arithmetic. Guarantees zero IEEE-754 floating-point representation drift (`0.1 + 0.2 = 0.3` exactly) for legal WMO bulletins, station coordinates, and precipitation thresholds. |
 | **High-Frequency Raw IoT / Sonic Anemometer Streams** | `NUMERIC` (higher CPU overhead in tight math loops) | **`REAL` (`float4`)** or **`DOUBLE PRECISION` (`float8`)** | **4 Bytes** (`REAL`) / **8 Bytes** (`FLOAT8`) | Hardware-accelerated IEEE-754 floating point. Compact fixed 4-byte (`REAL`) or 8-byte (`DOUBLE PRECISION`) width for fast CPU vector aggregations and predictable byte alignment on raw 10Hz telemetry tables. |
+| **Surrogate / Distributed Row Identifiers** | `VARCHAR(36)` / `TEXT` UUID (`37 Bytes`) or Random `UUIDv4` (`gen_random_uuid()`) | **`BIGINT GENERATED ALWAYS AS IDENTITY`** (`8B`) or **`UUID` (`UUIDv7` RFC 9562)** (`16B`) | **8 Bytes** (`BIGINT`) / **16 Bytes** (`UUID`) | Centralized ingestion uses sequential `8-byte` `BIGINT`. Distributed offline-first edge stations use time-ordered **`UUIDv7`** (`48-bit` big-endian Unix ms prefix + `74-bit` randomness) stored in PostgreSQL's native `16-byte` binary `UUID` type (`typalign = 'c'`), preventing random `UUIDv4` B-Tree page splits and `pg_wal` Full-Page Write (`FPW`) amplification. |
 
 ---
 
@@ -370,6 +371,127 @@ Engineers are often surprised to discover that in SQLite, PostgreSQL, DuckDB, an
 | **2. `UNIQUE NOT NULL`** | ❌ **No** | `0` | ✅ Yes | Candidate key | Secondary natural keys that must always exist and never repeat (`station_name VARCHAR(100) NOT NULL UNIQUE`, `(station_id, obs_time)`). |
 | **3. Nullable `UNIQUE`** *(Default `NULLS DISTINCT`)* | ✅ **Yes** | **Unlimited `NULL`s!** | ✅ Yes | No | Optional external identifiers (e.g., `icao_airport_code CHAR(4) UNIQUE`—only airport stations have one; non-airport stations are all `NULL`). |
 | **4. `UNIQUE NULLS NOT DISTINCT`** *(PG 15+)* | ✅ **Yes** | **At most `1` `NULL`!** | ✅ Yes | No | When `NULL` represents a singleton default slot that must not be duplicated. |
+
+---
+
+#### Black Box 2D Demystified: Surrogate Primary Keys at Scale — `BIGINT IDENTITY` vs. `UUIDv4` (B-Tree & WAL Killer) vs. `UUIDv7` (RFC 9562 Time-Ordered)
+
+When designing a 500-million-row telemetry table or a distributed network of remote Saharan automatic weather stations (`AWS`) that buffer readings offline during satellite outages and sync later, **what data type should you choose for your surrogate Primary Key?**
+
+##### 1. First Rule of UUIDs in PostgreSQL: Native `UUID` (`16 Bytes`) vs. `VARCHAR(36)` (`37 Bytes`)
+Never store a UUID as `VARCHAR(36)`, `CHAR(36)`, or `TEXT`!
+- A canonical UUID string like `'01925a6b-9c00-7e42-8a1b-3c4d5e6f7a8b'` is **36 ASCII characters** (`32` hex digits + `4` hyphens), which occupies **`37 bytes` on disk** (`1-byte` short `varlena` header + `36` bytes) and forces slow locale/collation string comparisons.
+- PostgreSQL's native **`UUID`** data type strips the hyphens at parse time and stores the raw **128-bit (`16-byte`) binary value** (`typlen = 16` in `pg_type`). Better yet, its alignment in `pg_type` is **`typalign = 'c'` (`1-byte` char alignment)**—meaning a `UUID` column can be placed at *any* byte offset in a tuple without causing a single byte of CPU alignment padding!
+
+##### 2. Why Random `UUIDv4` (`gen_random_uuid()`) Destroys Database Performance Once the B-Tree Exceeds RAM
+For years, developers defaulted to **`UUIDv4`** (`gen_random_uuid()` in PostgreSQL), where **122 out of 128 bits are cryptographically random**. While `UUIDv4` guarantees zero collisions across offline edge stations, it is a **physical catastrophe for B-Tree indexes and Write-Ahead Logs (`pg_wal`)** once your index grows larger than `shared_buffers`:
+
+```
+  MONOTONIC KEYS (BIGINT IDENTITY or UUIDv7)             RANDOM KEYS (UUIDv4 / gen_random_uuid())
+ ┌──────────────────────────────────────────┐          ┌──────────────────────────────────────────┐
+ │ New keys are ALWAYS strictly greater     │          │ Every new key lands on a UNIFORMLY       │
+ │ than all existing keys:                  │          │ RANDOM leaf page across the entire tree: │
+ │                                          │          │                                          │
+ │  [Leaf 1] [Leaf 2] [Leaf 3] [Leaf N] ◄───┼── Append │  [Leaf 1]   [Leaf 402]   [Leaf 89,104]   │
+ │   100%     100%     100%    In-RAM!      │   ONLY!  │     ▲            ▲             ▲         │
+ │                                          │          │     ┴────────────┴─────────────┴─ Random │
+ │  • Only 1 rightmost 8 KB page stays hot  │          │  • Every INSERT triggers a disk read     │
+ │  • 90–100% B-Tree page density           │          │  • Constant 50/50 Page Splits (~55% fill)│
+ │  • Minimal WAL: 1 Full-Page Write (8 KB) │          │  • MASSIVE WAL Full-Page Write (FPW)     │
+ │    per checkpoint for the active leaf!   │          │    amplification: 8 KB logged per page!  │
+ └──────────────────────────────────────────┘          └──────────────────────────────────────────┘
+```
+
+Here are the **four compounding hardware penalties** of `UUIDv4`:
+1. **`shared_buffers` Cache Thrashing (Zero Spatial Locality):** With sequential `BIGINT` or time-ordered `UUIDv7`, 100% of new `INSERT`s hit the **single rightmost 8 KB B-Tree leaf page**, which stays pinned in L3 CPU cache / `shared_buffers`. With random `UUIDv4` on a 100 GB index, every single row targets a different random 8 KB leaf page across the entire 12.8-million-page B-Tree, turning fast memory appends into random SSD read/write IOPS.
+2. **Chronic 50/50 B-Tree Page Splits & Index Bloat:** Because random inserts arrive in the middle of already-full leaf pages, PostgreSQL must constantly split 8 KB leaf pages in half (`50%` full on the left, `50%` full on the right). Your B-Tree index averages **~55–65% page density** (wasting 35–45% of disk and RAM on empty air inside pages!).
+3. **The Hidden Killer — `pg_wal` Full-Page Write (`FPW`) Amplification:** Recall from Section 3.4 that to prevent 4 KB OS torn pages, PostgreSQL's `full_page_writes = on` logs the **entire 8 KB page image** into `pg_wal` the *first time* any page is dirtied after a `CHECKPOINT`.
+   - If you insert **1,000 rows** after a checkpoint using **`UUIDv7` or `BIGINT`**, all 1,000 index entries land on **2 or 3 adjacent rightmost leaf pages** $\rightarrow$ PostgreSQL writes only **$2 \times 8\text{ KB} = 16\text{ KB}$** of Full-Page Images to `pg_wal`.
+   - If you insert **1,000 rows** after a checkpoint using **`UUIDv4`**, those 1,000 index entries dirty **~1,000 distinct random leaf pages** $\rightarrow$ PostgreSQL is forced to write **$1,000 \times 8\text{ KB} = 8,000\text{ KB}$ ($8\text{ MB}$!)** of Full-Page Images into `pg_wal`! That is a **$500\times$ WAL write amplification penalty** on the index alone!
+4. **Even Worse in MySQL InnoDB:** Because PostgreSQL uses an unclustered heap, `UUIDv4` only fragments the *B-Tree index* while heap tuples still append sequentially. In MySQL InnoDB (where the `PRIMARY KEY` *is* the Clustered B+Tree containing the full row), `UUIDv4` splits and fragments the **entire 16 KB table pages**, cutting ingestion throughput by $10\times\text{–}30\times$!
+
+##### 3. The Solution: `UUIDv7` (IETF RFC 9562) — Bit-Level Anatomy
+Standardized in **May 2024 (`RFC 9562`)**, **`UUIDv7`** solves the distributed primary key dilemma by placing a **48-bit big-endian Unix Epoch millisecond timestamp (`unix_ts_ms`)** in the most significant bits, followed by a version tag (`0111` = `7`), optional sub-millisecond monotonic counter bits (`rand_a`), variant bits (`10`), and **62 bits of cryptographic randomness (`rand_b`)**:
+
+```
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           unix_ts_ms                          |  Bytes 0..3:  Top 32 bits of 48-bit UTC ms timestamp
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          unix_ts_ms           |  ver  |        rand_a         |  Bytes 4..7:  Low 16 bits of ts_ms + 4b ver (0111=7) + 12b rand_a/counter
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|var|                        rand_b                             |  Bytes 8..11: 2b variant (10) + Top 30 bits of 62-bit random payload
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                            rand_b                             |  Bytes 12..15: Low 32 bits of 62-bit random payload
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+Total = 128 bits (16 Bytes): [48-bit Timestamp (ms)] + [4-bit Ver=7] + [12-bit rand_a] + [2-bit Var] + [62-bit rand_b]
+Example UUIDv7: 01925a6b-9c00-7e42-8a1b-3c4d5e6f7a8b
+                \___________/ ^
+              48-bit UTC ms   Version 7 ('7')
+```
+
+- **Why `UUIDv7` Restores B-Tree Locality:** Because the first 6 bytes (`48 bits`) are a big-endian timestamp in milliseconds since `1970-01-01 00:00:00 UTC` (good until the year **10,889 AD**), every newly generated `UUIDv7` sorts **strictly after** all previous milliseconds! All new B-Tree entries append cleanly to the **rightmost leaf page**, eliminating random page splits and `pg_wal` FPW amplification while still allowing 10,000 disconnected Saharan edge dataloggers to generate globally unique IDs offline without coordinating with a central sequence server!
+
+##### 4. Runnable PostgreSQL Implementation (`uuid_generate_v7()` & Extracting the Embedded Timestamp)
+- **PostgreSQL 18+** includes a built-in C function **`uuidv7()`** out of the box.
+- **PostgreSQL 14–17** can generate RFC 9562 `UUIDv7` at full speed in pure SQL/PLpgSQL with zero external C extensions by stamping the 48-bit millisecond clock (`clock_timestamp()`) and version `'7'` over `gen_random_uuid()`:
+
+```sql
+-- 1. Pure-SQL RFC 9562 UUIDv7 Generator for PostgreSQL 14–17 (Zero Extensions Required)
+CREATE OR REPLACE FUNCTION public.uuid_generate_v7()
+RETURNS uuid
+LANGUAGE sql
+VOLATILE PARALLEL SAFE
+AS $$
+    -- Take a 16-byte random UUIDv4, overwrite bytes 0..5 with the 48-bit big-endian Unix ms timestamp,
+    -- and set the 4-bit version nibble (top 4 bits of byte 6) to 7 (0111):
+    SELECT encode(
+        set_bit(
+            set_bit(
+                overlay(
+                    uuid_send(gen_random_uuid())
+                    PLACING substring(int8send(floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint) FROM 3)
+                    FROM 1 FOR 6
+                ),
+                52, 1
+            ),
+            53, 1
+        ),
+        'hex'
+    )::uuid;
+$$;
+
+-- 2. Bonus Forensics Function: Extract the Exact UTC Creation Timestamp Hidden Inside Any UUIDv7!
+CREATE OR REPLACE FUNCTION public.uuid_v7_to_timestamptz(p_id uuid)
+RETURNS timestamptz
+LANGUAGE sql
+IMMUTABLE PARALLEL SAFE STRICT
+AS $$
+    SELECT to_timestamp(
+        ('x' || lpad( replace(left(p_id::text, 13), '-', ''), 16, '0'))::bit(64)::bigint / 1000.0
+    );
+$$;
+
+-- Verify monotonic sorting and timestamp extraction:
+SELECT
+    id,
+    public.uuid_v7_to_timestamptz(id) AS embedded_utc_created_at
+FROM (
+    SELECT public.uuid_generate_v7() AS id
+    FROM generate_series(1, 3)
+) s;
+```
+
+##### 5. The 5-Identifier Surrogate Key Engineering Decision Matrix
+
+| Identifier Strategy | PostgreSQL Declaration | Disk Size | B-Tree Append Locality | Offline Edge Generation? | When to Use It in Weather Engineering |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **1. `BIGINT IDENTITY`** *(SQL Standard replacement for `BIGSERIAL`)* | `BIGINT GENERATED ALWAYS AS IDENTITY` | **`8 Bytes`** (`int8`, `8B` aligned) | ✅ **100% Monotonic** (Fastest B-Tree & smallest FK joins) | ❌ **No** (Requires central DB sequence) | **Default for centralized tables** (`synoptic.observations.obs_id`, `nwp.forecasts`) where the PostgreSQL database assigns the ID at insert time. |
+| **2. `UUIDv7` (RFC 9562)** *(Time-ordered 128-bit UUID)* | `UUID DEFAULT uuid_generate_v7()` *(or `uuidv7()` in PG 18+)* | **`16 Bytes`** (`uuid`, `1B` aligned) | ✅ **Monotonic by ms** (Rightmost leaf appends; minimal WAL FPW) | ✅ **Yes** (Zero central coordination) | **Default for distributed / edge-generated IDs:** Offline weather stations, mobile radiosonde units, microservice APIs, or multi-region active-active ingest. |
+| **3. `UUIDv4` (RFC 9562)** *(Purely random 128-bit UUID)* | `UUID DEFAULT gen_random_uuid()` | **`16 Bytes`** (`uuid`, `1B` aligned) | ❌ **Worst (Uniformly Random!)** (`500x` WAL FPW amplification & 50/50 page splits) | ✅ **Yes** | **Avoid for indexed Primary Keys on large tables!** Only use for non-indexed security tokens, API keys, or tiny lookup tables ($< 100\text{k}$ rows) that fit permanently in RAM. |
+| **4. `ULID`** *(Crockford Base32 48b ts + 80b rand)* | Stored as `UUID` (`16B`) or `CHAR(26)` (`27B`) | **`16B` or `27B`** | ✅ **Monotonic by ms** | ✅ **Yes** | Predecessor to `UUIDv7`. Prefer **`UUIDv7`** in new greenfield PostgreSQL systems because `UUIDv7` is an official IETF standard (`RFC 9562`) supported natively by every database driver's `uuid` type. |
+| **5. MongoDB `ObjectId`** *(BSON 12-byte ID)* | N/A *(Day 4 MongoDB `_id`)* | **`12 Bytes`** (`4B` sec + `5B` host/proc + `3B` counter) | ✅ **Monotonic by second** | ✅ **Yes** | Native default `_id` in MongoDB (`weather_nosql`). Note that Day 4 often overrides `_id` with natural string keys (like `'DZ-ONM-2026-10-07-001'`) for idempotent alert upserts. |
 
 ### 4.3 Unclustered Heap vs. Clustered B+Tree Storage
 

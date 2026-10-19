@@ -151,7 +151,7 @@ In **MySQL InnoDB**, because rows move between 16 KB pages whenever a B+Tree pag
 #### Rule 3: Always Insert Monotonically Increasing Keys (Avoid Random UUIDv4 Page Splits!)
 * **Sequential Inserts (`AUTO_INCREMENT` or Time-Ordered Keys):** InnoDB fills each 16 KB leaf page to **$15/16$ ($93.75\%$ full)** and cleanly allocates the next 16 KB page.
 * **Random Inserts (`UUIDv4` or out-of-order keys):** InnoDB must insert into the middle of already-full 16 KB pages. It is forced to **split the 16 KB page into two pages**, copy $50\%$ of the rows to a newly allocated page, update parent pointers, and leave both pages half-empty ($\approx 50\%\text{–}65\%$ page fill factor)—**doubling disk consumption and slashing insert IOPS by $5\times\text{–}10\times$**!
-* **If You Must Use UUIDs in MySQL 8.0+:** Use **UUIDv7** (time-ordered) or MySQL 8.0's native **`UUID_TO_BIN(uuid, 1)`** (which swaps the timestamp bits of a UUIDv1 to the front and packs it into **16 binary bytes** `BINARY(16)` instead of 36 ASCII bytes!).
+* **If You Must Use UUIDs in MySQL 8.0+ or PostgreSQL:** Use **RFC 9562 `UUIDv7`** (48-bit big-endian Unix ms timestamp prefix — see [Day 2 Coursebook — Black Box 2D](../day2/day2_master_coursebook.md) for the bit-level diagram and `pg_wal` Full-Page Write amplification math) or MySQL 8.0's native **`UUID_TO_BIN(uuid, 1)`** (which swaps the timestamp bits of a UUIDv1 to the front and packs it into **16 binary bytes** `BINARY(16)` instead of 36 ASCII bytes!).
 
 #### Rule 4: Composite Clustered PK `PRIMARY KEY (station_id, obs_time)` vs. Surrogate `BIGINT AUTO_INCREMENT`
 In meteorological time-series tables in InnoDB, you have two choices:

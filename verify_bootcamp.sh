@@ -157,7 +157,7 @@ log_header "2. DAY 1 LIVE VERIFICATION (SQLite3 Synoptic & 250,000-Row Telemetry
 
 TMP_OPS_DB=$(mktemp /tmp/weather_ops_verify_XXXXXX.db)
 TMP_TELEM_BAK=$(mktemp /tmp/weather_telemetry_bak_XXXXXX.db)
-trap 'rm -f "$TMP_OPS_DB" "$TMP_TELEM_BAK"' EXIT
+trap 'rm -f "$TMP_OPS_DB" "${TMP_OPS_DB}-wal" "${TMP_OPS_DB}-shm" "$TMP_TELEM_BAK"' EXIT
 
 sqlite3 "$TMP_OPS_DB" < "$BASE_DIR/day1/weather_ops_seed.sql"
 
@@ -172,18 +172,22 @@ else
     log_fail "weather_ops.db row count mismatch (stations=${STATIONS_CNT}, observations=${OBS_CNT}, forecasts=${FCST_CNT}, weather_alerts=${ALERTS_CNT})"
 fi
 
-# Test SQLite PRAGMA Integrity, Foreign Key Check & Introspection TVFs
+# Test SQLite PRAGMA Integrity, Foreign Key Check, Introspection TVFs & WAL Checkpointing
 PRAGMA_AUDIT=$(sqlite3 "$TMP_OPS_DB" "
 PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA journal_size_limit = 67108864;
 SELECT (SELECT integrity_check FROM pragma_integrity_check LIMIT 1) || '|' ||
        (SELECT COUNT(*) FROM pragma_foreign_key_check) || '|' ||
        (SELECT COUNT(*) FROM pragma_table_info('observations')) || '|' ||
        (SELECT on_delete FROM pragma_foreign_key_list('observations') LIMIT 1);
-")
-if [[ "$PRAGMA_AUDIT" == "ok|0|10|CASCADE" ]]; then
-    log_pass "SQLite PRAGMA Audit verified (integrity_check=ok, fk_violations=0, observations_cols=10, on_delete=CASCADE)"
+" | tr '\n' '|')
+WAL_CKPT=$(sqlite3 "$TMP_OPS_DB" "PRAGMA wal_checkpoint(TRUNCATE);")
+if [[ "$PRAGMA_AUDIT" == "wal|67108864|ok|0|10|CASCADE|" && "$WAL_CKPT" == "0|0|0" ]]; then
+    log_pass "SQLite PRAGMA & WAL Audit verified (journal_mode=wal, journal_size_limit=64MiB, wal_checkpoint=0|0|0, integrity_check=ok, fk_violations=0)"
 else
-    log_fail "SQLite PRAGMA Audit unexpected output: ${PRAGMA_AUDIT}"
+    log_fail "SQLite PRAGMA & WAL Audit unexpected output: ${PRAGMA_AUDIT} / ckpt=${WAL_CKPT}"
 fi
 
 # Test -9999.0 NULLIF Sentinel Hygiene Query

@@ -197,24 +197,28 @@ When WAL is enabled, SQLite creates two auxiliary files alongside `weather.db`:
 
 ```
 
-#### Checkpointing: Moving Frames from WAL to Database
+#### Checkpointing (`PRAGMA wal_checkpoint`) & Companion WAL Pragmas
 
-Because appending to the WAL causes it to grow indefinitely, SQLite must periodically migrate pages back into the master `weather.db` file via **checkpointing**:
+Because appending to the WAL causes `.db-wal` to grow continuously, SQLite periodically migrates committed 4 KB frames back into the master `weather.db` file via **checkpointing**. Every execution of `PRAGMA wal_checkpoint(<MODE>);` returns a single diagnostic row with **three integers** `(busy, log, checkpointed)`:
+- **`busy` (`0` or `1`):** `0` if the checkpoint completed without blocking; `1` if an active concurrent reader or writer prevented completion.
+- **`log` (Integer):** Total number of modified 4 KB frames currently residing inside `.db-wal`.
+- **`checkpointed` (Integer):** Number of frames successfully copied from `.db-wal` back into the main `.db` file *(if `checkpointed < log`, an active reader is holding a "Read-Mark" on an older snapshot)*.
 
-```
--- Passive: Writes as many frames as possible without blocking active readers
-PRAGMA wal_checkpoint(PASSIVE);
+| Checkpoint Mode / Pragma | SQL Syntax | Blocks Writers / Readers? | Rewinds WAL Write Pointer to Byte `0`? | Truncates `.db-wal` on Disk? | Operational Use Case |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **`PASSIVE`** *(Auto-Checkpoint Default)* | `PRAGMA wal_checkpoint(PASSIVE);` | ❌ **Never blocks** (stops at oldest active reader Read-Mark) | Only if `checkpointed == log` and no active readers remain | ❌ No (keeps file size unless `journal_size_limit` set) | Triggered automatically by `PRAGMA wal_autocheckpoint = 1000;` ($\approx 4\text{ MB}$) or low-impact background crons. |
+| **`FULL`** | `PRAGMA wal_checkpoint(FULL);` | ⏳ **Waits** (up to `busy_timeout`) for current writers/readers | Only if no new reader started during the flush | ❌ No | Scheduled maintenance flush when readers are intermittent. |
+| **`RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | ⏳ **Waits** for all readers **after** flushing so next writer **must** start at frame 1 | ✅ **Guaranteed** | ❌ No (reuses allocated disk blocks for speed) | High-rate telemetry daemons to prevent `.db-wal` from growing while avoiding `ftruncate()` metadata stalls. |
+| **`TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | ⏳ **Waits** for all writers & readers, flushes all frames, and rewinds | ✅ **Guaranteed** | ✅ **Yes (`0` bytes)** | Pre-backup / pre-archival hook to fold all state cleanly into `.db` and zero out `.db-wal`. |
+| **`wal_autocheckpoint`** | `PRAGMA wal_autocheckpoint = 1000;` | — | Triggers `PASSIVE` at $N$ pages | — | Default `1000` pages (`4 MB`). Set to `<= 0` only if managing checkpoints manually via a dedicated thread. |
+| **`journal_size_limit`** | `PRAGMA journal_size_limit = 67108864;` | — | — | ✅ Truncates `.db-wal` to cap (`64 MiB`) on rewind | Prevents a temporary burst spike from leaving a multi-GB `.db-wal` file allocated on disk forever. |
 
--- Full: Blocks until all readers finish their transaction, then flushes all frames
-PRAGMA wal_checkpoint(FULL);
+#### Production WAL Pitfalls: "WAL Starvation" & `SQLITE_BUSY_SNAPSHOT`
 
--- Restart: Flushes all frames and resets WAL write offset to byte 0
-PRAGMA wal_checkpoint(RESTART);
-
--- Truncate: Flushes all frames, resets WAL, and truncates WAL file to 0 bytes
-PRAGMA wal_checkpoint(TRUNCATE);
-
-```
+1. **"WAL Starvation" (Unbounded `.db-wal` Growth From Unclosed Read Cursors):**
+   - SQLite can only rewind `.db-wal` to frame 1 when *all* frames are checkpointed and no connection holds a Read-Mark on an earlier snapshot. If a Python script or GUI leaves an unfinished `SELECT` cursor open without closing it, `checkpointed < log` forever and `.db-wal` grows to gigabytes! Always close read cursors promptly and configure `PRAGMA journal_size_limit = 67108864;`.
+2. **Why `PRAGMA busy_timeout = 5000;` Requires `BEGIN IMMEDIATE;` on Concurrent Writers:**
+   - If Connection A starts a deferred `BEGIN;`, runs a `SELECT` (acquiring a read snapshot), and later executes `INSERT` after Connection B has committed a newer WAL frame, SQLite **immediately aborts with `SQLITE_BUSY_SNAPSHOT` (`0 ms`)—ignoring `busy_timeout`**—because upgrading a stale read snapshot would violate serializability. Always start write transactions with **`BEGIN IMMEDIATE;`** so the write lock is acquired up front and `busy_timeout` is respected!
 
 #### When SQLite WAL Must NOT Be Used:
 

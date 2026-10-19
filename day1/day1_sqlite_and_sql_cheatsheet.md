@@ -196,15 +196,68 @@ Unlike standard SQL statements, a `PRAGMA` can be called in three ways:
 
 #### 5.3 Category B: Journaling, Crash Recovery (`WAL`) & Lock Concurrency Pragmas
 
-*(For deep architectural diagrams comparing SQLite Rollback Journals vs. `-wal`/`-shm` frames, see [Reference Card 07: WAL & Crash Recovery](../reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md)).*
+*(For cross-engine architectural diagrams comparing SQLite WAL vs. PostgreSQL `XLogRecord` vs. MySQL InnoDB Redo Log, see [Reference Card 07: WAL & Crash Recovery](../reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md)).*
 
 | `PRAGMA` Option | Default | Scope | Options & Mechanics | When to Use in Weather Telemetry |
 | :--- | :---: | :---: | :--- | :--- |
 | **`PRAGMA journal_mode`** | `DELETE` | **Persistent** (for `WAL`) / Connection | • `DELETE`: Creates & deletes `.db-journal` on every commit (blocks readers during writes).<br>• `TRUNCATE`: Truncates journal to `0` bytes.<br>• `PERSIST`: Zeroes journal header.<br>• `MEMORY`: Keeps rollback journal in RAM (**corrupts on power loss**).<br>• **`WAL`**: **Write-Ahead Logging** (`.db-wal` + `.db-shm`). Readers never block the writer; writer never blocks readers!<br>• `OFF`: Disables rollback journal (**corrupts on crash/rollback**). | • **Live AWS Station Daemon + Dashboard:** Always set `PRAGMA journal_mode = WAL;` so 1-minute ingestion doesn't throw `database is locked` while forecasters run queries.<br>• **Scratch Bulk Generator ([`generate_weather_db.py`](./generate_weather_db.py)):** Uses `OFF` to synthesize 250,000 rows in ~2s because the file can be regenerated from scratch if interrupted. |
-| **`PRAGMA synchronous`** | `FULL` (`2`) | **Per-Connection** | • `EXTRA` (`3`): Extra `fsync` of directory on `DELETE` mode.<br>• `FULL` (`2`): OS `fsync()` after every transaction commit.<br>• **`NORMAL` (`1`)**: In `WAL` mode, guarantees crash-safe consistency while skipping `fsync()` on individual WAL appends (syncs only at checkpoints!).<br>• `OFF` (`0`): Hands bytes to OS buffer cache without `fsync()` (**fast, but OS crash can lose data**). | • **Production (`WAL` mode):** Use `PRAGMA synchronous = NORMAL;` ($5\text{--}20\times$ faster writes than `FULL` with full ACID crash safety in `WAL` mode).<br>• **Disposable Bulk Load:** `generate_weather_db.py` uses `OFF` to avoid 250k disk barrier stalls. |
+| **`PRAGMA synchronous`** | `FULL` (`2`) | **Per-Connection** | • `EXTRA` (`3`): Extra `fsync` of parent directory in `DELETE` mode.<br>• `FULL` (`2`): OS `fsync()` after every transaction commit.<br>• **`NORMAL` (`1`)**: In `WAL` mode, guarantees B-Tree corruption safety while skipping `fsync()` on individual WAL commits (syncs only at checkpoints!).<br>• `OFF` (`0`): Hands bytes to OS buffer cache without `fsync()` (**fast, but OS crash can lose data**). | • **Production (`WAL` mode):** Use `PRAGMA synchronous = NORMAL;` ($5\text{--}20\times$ faster writes than `FULL` with full B-Tree crash safety in `WAL` mode).<br>• **Disposable Bulk Load:** `generate_weather_db.py` uses `OFF` to avoid 250k disk barrier stalls. |
 | **`PRAGMA busy_timeout`** | `0` ms | **Per-Connection** | `PRAGMA busy_timeout = 5000;` (milliseconds) | By default (`0 ms`), if Process A holds a write lock, Process B fails *instantly* with `OperationalError: database is locked` (`SQLITE_BUSY`). Setting `5000` instructs SQLite to sleep and retry for up to 5 seconds until the writer finishes. |
-| **`PRAGMA wal_autocheckpoint`** | `1000` pages | **Per-Connection** | `PRAGMA wal_autocheckpoint = 1000;` ($\approx 4\text{ MB}$ at 4 KB pages) | Automatically transfers committed pages from `.db-wal` back into the main `.db` file once the WAL reaches $N$ pages. |
-| **`PRAGMA wal_checkpoint`** | — | Action | `PASSIVE` \| `FULL` \| `RESTART` \| `TRUNCATE` | Manually triggers a WAL checkpoint. `PRAGMA wal_checkpoint(TRUNCATE);` flushes all WAL frames into `.db` and shrinks `.db-wal` back to `0` bytes. |
+| **`PRAGMA wal_autocheckpoint`** | `1000` pages | **Per-Connection** | `PRAGMA wal_autocheckpoint = 1000;` ($\approx 4\text{ MB}$ at 4 KB pages; `<= 0` disables auto-checkpoint) | Automatically triggers a `PASSIVE` checkpoint once `.db-wal` accumulates $N$ frames (default `1000` pages = `4 MB`). |
+| **`PRAGMA wal_checkpoint`** | — | Action | `PASSIVE` \| `FULL` \| `RESTART` \| `TRUNCATE` | Manually triggers a WAL checkpoint and returns the 3-column diagnostic row `(busy, log, checkpointed)`. |
+| **`PRAGMA journal_size_limit`** | `-1` (Unlimited) | **Per-Connection** | Bytes (e.g., `PRAGMA journal_size_limit = 67108864;` for `64 MiB`; `0` truncates to minimum) | Caps the on-disk size of `.db-wal` (and `PERSIST` journals). Whenever a WAL checkpoint rewinds to frame 1, SQLite automatically truncates `.db-wal` if it exceeded this byte limit! |
+| **`PRAGMA locking_mode`** | `NORMAL` | **Per-Connection** | `NORMAL` \| `EXCLUSIVE` | In `EXCLUSIVE` + `WAL` mode, a single-process edge logger keeps locks permanently and never creates or maps the `.db-shm` shared-memory file (reducing flash I/O, but forbidding any second process from connecting). |
+
+##### 5.3a. Deep-Dive: The 4 `PRAGMA wal_checkpoint` Modes & Return Tuple `(busy, log, checkpointed)`
+
+When SQLite runs in `WAL` mode, every `INSERT`/`UPDATE`/`DELETE` appends modified 4 KB pages ("frames") sequentially to `weather_ops.db-wal`. Checkpointing copies those committed frames back into the main `weather_ops.db` file so `.db-wal` can be rewound to the beginning and reused.
+
+Every execution of `PRAGMA wal_checkpoint(<MODE>);` returns a single diagnostic row with **three integers**:
+
+```text
+┌──────┬──────┬──────────────┐
+│ busy │ log  │ checkpointed │
+├──────┼──────┼──────────────┤
+│ 0    │ 1420 │ 1420         │
+└──────┴──────┴──────────────┘
+```
+1. **`busy` (`0` or `1`):** `0` means the checkpoint completed without being blocked; `1` means an active concurrent reader or writer prevented the checkpoint from finishing or rewinding.
+2. **`log` (Integer):** Total number of modified 4 KB frames currently residing inside the `.db-wal` file.
+3. **`checkpointed` (Integer):** Total number of frames successfully copied from `.db-wal` back into the main `.db` file. *(If `checkpointed < log`, an active reader is holding a read lock ("Read-Mark") on an older snapshot in the WAL!)*
+
+| Checkpoint Mode | SQL Command | Waits for Active Writers/Readers? | Rewinds WAL Write Pointer to Frame 1? | Truncates `.db-wal` File to `0` Bytes on Disk? | When to Use |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **1. `PASSIVE`** *(Default)* | `PRAGMA wal_checkpoint(PASSIVE);` | ❌ **Never blocks** (stops at first active reader snapshot) | Only if `checkpointed == log` and no readers remain | ❌ No (keeps allocated file size unless `journal_size_limit` set) | Used automatically by `wal_autocheckpoint = 1000` and non-intrusive background cron jobs. |
+| **2. `FULL`** | `PRAGMA wal_checkpoint(FULL);` | ⏳ **Waits** (up to `busy_timeout`) for current writers & existing readers to finish | Only if no new reader started during the flush | ❌ No | Scheduled maintenance window when you want all committed WAL frames flushed to `.db`. |
+| **3. `RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | ⏳ **Waits** for all readers to finish **after** flushing so next writer **must** start at byte 0 | ✅ **Guaranteed** (blocks new writers until WAL rewinds to frame 1) | ❌ No (reuses existing file allocation for speed) | High-throughput ingestion daemons that want to bound `.db-wal` growth without filesystem `ftruncate()` metadata stalls. |
+| **4. `TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | ⏳ **Waits** for all writers & readers, flushes all frames, and rewinds | ✅ **Guaranteed** | ✅ **Yes (`0` bytes)** | Pre-backup / pre-archival hook (`compact_hot_to_cold.py`) to fold everything into a clean single `.db` file. |
+
+##### 5.3b. Deep-Dive: The `journal_mode` $\times$ `synchronous` Durability & `fsync()` Matrix
+
+A common misconception is that `PRAGMA synchronous = NORMAL;` is "unsafe." In reality, its safety depends entirely on whether you are in legacy `DELETE` mode or `WAL` mode:
+
+| Configuration Pair | OS `fsync()` Calls per `COMMIT` | Process Crash (`kill -9`) | Sudden Power Loss / OS Kernel Panic | Relative Write Speed | Verdict for Meteorological Engineering |
+| :--- | :---: | :--- | :--- | :---: | :--- |
+| `journal_mode = DELETE` + `synchronous = FULL` *(SQLite Default)* | **2 `fsync`s** per commit (journal + `.db`) | ✅ Safe | ✅ Safe (Zero data loss, zero corruption) | $1\times$ (Slowest; blocks readers) | Legacy default; safe but suffers `database is locked` under concurrent load. |
+| `journal_mode = DELETE` + `synchronous = NORMAL` | 1–2 `fsync`s (skips barrier before deleting journal) | ✅ Safe | ⚠️ **Small Corruption Risk** if power dies mid-commit | $\approx 2\times$ | Avoid in `DELETE` mode; switch to `WAL` instead. |
+| **`journal_mode = WAL` + `synchronous = NORMAL`** *(Recommended Production)* | **0 `fsync`s on commit!** (`fsync` only during WAL checkpoint) | ✅ Safe (OS flushes buffers) | ✅ **100% Corruption-Safe!** *(Last ~1–2s of un-fsynced commits may roll back cleanly, but `.db` never corrupts)* | **$10\text{--}25\times$ faster** | **Gold Standard for Edge AWS Loggers & Telemetry Daemons.** Preserves SSD/SD-card lifespan and eliminates commit stalls. |
+| **`journal_mode = WAL` + `synchronous = FULL`** | **1 `fsync`** per commit (on `.db-wal` append) | ✅ Safe | ✅ **100% Safe + Zero Lost Commits** | $\approx 3\text{--}5\times$ faster than `DELETE+FULL` | Use for critical operational alert tables (`weather_alerts`) where even 1 second of power-cut rollback is unacceptable. |
+| `journal_mode = OFF` + `synchronous = OFF` | **0 `fsync`s** | ❌ **DB Corrupts** | ❌ **DB Corrupts** | **$50\times$ faster** | **Only** for disposable scratch generators ([`generate_weather_db.py`](./generate_weather_db.py)) where the file is rebuilt from scratch on failure. |
+
+##### 5.3c. Two Production WAL Pitfalls Every Engineer Must Know
+
+> [!WARNING]
+> **Pitfall 1 — "WAL Starvation" (Why `.db-wal` Can Grow to Gigabytes Despite `wal_autocheckpoint = 1000`):**  
+> In `WAL` mode, SQLite can only rewind `.db-wal` back to byte `0` when **every** frame in `.db-wal` has been copied to `.db` **and** no active reader is referencing an older snapshot.  
+> If a forecaster opens a query in a GUI or a Python script runs `cur.execute("SELECT * FROM raw_telemetry")` and fetches only 10 rows **without closing the cursor or finishing the transaction**, that connection holds a permanent "Read-Mark" on the old snapshot!  
+> - **Symptom:** Subsequent checkpoints copy frames up to the Read-Mark (`checkpointed < log`), cannot rewind `.db-wal`, and `.db-wal` grows indefinitely to 10+ GB!  
+> - **Fix:** Always close read cursors / wrap reads in short context managers, set `PRAGMA journal_size_limit = 67108864;` (`64 MiB`), and run periodic `PRAGMA wal_checkpoint(RESTART);`.
+
+> [!CAUTION]
+> **Pitfall 2 — Why `PRAGMA busy_timeout = 5000;` Fails Instantly on Read-to-Write Upgrades (`SQLITE_BUSY_SNAPSHOT`):**  
+> Suppose Connection A starts a default deferred transaction (`BEGIN;`), runs a `SELECT` (acquiring a read snapshot at WAL frame 500), and then tries to run an `INSERT`. If Connection B committed frame 501 in the meantime, Connection A's snapshot is now stale.  
+> SQLite **cannot** let Connection A wait and overwrite frame 501 without violating Serializable Snapshot Isolation—so SQLite **completely ignores `PRAGMA busy_timeout = 5000;`** and throws `OperationalError: database is locked` (`SQLITE_BUSY_SNAPSHOT`) at `0 ms`!  
+> - **The Golden Rule for Concurrent Writers:** Whenever a transaction intends to write (`INSERT`/`UPDATE`/`DELETE`), **always start it with `BEGIN IMMEDIATE;`** instead of `BEGIN;`. `BEGIN IMMEDIATE;` acquires the write lock up front and **always honors `PRAGMA busy_timeout = 5000;`**!
 
 ---
 
@@ -252,13 +305,17 @@ SELECT * FROM pragma_table_info('observations');
 -- Prioritizes concurrent reader/writer throughput + crash safety on flash/SSD
 -- ============================================================================
 PRAGMA journal_mode = WAL;           -- Persistent: concurrent readers + 1 writer
-PRAGMA synchronous = NORMAL;         -- Crash-safe in WAL mode without per-commit fsync stall
+PRAGMA synchronous = NORMAL;         -- 100% corruption-safe in WAL mode without per-commit fsync stall
+PRAGMA wal_autocheckpoint = 1000;    -- Auto-checkpoint every 1000 pages (~4 MB)
+PRAGMA journal_size_limit = 67108864;-- Cap .db-wal file size on disk at 64 MiB after rewind
 PRAGMA foreign_keys = ON;            -- Block invalid station_id inserts
 PRAGMA busy_timeout = 5000;          -- Retry automatically on transient write contention
 PRAGMA cache_size = -64000;          -- 64 MiB page cache in RAM
 PRAGMA temp_store = MEMORY;          -- Keep sorting/window temp B-Trees in RAM
+-- Always start write transactions with: BEGIN IMMEDIATE;
 -- Before closing long-lived connection:
 PRAGMA optimize;                     -- Refresh planner stats if table sizes grew
+PRAGMA wal_checkpoint(TRUNCATE);     -- Optional: flush & truncate .db-wal on clean daemon shutdown
 
 -- ============================================================================
 -- PROFILE 3: Disposable Scratch Bulk-Seed Script (generate_weather_db.py)

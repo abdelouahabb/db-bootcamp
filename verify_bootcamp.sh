@@ -172,6 +172,20 @@ else
     log_fail "weather_ops.db row count mismatch (stations=${STATIONS_CNT}, observations=${OBS_CNT}, forecasts=${FCST_CNT}, weather_alerts=${ALERTS_CNT})"
 fi
 
+# Test SQLite PRAGMA Integrity, Foreign Key Check & Introspection TVFs
+PRAGMA_AUDIT=$(sqlite3 "$TMP_OPS_DB" "
+PRAGMA foreign_keys = ON;
+SELECT (SELECT integrity_check FROM pragma_integrity_check LIMIT 1) || '|' ||
+       (SELECT COUNT(*) FROM pragma_foreign_key_check) || '|' ||
+       (SELECT COUNT(*) FROM pragma_table_info('observations')) || '|' ||
+       (SELECT on_delete FROM pragma_foreign_key_list('observations') LIMIT 1);
+")
+if [[ "$PRAGMA_AUDIT" == "ok|0|10|CASCADE" ]]; then
+    log_pass "SQLite PRAGMA Audit verified (integrity_check=ok, fk_violations=0, observations_cols=10, on_delete=CASCADE)"
+else
+    log_fail "SQLite PRAGMA Audit unexpected output: ${PRAGMA_AUDIT}"
+fi
+
 # Test -9999.0 NULLIF Sentinel Hygiene Query
 SENTINEL_TEST=$(sqlite3 "$TMP_OPS_DB" "
 SELECT ROUND(AVG(precip_1h_mm), 2) || '|' || ROUND(AVG(NULLIF(precip_1h_mm, -9999.0)), 2)

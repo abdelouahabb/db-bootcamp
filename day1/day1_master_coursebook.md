@@ -121,6 +121,53 @@ Inside `sqlite3 weather_telemetry.db`:
 ```
 *(Refer to `day1_sqlite_and_sql_cheatsheet.md` for how `.tables` and `.schema` query `sqlite_schema` under the hood and how to configure `~/.sqliterc` permanently).*
 
+### 3.4 SQLite `PRAGMA` Engine Directives vs. CLI Dot-Commands
+
+A critical distinction in SQLite engineering is the difference between **CLI Dot-Commands** (`.headers`, `.mode`, `.schema`) and **`PRAGMA` Statements**:
+- **CLI Dot-Commands (`.cmd`):** Evaluated **only** by the `sqlite3` terminal program. They do not end with a semicolon and will throw a syntax error if executed inside Python (`cur.execute(".tables")`) or DBeaver.
+- **`PRAGMA` Statements (`PRAGMA name = value;`):** SQLite-specific SQL extensions evaluated directly by the **SQLite Storage Core (`libsqlite3`)**. They **end with a semicolon (`;`)**, work identically across the `sqlite3` CLI, Python `sqlite3`, and DBeaver, and control runtime engine behavior, crash recovery, memory caching, and schema introspection.
+
+#### 1. The Scope Rule: Per-Connection vs. Persistent Database Header Pragmas
+- **Per-Connection (Session) Pragmas:** Reset to compile-time defaults every time a new connection opens! You must run them at the start of every session (or inside `~/.sqliterc` / Python connection hooks):
+  - `PRAGMA foreign_keys = ON;` (Default: `OFF` / `0`)
+  - `PRAGMA synchronous = NORMAL;` (Default: `FULL` / `2`)
+  - `PRAGMA busy_timeout = 5000;` (Default: `0` ms)
+  - `PRAGMA cache_size = -64000;` (Default: `-2000` $\approx 2\text{ MiB}$)
+  - `PRAGMA temp_store = MEMORY;` (Default: `DEFAULT` / `0`)
+- **Persistent (Database File Header) Pragmas:** Stored permanently inside the `.db` file header and remembered across all future connections:
+  - `PRAGMA journal_mode = WAL;` (Switches the database file permanently to Write-Ahead Logging until changed back).
+  - `PRAGMA page_size = 4096;` (Persists when set before table creation or immediately followed by `VACUUM;`).
+  - `PRAGMA auto_vacuum = NONE | FULL | INCREMENTAL;`
+
+#### 2. Complete Categorized Matrix of Essential SQLite `PRAGMA` Options
+
+| Category | `PRAGMA` Statement | Default | Scope | Meteorological Engineering Purpose & When to Use |
+| :--- | :--- | :---: | :---: | :--- |
+| **Integrity & Constraints** | `PRAGMA foreign_keys = ON;` | `0` (`OFF`) | Connection | Enforces `FOREIGN KEY` constraints and `ON DELETE CASCADE` (Line 7 of [`weather_ops_seed.sql`](./weather_ops_seed.sql)). |
+| **Integrity & Constraints** | `PRAGMA foreign_key_check;` | — | Action | Scans existing tables (or a single table: `PRAGMA foreign_key_check(observations);`) for orphaned rows inserted while foreign keys were disabled. |
+| **Integrity & Constraints** | `PRAGMA integrity_check;` / `PRAGMA quick_check;` | — | Action | Audits physical B-Tree pages, index sort order, `UNIQUE`, and `NOT NULL` constraints after power loss on remote field data loggers (`ok` = healthy). |
+| **Journaling & Concurrency** | `PRAGMA journal_mode = WAL \| DELETE \| TRUNCATE \| PERSIST \| MEMORY \| OFF;` | `DELETE` | **Persistent** (`WAL`) | • **`WAL`:** Enables concurrent readers + 1 writer via `.db-wal`/`.db-shm` (prevents `database is locked` when a daemon ingests while a dashboard reads).<br>• **`OFF`:** Disables rollback journal (used in [`generate_weather_db.py`](./generate_weather_db.py) for 2-second scratch generation; unsafe for live production). |
+| **Journaling & Concurrency** | `PRAGMA synchronous = EXTRA \| FULL \| NORMAL \| OFF;` | `FULL` (`2`) | Connection | Controls how often SQLite calls OS `fsync()`. Pair `WAL` + `NORMAL` (`1`) for high-speed crash-safe production ingestion; `generate_weather_db.py` uses `OFF` (`0`) during disposable bulk seeding. |
+| **Journaling & Concurrency** | `PRAGMA busy_timeout = 5000;` | `0` ms | Connection | Instructs SQLite to wait up to `5000 ms` (5 seconds) for an active write lock to clear instead of failing immediately with `SQLITE_BUSY` (`database is locked`). |
+| **Journaling & Concurrency** | `PRAGMA wal_checkpoint(TRUNCATE);` | — | Action | Flushes committed frames from `.db-wal` back into the main `.db` file and resets `.db-wal` to 0 bytes (`PASSIVE`, `FULL`, `RESTART`, `TRUNCATE`). |
+| **Memory & I/O Tuning** | `PRAGMA cache_size = -64000;` *(or `+100000`)* | `-2000` ($2\text{ MiB}$) | Connection | Negative = KiB (`-64000` = `64 MiB` RAM cache). Positive = page count (`100000` pages $\times 4\text{ KB} \approx 400\text{ MB}$ RAM in `generate_weather_db.py` for rapid index builds). |
+| **Memory & I/O Tuning** | `PRAGMA temp_store = MEMORY;` | `0` (`DEFAULT`) | Connection | Keeps temporary B-Trees for `ORDER BY`, `GROUP BY`, `DISTINCT`, and window functions in RAM rather than `/tmp` disk files. |
+| **Memory & I/O Tuning** | `PRAGMA mmap_size = 268435456;` | `0` | Connection | Memory-maps up to `256 MiB` of the `.db` file directly into process memory, avoiding `read()` syscall overhead during large analytical scans. |
+| **Schema Introspection** | `PRAGMA table_info('observations');` | — | Query / TVF | Returns columns (`cid, name, type, notnull, dflt_value, pk`). Can also be queried as a table in SQL: `SELECT * FROM pragma_table_info('observations');`! |
+| **Schema Introspection** | `PRAGMA index_list('observations');` & `PRAGMA index_info('...');` | — | Query / TVF | Lists table indexes (including `sqlite_autoindex_observations_1` created by `UNIQUE (station_id, obs_time)`) and their indexed column order. |
+| **Schema Introspection** | `PRAGMA foreign_key_list('observations');` | — | Query / TVF | Lists parent tables (`stations`), referencing columns (`station_id`), and `on_delete` rules (`CASCADE`). |
+| **Planner Maintenance** | `PRAGMA optimize;` | — | Action | Run right before closing a database connection; selectively runs `ANALYZE` on tables whose row counts shifted substantially. |
+
+#### 3. Why `generate_weather_db.py` Uses `OFF` While Production Uses `WAL`
+Notice Lines 23–25 of [`generate_weather_db.py`](./generate_weather_db.py):
+```python
+cur.execute("PRAGMA journal_mode = OFF;")
+cur.execute("PRAGMA synchronous = OFF;")
+cur.execute("PRAGMA cache_size = 100000;")
+```
+- **Why this is valid in `generate_weather_db.py`:** The script builds a brand-new synthetic `.db` file from scratch in 2 seconds. If power fails mid-script, you simply re-run `./generate_weather_db.py`. Turning off the rollback journal (`journal_mode = OFF`) and OS disk barriers (`synchronous = OFF`) while allocating `100,000` pages ($\approx 400\text{ MB}$) of RAM cache allows 250,000 rows + 2 composite B-Tree indexes to materialize in ~2 seconds.
+- **Why you must NEVER use `OFF` on a live weather station:** On a real station logger or operational database (`weather_ops.db`), a power cut during `journal_mode = OFF` corrupts the B-Tree permanently. In production, always use `PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`.
+
 ---
 
 ## 4. Module 2: Relational Schema Design, WMO Constraints & CRUD

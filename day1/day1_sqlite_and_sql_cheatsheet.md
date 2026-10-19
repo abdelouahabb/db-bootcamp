@@ -10,28 +10,33 @@
 
 ---
 
-## PART I: SQLite CLI Shell Directives & Dot-Commands Reference
+## PART I: SQLite CLI Shell Directives (`.dot-commands`) & Engine `PRAGMA` Reference
 
-### 1. Core Concept: Client Directives vs. Declarative SQL
+### 1. Core Concept: Shell Dot-Commands vs. `PRAGMA` Directives vs. Declarative SQL
 
-When interacting with a database via a Command-Line Interface (CLI), engineers must distinguish between two completely different types of instructions:
+When working with SQLite, engineers must distinguish between **three** fundamentally different instruction layers:
 
-1. **SQL Statements (`SELECT`, `INSERT`, `CREATE`):** Declarative code sent across the database driver to the relational query engine. They compile into bytecode, manipulate storage tables, and must always end with a semicolon (`;`).
-2. **Shell Directives ("Dot-Commands"):** Control instructions evaluated **strictly by the client terminal program** (`sqlite3`). They configure terminal display formatting, toggle performance timers, manage import/export streams, and inspect database metadata. They **must start with a dot (`.`) at column 1** and **must never end with a semicolon**.
+1. **Shell Directives ("Dot-Commands" — `.headers`, `.mode`, `.timer`, `.schema`):** Control instructions evaluated **strictly by the `sqlite3` terminal client program**. They configure terminal display formatting, toggle performance timers, and manage CSV import/export streams. They **must start with a dot (`.`) at column 1**, **never end with a semicolon**, and **cannot** be executed inside Python `sqlite3.connect().execute()` or DBeaver SQL editors.
+2. **Engine `PRAGMA` Statements (`PRAGMA foreign_keys = ON;`, `PRAGMA journal_mode = WAL;`, `PRAGMA table_info(...)`):** SQLite-specific SQL extensions parsed and executed directly by the **SQLite Storage Core (`libsqlite3`)**. They configure connection-level or database-level engine behavior (foreign key enforcement, Write-Ahead Logging, OS `fsync` durability, RAM page cache size, lock timeouts) and provide SQL-callable schema/integrity introspection. They **end with a semicolon (`;`)** and **work everywhere** (`sqlite3` CLI, Python `sqlite3`, DBeaver, DB Browser for SQLite).
+3. **Standard Declarative SQL (`SELECT`, `INSERT`, `CREATE`, `WITH`):** Relational statements sent to the SQLite compiler, translated into Virtual Database Engine (`VDBE`) bytecode, and executed against 4 KB B-Tree pages. They must always end with a semicolon (`;`).
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Terminal User                         │
-└──────────────┬──────────────────────────────┬───────────────┘
-               │                              │
-      Starts with "."?                 Standard SQL?
-               │                              │
-               ▼                              ▼
-┌─────────────────────────────┐┌──────────────────────────────┐
-│    SQLite Shell Client      ││     SQLite Storage Core      │
-│  (Configures display,       ││  (Parses AST, executes plan, │
-│   measures timer, exports)  ││   reads B-tree pages)        │
-└─────────────────────────────┘└──────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                           Engineer / Python Driver / GUI Client                          │
+└───────────────┬─────────────────────────────────────────┬────────────────────────────────┘
+                │                                         │
+       Starts with "."?                        Valid SQL / PRAGMA (;)?
+       (CLI Shell Only)                        (CLI, Python, DBeaver, JDBC)
+                │                                         │
+                ▼                                         ▼
+┌───────────────────────────────┐         ┌────────────────────────────────────────────────┐
+│      SQLite Shell Client      │         │          SQLite Storage Core (libsqlite3)      │
+│  • .headers on / .mode box    │         │  1. PRAGMA Engine Control & Introspection      │
+│  • .timer on / .nullvalue     │         │     (foreign_keys, journal_mode, cache_size,   │
+│  • .tables / .schema / .import│         │      synchronous, busy_timeout, table_info)    │
+└───────────────────────────────┘         │  2. Declarative SQL Bytecode (VDBE & B-Trees)  │
+                                          │     (SELECT, INSERT, CREATE, JOIN, OVER)       │
+                                          └────────────────────────────────────────────────┘
 ```
 
 ### 2. Launching & Building Databases from Terminal
@@ -140,11 +145,13 @@ ORDER BY type = 'table' DESC, name;
 3. **Type Affinity Inspection:** Ensures sensor timestamps are stored consistently as ISO-8601 `TEXT` strings (`YYYY-MM-DD HH:MM:SS`).
 
 #### 4.5 Permanent Shell Automation (`~/.sqliterc`)
-Persist display and profiling directives so every `sqlite3` session opens pre-configured:
+Persist both `PRAGMA` engine rules and CLI display directives so every `sqlite3` session opens pre-configured:
 
 ```bash
 # Linux / macOS:
 cat << 'EOF' > ~/.sqliterc
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
 .headers on
 .mode box
 .timer on
@@ -154,10 +161,116 @@ EOF
 
 ```powershell
 # Windows (PowerShell):
-Set-Content -Path "$HOME\.sqliterc" -Value ".headers on`n.mode box`n.timer on`n.nullvalue NULL"
+Set-Content -Path "$HOME\.sqliterc" -Value "PRAGMA foreign_keys = ON;`nPRAGMA busy_timeout = 5000;`n.headers on`n.mode box`n.timer on`n.nullvalue NULL"
 ```
 
 ---
+
+### 5. Complete SQLite `PRAGMA` Options Reference & Production Tuning Guide
+
+#### 5.1 How `PRAGMA` Syntax Works & Scope Rules (Per-Connection vs. Persistent)
+Unlike standard SQL statements, a `PRAGMA` can be called in three ways:
+- **Query current setting:** `PRAGMA foreign_keys;` or `PRAGMA journal_mode;`
+- **Assign a new setting:** `PRAGMA foreign_keys = ON;` or `PRAGMA cache_size = -64000;`
+- **Call with an argument (or as a Table-Valued Function in SQLite 3.16+):** `PRAGMA table_info('stations');` or `SELECT * FROM pragma_table_info('stations') WHERE notnull = 1;`
+
+> [!IMPORTANT]
+> **The Golden Scope Rule — Per-Connection vs. Persistent Database Header Pragmas:**
+> - **Per-Connection (Session) Pragmas:** Reset to compile-time defaults on **every** new `sqlite3` CLI launch, Python `sqlite3.connect()`, or DBeaver connection! Examples: `foreign_keys`, `synchronous`, `busy_timeout`, `cache_size`, `temp_store`, `mmap_size`.
+> - **Persistent (Database File Header) Pragmas:** Recorded permanently inside the first 100 bytes of the `.db` file header and persist across all future connections! Examples: `journal_mode = WAL` (persists until explicitly changed back to `DELETE`), `page_size` (when set before table creation or followed by `VACUUM;`), `auto_vacuum`, `application_id`, `user_version`.
+
+---
+
+#### 5.2 Category A: Data Integrity, Foreign Keys & Corruption Auditing Pragmas
+
+| `PRAGMA` Option | Default | Scope | Values / Syntax | Purpose & Meteorological Engineering Impact |
+| :--- | :---: | :---: | :--- | :--- |
+| **`PRAGMA foreign_keys`** | `0` (`OFF`) | **Per-Connection** | `ON` (`1`) \| `OFF` (`0`) | **Critical:** Enables runtime enforcement of `FOREIGN KEY` constraints and `ON DELETE CASCADE` (used in [`weather_ops_seed.sql`](./weather_ops_seed.sql)). Without this, SQLite silently allows orphaned `station_id` rows! |
+| **`PRAGMA foreign_key_check`** | — | Action | `PRAGMA foreign_key_check;` or `PRAGMA foreign_key_check(observations);` | Scans existing tables for orphaned rows that were inserted while `foreign_keys = OFF`. Returns 4 columns (`table`, `rowid`, `parent`, `fkid`); empty result = 100% valid. |
+| **`PRAGMA integrity_check`** | — | Action | `PRAGMA integrity_check;` or `PRAGMA integrity_check(10);` | Full physical B-Tree page audit: verifies page pointers, index entries, `UNIQUE`, and `NOT NULL` constraints. Returns `ok` if clean. Run after power outages on remote field loggers! |
+| **`PRAGMA quick_check`** | — | Action | `PRAGMA quick_check;` | Fast variant of `integrity_check` ($\approx 5\text{--}10\times$ faster) that verifies B-Tree pages and constraints but skips cross-checking index sort order against table rows. |
+| **`PRAGMA ignore_check_constraints`** | `0` (`OFF`) | **Per-Connection** | `OFF` (`0`) \| `ON` (`1`) | Temporarily bypasses `CHECK (...)` constraints during emergency raw recovery (never enable in normal operations). |
+| **`PRAGMA trusted_schema`** | `1` (`ON`) | **Per-Connection** | `OFF` (`0`) \| `ON` (`1`) | Set to `OFF` when opening untrusted external `.db` files so SQLite refuses to execute potentially malicious SQL functions hidden inside views or triggers. |
+
+---
+
+#### 5.3 Category B: Journaling, Crash Recovery (`WAL`) & Lock Concurrency Pragmas
+
+*(For deep architectural diagrams comparing SQLite Rollback Journals vs. `-wal`/`-shm` frames, see [Reference Card 07: WAL & Crash Recovery](../reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md)).*
+
+| `PRAGMA` Option | Default | Scope | Options & Mechanics | When to Use in Weather Telemetry |
+| :--- | :---: | :---: | :--- | :--- |
+| **`PRAGMA journal_mode`** | `DELETE` | **Persistent** (for `WAL`) / Connection | • `DELETE`: Creates & deletes `.db-journal` on every commit (blocks readers during writes).<br>• `TRUNCATE`: Truncates journal to `0` bytes.<br>• `PERSIST`: Zeroes journal header.<br>• `MEMORY`: Keeps rollback journal in RAM (**corrupts on power loss**).<br>• **`WAL`**: **Write-Ahead Logging** (`.db-wal` + `.db-shm`). Readers never block the writer; writer never blocks readers!<br>• `OFF`: Disables rollback journal (**corrupts on crash/rollback**). | • **Live AWS Station Daemon + Dashboard:** Always set `PRAGMA journal_mode = WAL;` so 1-minute ingestion doesn't throw `database is locked` while forecasters run queries.<br>• **Scratch Bulk Generator ([`generate_weather_db.py`](./generate_weather_db.py)):** Uses `OFF` to synthesize 250,000 rows in ~2s because the file can be regenerated from scratch if interrupted. |
+| **`PRAGMA synchronous`** | `FULL` (`2`) | **Per-Connection** | • `EXTRA` (`3`): Extra `fsync` of directory on `DELETE` mode.<br>• `FULL` (`2`): OS `fsync()` after every transaction commit.<br>• **`NORMAL` (`1`)**: In `WAL` mode, guarantees crash-safe consistency while skipping `fsync()` on individual WAL appends (syncs only at checkpoints!).<br>• `OFF` (`0`): Hands bytes to OS buffer cache without `fsync()` (**fast, but OS crash can lose data**). | • **Production (`WAL` mode):** Use `PRAGMA synchronous = NORMAL;` ($5\text{--}20\times$ faster writes than `FULL` with full ACID crash safety in `WAL` mode).<br>• **Disposable Bulk Load:** `generate_weather_db.py` uses `OFF` to avoid 250k disk barrier stalls. |
+| **`PRAGMA busy_timeout`** | `0` ms | **Per-Connection** | `PRAGMA busy_timeout = 5000;` (milliseconds) | By default (`0 ms`), if Process A holds a write lock, Process B fails *instantly* with `OperationalError: database is locked` (`SQLITE_BUSY`). Setting `5000` instructs SQLite to sleep and retry for up to 5 seconds until the writer finishes. |
+| **`PRAGMA wal_autocheckpoint`** | `1000` pages | **Per-Connection** | `PRAGMA wal_autocheckpoint = 1000;` ($\approx 4\text{ MB}$ at 4 KB pages) | Automatically transfers committed pages from `.db-wal` back into the main `.db` file once the WAL reaches $N$ pages. |
+| **`PRAGMA wal_checkpoint`** | — | Action | `PASSIVE` \| `FULL` \| `RESTART` \| `TRUNCATE` | Manually triggers a WAL checkpoint. `PRAGMA wal_checkpoint(TRUNCATE);` flushes all WAL frames into `.db` and shrinks `.db-wal` back to `0` bytes. |
+
+---
+
+#### 5.4 Category C: Memory Cache, I/O Performance & Storage Layout Pragmas
+
+| `PRAGMA` Option | Default | Scope | Values / Syntax | Purpose & Meteorological Engineering Impact |
+| :--- | :---: | :---: | :--- | :--- |
+| **`PRAGMA cache_size`** | `-2000` ($\approx 2\text{ MiB}$) | **Per-Connection** | • **Negative (`-N`):** Allocates $N\text{ KiB}$ of RAM (e.g., `-64000` $\approx 64\text{ MiB}$).<br>• **Positive (`+N`):** Allocates $N$ B-Tree pages (e.g., `100000` pages $\times 4\text{ KB} \approx 400\text{ MB}$, used in [`generate_weather_db.py`](./generate_weather_db.py)). | Prevents SQLite from thrashing disk when building composite B-Tree indexes (`idx_telemetry_station_time`) or computing window functions across 250,000+ rows. |
+| **`PRAGMA temp_store`** | `0` (`DEFAULT`) | **Per-Connection** | `0` (`DEFAULT`) \| `1` (`FILE`) \| `2` (`MEMORY`) | Setting `PRAGMA temp_store = MEMORY;` forces temporary B-Trees created by `ORDER BY`, `GROUP BY`, `DISTINCT`, `WITH RECURSIVE`, and window functions (`OVER`) to live purely in RAM instead of spilling to `/tmp`. |
+| **`PRAGMA mmap_size`** | `0` (Disabled) | **Per-Connection** | Bytes (e.g., `PRAGMA mmap_size = 268435456;` for `256 MiB`) | Maps the `.db` file directly into the process virtual address space via OS `mmap()`, bypassing kernel `read()` system calls on analytical table scans. |
+| **`PRAGMA page_size`** | `4096` bytes | **Persistent** (before DDL or `VACUUM`) | `512`, `1024`, `2048`, **`4096`**, `8192`, `16384`, `32768`, `65536` | Size of each physical B-Tree page on disk. `4096` matches modern SSD/OS 4 KB blocks; increasing to `8192` or `16384` speeds up sequential telemetry scans (`VACUUM;` required to apply to an existing DB). |
+| **`PRAGMA auto_vacuum`** | `0` (`NONE`) | **Persistent** | `0` (`NONE`) \| `1` (`FULL`) \| `2` (`INCREMENTAL`) | By default (`NONE`), deleting old telemetry rows marks pages as reusable inside the file (`freelist_count`) without shrinking the `.db` file size on disk until `VACUUM;` is run. |
+
+---
+
+#### 5.5 Category D: Schema Introspection, System Metadata & Optimizer Pragmas
+
+Unlike CLI dot-commands (`.tables`, `.schema`) which fail outside the `sqlite3` terminal, **Introspection Pragmas are valid SQL statements** that return tabular rows in Python (`cur.fetchall()`), DBeaver, and SQL queries (via `pragma_*` table-valued functions):
+
+| `PRAGMA` Statement | Table-Valued SQL Equivalent | Output Columns Returned | Practical Use in `weather_ops.db` & `weather_telemetry.db` |
+| :--- | :--- | :--- | :--- |
+| **`PRAGMA table_info('stations');`** | `SELECT * FROM pragma_table_info('stations');` | `cid`, `name`, `type`, `notnull`, `dflt_value`, `pk` | Inspect column names, affinities (`INTEGER`, `REAL`, `TEXT`), `NOT NULL` flags (`1`/`0`), defaults, and Primary Key ordinal (`pk`). |
+| **`PRAGMA table_xinfo('observations');`** | `SELECT * FROM pragma_table_xinfo('observations');` | Same as `table_info` + `hidden` | Also reveals virtual/generated columns and internal `rowid` hidden columns. |
+| **`PRAGMA index_list('observations');`** | `SELECT * FROM pragma_index_list('observations');` | `seq`, `name`, `unique`, `origin`, `partial` | Lists all indexes on a table, including `sqlite_autoindex_observations_1` (`origin = 'u'` for `UNIQUE (station_id, obs_time)`). |
+| **`PRAGMA index_info('idx_name');`** | `SELECT * FROM pragma_index_info('idx_name');` | `seqno`, `cid`, `name` | Shows the exact left-to-right column order inside a composite index (`station_id`, then `obs_time`). |
+| **`PRAGMA foreign_key_list('observations');`** | `SELECT * FROM pragma_foreign_key_list('observations');` | `id`, `seq`, `table`, `from`, `to`, `on_update`, `on_delete`, `match` | Verifies that `observations.station_id` references `stations.station_id` with `on_delete = 'CASCADE'`. |
+| **`PRAGMA database_list;`** | `SELECT * FROM pragma_database_list;` | `seq`, `name`, `file` | Displays the exact filesystem path of the `main` `.db` file and any `ATTACH`ed databases. |
+| **`PRAGMA page_count;`** & **`PRAGMA freelist_count;`** | `SELECT * FROM pragma_page_count;` | Single integer | Total 4 KB pages in the database file vs. unused pages available for reuse before growing the file. |
+| **`PRAGMA optimize;`** | — | Action (run before closing connection) | Inspects query planner usage and automatically runs `ANALYZE` (`sqlite_stat1`) **only** on tables/indexes whose row counts changed significantly during the session. |
+
+#### 5.6 Side-by-Side Comparison: Three Real-World SQLite `PRAGMA` Profiles
+
+```sql
+-- ============================================================================
+-- PROFILE 1: Interactive Day 1 Lab & GUI Session (weather_ops.db)
+-- Prioritizes strict referential integrity, lock resilience, and inspection
+-- ============================================================================
+PRAGMA foreign_keys = ON;            -- Enforce FOREIGN KEY & ON DELETE CASCADE
+PRAGMA busy_timeout = 5000;          -- Wait up to 5s if another terminal is writing
+PRAGMA foreign_key_check;            -- Audit existing rows for FK violations
+SELECT * FROM pragma_table_info('observations');
+
+-- ============================================================================
+-- PROFILE 2: Live Production Edge Weather Logger / Daemon + Dashboard Reader
+-- Prioritizes concurrent reader/writer throughput + crash safety on flash/SSD
+-- ============================================================================
+PRAGMA journal_mode = WAL;           -- Persistent: concurrent readers + 1 writer
+PRAGMA synchronous = NORMAL;         -- Crash-safe in WAL mode without per-commit fsync stall
+PRAGMA foreign_keys = ON;            -- Block invalid station_id inserts
+PRAGMA busy_timeout = 5000;          -- Retry automatically on transient write contention
+PRAGMA cache_size = -64000;          -- 64 MiB page cache in RAM
+PRAGMA temp_store = MEMORY;          -- Keep sorting/window temp B-Trees in RAM
+-- Before closing long-lived connection:
+PRAGMA optimize;                     -- Refresh planner stats if table sizes grew
+
+-- ============================================================================
+-- PROFILE 3: Disposable Scratch Bulk-Seed Script (generate_weather_db.py)
+-- Prioritizes raw 250,000-row generation speed (~2s); regenerate file on crash
+-- ============================================================================
+PRAGMA journal_mode = OFF;           -- Skip rollback journal I/O during initial seed
+PRAGMA synchronous = OFF;            -- Skip OS fsync() barriers during batch load
+PRAGMA cache_size = 100000;          -- 100,000 pages (~400 MB RAM) for fast index build
+```
+
+---
+
 
 ## PART II: Declarative SQL Execution Order, DDL & Three-Valued Logic (3VL)
 

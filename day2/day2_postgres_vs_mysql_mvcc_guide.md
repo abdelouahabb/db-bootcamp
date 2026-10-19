@@ -309,6 +309,23 @@ WHERE recorded_at >= '2026-10-01 00:00:00'
 GROUP BY station_id;
 ```
 
+### 6.3 Side-by-Side Performance Tuning Translator: PostgreSQL (`postgresql.conf`) vs. MySQL InnoDB (`my.cnf`)
+
+For full details on MySQL 8.0/8.4 performance engineering (Buffer Pool warmup dumps, `AHI` latch contention, `Dual-1` Group Commit, Parallel DDL, Optimizer Histograms, and Invisible Indexes), see **[Reference Card 14 — Section 10.3 & 10.4](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md#103-advanced-mysql-80--84-performance-engineering-7-high-impact-production-optimizations)**.
+
+| Performance Subsystem | PostgreSQL 16+ (`postgresql.conf` / SQL) | MySQL 8.0 / 8.4 InnoDB (`my.cnf` / SQL) | Key Architectural Difference |
+| :--- | :--- | :--- | :--- |
+| **1. Primary Page Cache Allocation** | `shared_buffers = 8GB` (**~25% RAM**; relies on Linux OS Page Cache for remaining 75%) | `innodb_buffer_pool_size = 24G` (**~75% RAM**) + `innodb_flush_method = O_DIRECT` | PostgreSQL uses Dual-Tier caching; InnoDB bypasses OS cache via `O_DIRECT` and splits pool into `innodb_buffer_pool_instances = 8`. |
+| **2. Cache Warmup After Restart** | `pg_prewarm` extension (`autoprewarm`) + OS Page Cache survives service restart | `innodb_buffer_pool_dump_at_shutdown = ON` + `innodb_buffer_pool_load_at_startup = ON` | Built into InnoDB: dumps 8-byte `(space_id, page_no)` list to `ib_buffer_pool` and pre-fetches pages on startup. |
+| **3. Per-Query Sort & Hash RAM** | `work_mem = 32MB–64MB` (per sort/hash node) | `sort_buffer_size = 4M` + `join_buffer_size = 8M` + `tmp_table_size = 64M` | Both allocate per operation/session—never set to multi-GB globally or concurrent queries will trigger OS OOM! |
+| **4. WAL / Redo Log Sizing** | `max_wal_size = 16GB`, `checkpoint_timeout = 15min`, `checkpoint_completion_target = 0.9` | `innodb_redo_log_capacity = 16G` *(8.0.30+)*, `innodb_log_buffer_size = 64M`, `innodb_io_capacity_max = 10000` | Smooths dirty page flushing across 00Z/12Z NWP bulk forecast loads without I/O stalls. |
+| **5. Torn-Page Protection** | `full_page_writes = on` + `wal_compression = lz4` (logs 8 KB image in `pg_wal` after checkpoint) | `innodb_doublewrite = ON` (writes 16 KB pages to Doublewrite Buffer before `.ibd` flush) | Random `UUIDv4` causes $500\times$ `FPW` WAL bloat in PG and 50/50 Clustered PK splits in MySQL—use **`BIGINT`** or **RFC 9562 `UUIDv7`** in both! |
+| **6. Fast Relaxed Commit Mode** | `SET LOCAL synchronous_commit = off;` (or `commit_delay` group commit) | `innodb_flush_log_at_trx_commit = 2` (or keep `= 1` with `binlog_group_commit_sync_delay = 100` $\mu\text{s}$!) | MySQL's `binlog_group_commit_sync_delay = 100` batches concurrent `Dual-1` (`RPO=0`) commits into a single NVMe `fsync()`. |
+| **7. Fastest Bulk Ingestion & Parallel Index Build** | Binary `COPY ... FROM STDIN` + `maintenance_work_mem = 2GB` + `max_parallel_maintenance_workers = 4` | Pre-sorted `LOAD DATA INFILE` + `innodb_ddl_threads = 4` + `innodb_ddl_buffer_size = 1G` | Both engines build B-Tree indexes $4\times\text{–}8\times$ faster when sorting keys in parallel RAM buffers after bulk load. |
+| **8. MVCC Garbage Collection & Defragmentation** | Autovacuum (`autovacuum_vacuum_scale_factor = 0.01`, `cost_limit = 2000`) + `pg_repack` | Background Purge (`innodb_purge_threads = 4`) + `ALTER TABLE ... ENGINE=InnoDB, ALGORITHM=INPLACE, LOCK=NONE` | PostgreSQL cleans dead heap tuples via `VACUUM`; InnoDB purges Undo Logs and defragments 16 KB B+Trees via Online DDL. |
+| **9. Optimizer Column Histograms** | Automatic on **all columns** during `ANALYZE` (`default_statistics_target = 100`) + `CREATE STATISTICS` | **Opt-in only!** Must run `ANALYZE TABLE tbl UPDATE HISTOGRAM ON col1, col2 WITH 100 BUCKETS;` | Without explicit `UPDATE HISTOGRAM`, MySQL has zero value-distribution histograms on non-indexed columns! |
+| **10. Safe Index Testing & Removal** | Check `pg_stat_user_indexes.idx_scan = 0` $\rightarrow$ `DROP INDEX CONCURRENTLY` | **`ALTER TABLE tbl ALTER INDEX idx INVISIBLE;`** $\rightarrow$ verify no latency spike $\rightarrow$ `DROP INDEX` | MySQL 8.0+ **Invisible Indexes** let you hide an index from the CBO in $1\text{ ms}$ and flip it back to `VISIBLE` instantly if needed! |
+
 ---
 
 ## 7. Summary Cheat Card for Bootcamp Q&A
@@ -321,4 +338,5 @@ If an attendee asks: *"In one sentence, when does MySQL InnoDB win, and why do m
 ---
 
 > **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+
 

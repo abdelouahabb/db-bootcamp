@@ -653,10 +653,14 @@ innodb_buffer_pool_instances     = 8                  # 1 instance per 2–4 GB 
 innodb_flush_method              = O_DIRECT           # Bypass Linux OS Page Cache (prevent double buffering)
 innodb_old_blocks_time           = 1000               # 1000ms scan-resistance guard on Midpoint LRU
 innodb_change_buffer_max_size    = 25                 # Up to 25% of pool for secondary index write buffering
+innodb_buffer_pool_dump_at_shutdown = ON              # Save hot 16KB page IDs to ib_buffer_pool on shutdown
+innodb_buffer_pool_load_at_startup  = ON              # Auto-prewarm Buffer Pool in background on startup!
+innodb_adaptive_hash_index       = OFF                # Disable AHI on NVMe to prevent btr_search_latch stalls!
 join_buffer_size                 = 8M                 # Per-join buffer for Hash Joins (MySQL 8.0.18+)
 sort_buffer_size                 = 4M                 # Per-session sort buffer
 tmp_table_size                   = 64M                # Max in-RAM TempTable before spilling to disk
 max_heap_table_size              = 64M
+thread_cache_size                = 128                # Cache OS pthreads to prevent thread-creation storms
 
 # ================= 3. WAL (REDO LOG), DOUBLEWRITE & DURABILITY ======
 innodb_redo_log_capacity         = 16G                # MySQL 8.0.30+ (replaces innodb_log_file_size)
@@ -664,9 +668,13 @@ innodb_log_buffer_size           = 64M                # Buffers Redo records in 
 innodb_doublewrite               = ON                 # Mandatory 16KB torn-page protection
 innodb_flush_log_at_trx_commit   = 1                  # 1 = Strict ACID fsync; 2 = OS flush on commit, 1s fsync
 sync_binlog                      = 1                  # 1 = Sync binary log on every commit (RPO = 0)
+binlog_group_commit_sync_delay   = 100                # Wait 100 microseconds to batch Dual-1 commits into 1 fsync!
 
-# ================= 4. NVME STORAGE IOPS & PURGE THREADS =============
+# ================= 4. NVME STORAGE IOPS, PARALLEL DDL & PURGE =======
 innodb_file_per_table            = ON                 # Separate .ibd file per table (allows space reclaim)
+innodb_autoinc_lock_mode         = 2                  # Interleaved AUTO_INCREMENT (zero table-level lock wait)
+innodb_ddl_threads               = 4                  # Parallel worker threads for sorted B+Tree index builds!
+innodb_ddl_buffer_size           = 1G                 # RAM sort buffer for fast online CREATE/ALTER INDEX
 innodb_io_capacity               = 4000               # Baseline background IOPS for Enterprise NVMe
 innodb_io_capacity_max           = 10000              # Peak background flushing IOPS
 innodb_read_io_threads           = 8
@@ -796,7 +804,88 @@ GROUP BY s.station_id, s.station_name;
 
 ---
 
+### 10.3 Advanced MySQL 8.0 / 8.4 Performance Engineering: 7 High-Impact Production Optimizations
+
+Just as PostgreSQL has non-obvious performance levers (`jit_above_cost`, `max_parallel_maintenance_workers`, `plan_cache_mode`), senior MySQL / MariaDB DBAs tune **7 high-impact InnoDB & optimizer subsystems** to squeeze maximum throughput out of NVMe hardware:
+
+#### 1. Automatic Buffer Pool Warmup Across Restarts (`innodb_buffer_pool_dump_at_shutdown` & `load_at_startup`)
+- **The Problem:** Because MySQL InnoDB opens `.ibd` files with **`O_DIRECT`** (bypassing the Linux OS Page Cache completely), restarting `mysqld` wipes the entire `24 GB` Buffer Pool! Unlike PostgreSQL (where the Linux OS Page Cache still holds warm pages after a `postgres` service restart), a restarted MySQL server suffers a brutal 20–30 minute "cold-cache IOPS storm" while queries hit raw disk.
+- **The Fix:** Enable `innodb_buffer_pool_dump_at_shutdown = ON`, `innodb_buffer_pool_load_at_startup = ON`, and `innodb_buffer_pool_dump_pct = 50` (or `100`). On clean shutdown, InnoDB writes only the compact **8-byte `(space_id, page_no)` coordinates** (a few megabytes!) to `ib_buffer_pool` on disk, and on startup a background thread sorts those page IDs and sequentially pre-fetches them back into RAM in seconds!
+
+#### 2. The Adaptive Hash Index (`AHI`) Contention Trap (`innodb_adaptive_hash_index = OFF`)
+- **The Problem:** By default (`innodb_adaptive_hash_index = ON`), InnoDB monitors B+Tree lookups and automatically builds an in-memory hash table (`AHI`) pointing directly to 16 KB leaf pages. While `AHI` speeds up single-row primary key point lookups in RAM, **every range scan (`WHERE obs_time BETWEEN ...`), page split, or bulk `DELETE`/`DROP` must acquire global `btr_search_latch` read/write locks** on the AHI! Under 64+ concurrent weather station threads, `btr_search_latch` contention (visible in `SHOW ENGINE INNODB STATUS` under `SEMAPHORES`) frequently stalls CPU cores!
+- **The Fix:** On modern NVMe servers running mixed time-range and high-concurrency telemetry workloads, set **`SET GLOBAL innodb_adaptive_hash_index = OFF;`**—eliminating `btr_search_latch` spinlocks and improving tail latency by **15%–35%**.
+
+#### 3. Group Commit Batching (`binlog_group_commit_sync_delay`) for `Dual-1` Durability
+- **The Problem:** As shown in Section 9.1, enforcing zero data loss (`Dual-1`: `innodb_flush_log_at_trx_commit = 1` + `sync_binlog = 1`) requires two disk `fsync()` barriers per commit. If transactions arrive slightly staggered, each transaction triggers its own individual NVMe `fsync()`.
+- **The Fix:** Set **`binlog_group_commit_sync_delay = 100`** ($100\ \mu\text{s} = 0.1\text{ ms}$) and `binlog_group_commit_sync_no_delay_count = 32`. The Group Commit leader waits up to `0.1 ms` (or until 32 transactions queue up) before issuing **1 shared `fsync()`** to the Redo Log and **1 shared `fsync()`** to the `binlog`—multiplying `Dual-1` commit throughput by **$3\times\text{–}6\times$** while keeping commit latency under `1 ms`!
+
+#### 4. High-Speed Bulk Ingestion: `LOAD DATA INFILE`, Parallel DDL (`innodb_ddl_threads`) & Redo Log Bypass
+When backfilling 50 million historical WMO synoptic observations into MySQL 8.0.27+:
+1. **Use `LOAD DATA INFILE` (MySQL's equivalent of PostgreSQL `COPY`):** Streams CSV/TSV files directly into InnoDB at **80,000–120,000 rows/sec** (especially when rows are pre-sorted by the Clustered Primary Key `(station_id, obs_time)`!).
+2. **Parallel Sorted B+Tree Index Creation (`innodb_ddl_threads` & `innodb_ddl_buffer_size`):** Just like PostgreSQL's `max_parallel_maintenance_workers`, MySQL 8.0.27+ builds secondary B+Tree indexes in parallel! Set `SET SESSION innodb_ddl_threads = 4;` and `SET SESSION innodb_ddl_buffer_size = 1073741824;` (`1 GB`) before running `ALTER TABLE ... ADD INDEX`.
+3. **Initial Load Redo-Log Bypass (MySQL 8.0.21+ equivalent of PG `UNLOGGED`):** When initializing a brand-new standalone server before putting it into production (never on a live production primary!), you can temporarily run `ALTER INSTANCE DISABLE INNODB REDO_LOG;`, load 100M rows at $3\times$ speed without Redo Log writes or Doublewrite Buffer overhead, and immediately run `ALTER INSTANCE ENABLE INNODB REDO_LOG;`.
+
+#### 5. Zero-Downtime Online DDL (`ALGORITHM=INSTANT` vs. `INPLACE` vs. `COPY`)
+In legacy MySQL 5.5, running `ALTER TABLE observations ADD COLUMN wind_gust_kt DECIMAL(4,1);` copied the entire 100 GB table and locked out writers for hours. In **MySQL 8.0.12+ / 8.0.29+**, always specify the explicit Online DDL clauses so a slow table copy never surprises you in production:
+```sql
+-- 1. Metadata-Only Column Add/Drop (< 5 milliseconds, zero table rebuild!):
+ALTER TABLE observations
+    ADD COLUMN sensor_firmware VARCHAR(16) DEFAULT 'v2.4',
+    ALGORITHM=INSTANT;
+
+-- 2. Online Secondary Index Build or B+Tree Defragmentation (Non-blocking for reads AND writes!):
+ALTER TABLE observations
+    ADD INDEX idx_obs_qc_time (qc_flag, obs_time),
+    ALGORITHM=INPLACE, LOCK=NONE;
+```
+
+#### 6. Optimizer Column Histograms (`ANALYZE TABLE ... UPDATE HISTOGRAM`)
+- **The Hidden Optimizer Difference vs. PostgreSQL:** In PostgreSQL, running `ANALYZE` automatically collects 100-bucket histograms (`pg_stats`) on **every column** of a table. In **MySQL 8.0+**, `ANALYZE TABLE` only updates **index cardinality statistics**—it collects **zero histograms on non-indexed columns** unless you explicitly ask for them!
+- **The Fix:** Whenever queries filter or join on skewed meteorological columns (`qc_flag`, `temp_c`, `wind_speed_kt`) that are not the leading column of an index, build persistent 100-bucket Equi-Height / Singleton histograms stored in `information_schema.COLUMN_STATISTICS`:
+  ```sql
+  -- Build 100-bucket histograms so the MySQL 8.0 CBO knows exact selectivity of skewed columns:
+  ANALYZE TABLE weather_ops_mysql.observations
+      UPDATE HISTOGRAM ON qc_flag, temp_c, precip_1h_mm WITH 100 BUCKETS;
+
+  -- Inspect collected histogram buckets:
+  SELECT TABLE_NAME, COLUMN_NAME, HISTOGRAM->>'$."histogram-type"' AS hist_type
+  FROM information_schema.COLUMN_STATISTICS
+  WHERE SCHEMA_NAME = 'weather_ops_mysql';
+  ```
+
+#### 7. Safe Index Retirement with **Invisible Indexes** (`INVISIBLE` / `VISIBLE`)
+- **The Problem:** `sys.schema_unused_indexes` shows a 15 GB secondary index hasn't been used this week. If you `DROP INDEX` and a critical end-of-month WMO climatology script suddenly runs a full 200M-row table scan, rebuilding that 15 GB index takes 30 minutes of emergency I/O!
+- **The Fix (MySQL 8.0+ Superpower):** Make the index **`INVISIBLE`** first:
+  ```sql
+  -- 1. Hide the index from the Query Optimizer in 1 ms (InnoDB still maintains it on writes):
+  ALTER TABLE weather_ops_mysql.observations ALTER INDEX idx_legacy_report INVISIBLE;
+
+  -- 2. If a monthly query slows down, restore it in 1 ms without rebuilding the B+Tree!
+  ALTER TABLE weather_ops_mysql.observations ALTER INDEX idx_legacy_report VISIBLE;
+  ```
+
+---
+
+### 10.4 The Unified 10-Layer MySQL 8.0/8.4 & MariaDB Performance Optimization Master Matrix
+
+| Layer | Optimization Lever | Default / Anti-Pattern | Production Weather Tuning (`my.cnf` / SQL) | Typical Speedup / Savings |
+| :---: | :--- | :--- | :--- | :--- |
+| **1. Hardware & OS** | `O_DIRECT` + `noatime` + `swappiness=1` | Buffered I/O double-caching in Linux Page Cache + InnoDB | `innodb_flush_method = O_DIRECT`; `/etc/fstab` `noatime,nodiratime`; `vm.swappiness = 1` | **Saves 20–30% RAM**; eliminates OS double-buffering |
+| **2. Connections** | Thread Cache (`thread_cache_size`) + **`ProxySQL`** | Creating/destroying OS `pthread` on every sensor connect | `thread_cache_size = 128` + **`ProxySQL`** connection multiplexing & read/write split | **$3\times\text{–}5\times$ higher TPS** under 2,000-station bursts |
+| **3. Buffer Pool** | 75% RAM Pool + Multi-Instance + Warmup Dump | `innodb_buffer_pool_size = 128M`; cold cache after restart; `AHI` latch stalls | `innodb_buffer_pool_size = 24G` (`8` instances), `dump_at_shutdown = ON`, `load_at_startup = ON`, `adaptive_hash_index = OFF` | **$10\times\text{–}30\times$ higher read IOPS**; instant warmup on restart |
+| **4. Clustered PK** | Narrow Monotonic Clustered PK (`BIGINT` / **`UUIDv7`**) | `CHAR(36)` random `UUIDv4` as Clustered PK (splits 16 KB pages & bloats all secondary indexes!) | `BIGINT UNSIGNED AUTO_INCREMENT` (`8B`), `(station_id, obs_time)` (`12B`), or `BINARY(16)` **RFC 9562 `UUIDv7`** / `UUID_TO_BIN(u,1)` | **$5\times\text{–}10\times$ faster inserts**; **saves 11+ GB** of secondary index RAM per 100M rows! |
+| **5. In-Place MVCC** | Undo Log Purge Threads & Short Transactions | Single purge thread + abandoned uncommitted sessions bloating `History List Length` | `innodb_purge_threads = 4`; keep transactions $< 1\text{s}$; monitor `trx_rseg_history_len < 1000` | Zero table heap bloat on 5-second station heartbeat `UPDATE`s |
+| **6. Locking & Concurrency** | Interleaved `AUTO_INC` & `READ COMMITTED` | `REPEATABLE READ` Next-Key Gap Locks stalling unindexed updates | `innodb_autoinc_lock_mode = 2`; use indexed predicates or `READ COMMITTED` to avoid Gap Locks | Eliminates `ERROR 1205: Lock wait timeout exceeded` stalls |
+| **7. Redo, Doublewrite & Group Commit** | 16 GB Redo Capacity + `Dual-1` Group Commit | Tiny `100 MB` Redo Log forcing furious page flush stalls; unbatched `fsync()` | `innodb_redo_log_capacity = 16G`, `innodb_doublewrite = ON`, `binlog_group_commit_sync_delay = 100` ($\mu\text{s}$) | **$3\times\text{–}6\times$ higher `Dual-1` (`RPO=0`) commit throughput** |
+| **8. Bulk Ingestion & Parallel DDL** | `LOAD DATA INFILE` + Parallel Index Build | Single-row `INSERT`s; `ALGORITHM=COPY` blocking DDL | Pre-sorted `LOAD DATA INFILE` + `innodb_ddl_threads = 4` + `innodb_ddl_buffer_size = 1G` + `ALGORITHM=INSTANT`/`INPLACE, LOCK=NONE` | **`100,000+ rows/s`** ingest; **$< 5\text{ ms}$** `INSTANT` column additions |
+| **9. Replicas & HA** | `WRITESET` Parallel Workers + `AFTER_SYNC` | Single-threaded SQL replica lagging hours behind; `AFTER_COMMIT` phantom reads | `binlog_format = ROW`, `replica_parallel_workers = 8`, `binlog_transaction_dependency_tracking = WRITESET`, `AFTER_SYNC`, `super_read_only = ON` | **$8\times\text{–}16\times$ faster replica replay**; zero split-brain errant GTIDs |
+| **10. Optimizer & Indexes** | `ESR` Composite Indexes + **Histograms** + **Invisible Indexes** | Blind selectivity guesses on unindexed columns; risky `DROP INDEX` | `ANALYZE TABLE ... UPDATE HISTOGRAM ... WITH 100 BUCKETS`; test index removal via `ALTER INDEX ... INVISIBLE`; verify with `EXPLAIN ANALYZE` | Prevents catastrophic Nested Loop / Full Table Scan regressions |
+
+---
+
 ### 🔗 Reference Library Navigation
 
 > **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
 > **Card Sequence:** [⬅️ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* ➡️ | [⬆️ Back to Top](#reference-card-14-mysql-8084--mariadb-complete-engineering-guide--innodb-internals-pluggable-engines-next-key-locking-spatial-sql-gtid-ha--production-tuning)
+

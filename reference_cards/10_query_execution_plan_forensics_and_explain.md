@@ -755,9 +755,21 @@ Execution Time: 0.075 ms
                            run ANALYZE or define CREATE STATISTICS for correlations.
  7. Beware Wrapped Funcs : Never write WHERE func(col) = val; it blinds B-Trees.
                            Write SARGable expressions or build Expression Indexes.
+ 8. Guard Against JIT    : If EXPLAIN ANALYZE on partitioned tables shows "JIT:
+                           Time: 140 ms" for a 2 ms query, raise jit_above_cost =
+                           500000 or run SET LOCAL jit = off.
+ 9. Generic vs Custom    : If prepared statements ($1, $2) regress on the 6th run
+                           due to skewed station counts, set plan_cache_mode =
+                           force_custom_plan.
+10. MySQL 8.0+ Histograms: Unlike PostgreSQL ANALYZE, MySQL requires explicit
+                           ANALYZE TABLE ... UPDATE HISTOGRAM ON col WITH 100 BUCKETS
+                           for non-indexed column skew, plus ALTER INDEX ... INVISIBLE
+                           for zero-risk index retirement (see Card 14 Section 10.3).
 ================================================================================
-
 ```
+
+> **Cross-Reference:** For the full **Unified 10-Layer Performance Optimization Master Matrices**, see [Day 2 Master Coursebook — Section 7.3 (PostgreSQL)](../day2/day2_master_coursebook.md#73-advanced-query--ingestion-acceleration-jit-parallel-ddl-plan-caching--the-10-layer-optimization-matrix), [Day 2 MVCC Guide — Section 6.3 (`postgresql.conf` vs. `my.cnf` Translator)](../day2/day2_postgres_vs_mysql_mvcc_guide.md#63-side-by-side-performance-tuning-translator-postgresql-postgresqlconf-vs-mysql-innodb-mycnf), and [Reference Card 14 — Section 10.4 (MySQL 8.0/8.4 & MariaDB)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#104-the-unified-10-layer-mysql-8084--mariadb-performance-optimization-master-matrix).
+
 ---
 
 ### 🔗 Reference Library Navigation

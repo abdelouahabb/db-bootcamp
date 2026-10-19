@@ -1257,6 +1257,70 @@ Execution Time: 242.410 ms
 
 ---
 
+### 7.3 Advanced Production Performance Engineering: JIT Compilation Traps, Parallel Bulk Index Builds, Prepared Plan Modes & The 10-Layer Master Optimization Matrix
+
+Beyond memory and index selection, senior PostgreSQL DBAs optimize three subtle engine behaviors—**LLVM JIT compilation**, **Parallel Bulk Index Builds**, and **Prepared Statement Plan Caching**—and combine all 10 physical layers into a unified production checklist:
+
+#### 1. The LLVM JIT Compilation Latency Trap (`jit = on` vs. `jit_above_cost`)
+PostgreSQL 11+ ships with **Just-In-Time (JIT) expression compilation** (`jit = on` by default). When the planner estimates a query's cost exceeds `jit_above_cost` (default `100,000`), PostgreSQL invokes LLVM at query execution time to compile tuple-deforming and `WHERE` / `AVG()` evaluation loops into native CPU machine code.
+- **When JIT Helps:** On a 50-million-row CPU-bound climatological aggregation taking `4,000 ms`, spending `100 ms` on LLVM JIT compilation shaves `800 ms` off CPU tuple evaluation (a net **15%–25% speedup**).
+- **When JIT Backfires Catastrophically (The OLTP / Partitioned Query Trap):** On a partitioned table with 36 monthly partitions or a wide `IN (...)` list, the *estimated* planner cost can easily exceed `100,000` even though partition pruning or an index scan finishes the actual data lookup in **`3 ms`**! PostgreSQL then spends **`80 ms–180 ms` compiling LLVM bytecode** for a `3 ms` query—making the query **$30\times\text{–}50\times$ slower**!
+- **How to Diagnose & Fix in `EXPLAIN (ANALYZE, BUFFERS)`:**
+  Look at the bottom of `EXPLAIN ANALYZE` for the `JIT:` block:
+  ```text
+  JIT:
+    Functions: 34
+    Options: Inlining true, Optimization true, Expressions true, Deforming true
+    Timing: Generation 4.120 ms, Inlining 18.450 ms, Optimization 62.310 ms, Emission 31.120 ms, Total 116.000 ms
+  Execution Time: 119.450 ms   <-- 116 ms of the 119 ms was spent in LLVM JIT compilation!
+  ```
+  - **Production Fix:** Raise `jit_above_cost = 500000` and `jit_inline_above_cost = 1000000` in `postgresql.conf` so JIT only triggers on genuinely massive analytical queries, or disable JIT inside low-latency FastAPI/dashboard sessions via `SET LOCAL jit = off;`.
+
+#### 2. Fast Bulk Loading: The Drop-Load-Rebuild Pattern & Parallel B-Tree Construction (`max_parallel_maintenance_workers`)
+When backfilling 50 million historical WMO synoptic observations into a table:
+- **Anti-Pattern (Loading with Secondary Indexes Active):** If 4 secondary B-Tree indexes exist during `COPY`, PostgreSQL must descend and update 4 separate B-Tree structures on every tuple, split leaf pages incrementally, and write gigabytes of index WAL records.
+- **Production Pattern ($5\times\text{–}8\times$ Faster):**
+  1. **Drop non-unique secondary indexes** before the bulk load (or load into a fresh monthly partition before attaching it via `ALTER TABLE ... ATTACH PARTITION`).
+  2. **Stream data via Binary `COPY`** (`120,000+ rows/sec`).
+  3. **Build B-Tree indexes in parallel from sorted RAM runs:** When `CREATE INDEX` runs on an already-populated table, PostgreSQL scans the heap in parallel, sorts all keys in `maintenance_work_mem` using parallel worker threads, and builds the entire B-Tree bottom-up in a single sequential pass (with `90%` leaf fillfactor and minimal WAL!):
+     ```sql
+     -- Boost maintenance RAM and parallel sort workers for instant B-Tree construction:
+     SET LOCAL maintenance_work_mem = '2GB';
+     SET LOCAL max_parallel_maintenance_workers = 4;
+
+     -- On a live table serving traffic, use CONCURRENTLY so reads/writes are never blocked:
+     CREATE INDEX CONCURRENTLY idx_obs_station_time
+     ON synoptic.observations (station_id, obs_time DESC)
+     INCLUDE (temp_c, pressure_hpa);
+     ```
+
+#### 3. Prepared Statements (`PREPARE`) & The "6th Execution" Generic vs. Custom Plan Switch (`plan_cache_mode`)
+When your Python daemon uses prepared statements (such as `psycopg` v3 with `prepare_threshold = 5`), how does PostgreSQL decide between a **Custom Plan** (compiled for the exact parameter literal, e.g., `qc_flag = 'ERRONEOUS'`) and a **Generic Plan** (compiled once for placeholder `$1`)?
+1. **Executions 1 to 5 (Custom Plans):** For the first 5 executions of a prepared statement, PostgreSQL generates a **Custom Plan** using the actual parameter values (`$1 = 'ERRONEOUS'`) and records the average custom cost.
+2. **Execution 6+ (The Switch):** On the **6th execution**, PostgreSQL builds a parameter-agnostic **Generic Plan**. If the Generic Plan's estimated cost is not significantly worse than the average of the first 5 Custom Plans, PostgreSQL freezes and reuses the Generic Plan for all future executions (eliminating planning CPU overhead!).
+3. **The Skewed Data Trap & Fix (`plan_cache_mode`):** Suppose your first 5 executions queried `WHERE qc_flag = 'VALID'` ($98\%$ of the table $\rightarrow$ `Seq Scan` is optimal). On execution 6, PostgreSQL locks in the `Seq Scan` as the Generic Plan. On execution 7, a forecaster queries `WHERE qc_flag = 'ERRONEOUS'` ($0.1\%$ of rows)—and instead of using the Partial Index, PostgreSQL executes the cached Generic `Seq Scan` across 100 million rows!
+   - **Production Fix for Skewed Columns or Partitioned Queries:** Force custom planning where parameter selectivity varies wildly:
+     ```sql
+     SET LOCAL plan_cache_mode = 'force_custom_plan';
+     ```
+
+#### 4. The Unified 10-Layer PostgreSQL Performance Optimization Master Matrix
+
+| Layer | Optimization Lever | Default / Anti-Pattern | Production Weather Tuning | Typical Speedup / Savings |
+| :---: | :--- | :--- | :--- | :--- |
+| **1. Hardware & OS** | Separate NVMe for `pg_wal` + `/etc/fstab` + `sysctl` | `$PGDATA` & `pg_wal` on 1 disk; `atime` on; `swappiness=60` | Dedicated `/data/pgwal` NVMe; `noatime,nodiratime`; `vm.swappiness=1`; `huge_pages=try` | **+25% read IOPS**; zero WAL fsync contention |
+| **2. Connections** | Transaction Pooler (`PgBouncer`) | `max_connections = 2000` (direct sensor connections) | `max_connections = 200` + **PgBouncer (`pool_mode = transaction`)** | **$3\times\text{–}5\times$ higher TPS** under 2,000-station bursts |
+| **3. Memory Pool** | Dual-Tier RAM (`shared_buffers` + `work_mem`) | `shared_buffers = 128MB`, `work_mem = 4MB` (spills to disk) | `shared_buffers = 25% RAM` (`8GB`), `effective_cache_size = 75%` (`24GB`), `work_mem = 32MB–64MB` | **$10\times\text{–}20\times$ faster** `Hash Join` & `GROUP BY` (in-RAM) |
+| **4. Tuple Layout** | **"Tuple Tetris"** Column Ordering | Alternating `BOOLEAN` (`1B`) and `BIGINT`/`TIMESTAMPTZ` (`8B`) | Order columns `8B` (`typalign='d'`) $\rightarrow$ `4B` $\rightarrow$ `2B` $\rightarrow$ `1B` (`UUID`, `BOOLEAN`) $\rightarrow$ `varlena` | **Saves 8–21 Bytes/row** (~21 GB per 1B rows!) |
+| **5. Primary Keys** | Surrogate Key Locality (`BIGINT` / **`UUIDv7`**) | Random `UUIDv4` (`gen_random_uuid()`) or `VARCHAR(36)` (`37B`) | `BIGINT GENERATED ALWAYS AS IDENTITY` (`8B`) or **RFC 9562 `UUIDv7`** (`16B` native `UUID`) | **Eliminates 50/50 B-Tree splits** & **$500\times$ WAL `FPW` bloat** |
+| **6. In-Page Updates** | **`HOT` Updates** & `TOAST` Compression | `fillfactor = 100` on heavily updated tables; `pglz` TOAST | `fillfactor = 80–90` on station status tables (no index on updated cols); `default_toast_compression = lz4` | **$5\times\text{–}10\times$ less index bloat**; $4\times$ faster TOAST decompression |
+| **7. WAL & Checkpoints** | Checkpoint Smoothing & WAL Compression | `max_wal_size = 1GB`, `checkpoint_timeout = 5min` | `max_wal_size = 16GB–32GB`, `checkpoint_timeout = 15min`, `checkpoint_completion_target = 0.9`, `wal_compression = lz4` | **Eliminates 00Z/12Z I/O stalls**; cuts WAL volume by **40%–60%** |
+| **8. Bulk Ingestion** | Binary `COPY` + Parallel Index Build | Row-by-row `INSERT` with active secondary B-Trees | `psycopg3` Binary **`COPY`** (`UNLOGGED` staging) + `max_parallel_maintenance_workers = 4` | **`800 rows/s` $\rightarrow$ `120,000+ rows/s`** (**$150\times$ speedup!**) |
+| **9. Autovacuum** | Per-Table Scale Factor & Cost Limit | `autovacuum_vacuum_scale_factor = 0.20`, `cost_limit = 200` | `autovacuum_vacuum_scale_factor = 0.01–0.05`, `cost_limit = 2000`, `idle_in_transaction_session_timeout = 60s` | Prevents multi-GB dead-tuple table bloat & XID wraparound |
+| **10. Planner & Indexes** | NVMe Cost + Partitioning + Covering / `BRIN` | `random_page_cost = 4.0`, monolithic B-Trees, `jit = on` on short queries | `random_page_cost = 1.1`, `effective_io_concurrency = 200`, Monthly Partitions + `BRIN` + `INCLUDE` Covering Indexes + `jit_above_cost = 500000` | **$100\times\text{–}1,800\times$ faster** point/range queries (`Heap Fetches: 0`) |
+
+---
+
 ## 8. Bridge to Day 3: Time-Series Partitioning, BRIN Indexes, PostGIS & JSONB
 
 Tomorrow on **Day 3**, we solve these exact time-series and spatial scale challenges in PostgreSQL:

@@ -37,9 +37,16 @@
 import sqlite3
 import pandas as pd
 
-# 1. Connect with context manager & enable Foreign Keys!
-with sqlite3.connect("weather_ops.db") as conn:
-    conn.execute("PRAGMA foreign_keys = ON;")
+# 1. Production Connection Setup: Enable Foreign Keys, WAL Mode & Lock Timeout!
+with sqlite3.connect("weather_ops.db", timeout=5.0) as conn:
+    # Per-connection & persistent WAL PRAGMAs (prevents 'database is locked' & orphan FKs)
+    conn.execute("PRAGMA foreign_keys = ON;")            # Enforce FK & ON DELETE CASCADE
+    conn.execute("PRAGMA journal_mode = WAL;")           # Concurrent readers + 1 writer
+    conn.execute("PRAGMA synchronous = NORMAL;")         # 100% corruption-safe in WAL mode
+    conn.execute("PRAGMA busy_timeout = 5000;")          # Wait up to 5s on write contention
+    conn.execute("PRAGMA journal_size_limit = 67108864;")# Cap .db-wal at 64 MiB after rewind
+    conn.execute("PRAGMA cache_size = -64000;")          # 64 MiB RAM page cache
+    conn.execute("PRAGMA temp_store = MEMORY;")          # Keep sort/window temp B-Trees in RAM
 
     # 2. Safe Parameterized Query (? placeholders)
     cur = conn.execute(
@@ -53,14 +60,29 @@ with sqlite3.connect("weather_ops.db") as conn:
     )
     for row in cur.fetchall():
         print(row)
+    cur.close()  # Always close read cursors promptly so WAL checkpoints can rewind!
 
-    # 3. Load SQL query directly into a Pandas DataFrame
+    # 3. Concurrent Write Pattern: Use BEGIN IMMEDIATE so busy_timeout is honored
+    conn.execute("BEGIN IMMEDIATE;")
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO observations (station_id, obs_time, temp_c, qc_flag)
+        VALUES (?, ?, ?, ?)
+        """,
+        [(60390, "2026-10-06 18:00:00", 22.4, "VALID")],
+    )
+    conn.commit()
+
+    # 4. Load SQL query directly into a Pandas DataFrame
     df = pd.read_sql_query(
         "SELECT * FROM forecasts WHERE model_name = ?",
         conn,
         params=("ECMWF-HRES",),
         parse_dates=["init_time", "valid_time"],
     )
+
+    # 5. Refresh planner statistics if table sizes grew significantly
+    conn.execute("PRAGMA optimize;")
 ```
 
 ---

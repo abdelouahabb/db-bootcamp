@@ -156,6 +156,36 @@ fi
 # ==============================================================================
 log_header "2. DAY 1 LIVE VERIFICATION (SQLite3 Synoptic & 250,000-Row Telemetry)"
 
+if ! command -v sqlite3 >/dev/null 2>&1; then
+    sqlite3() {
+        local db_path="$1"
+        shift
+        python3 -c '
+import sys, sqlite3
+db_path = sys.argv[1]
+sql_text = sys.argv[2] if len(sys.argv) > 2 else sys.stdin.read()
+quiet = (len(sys.argv) <= 2)
+conn = sqlite3.connect(db_path, isolation_level=None)
+cur = conn.cursor()
+buf = ""
+for line in sql_text.splitlines(True):
+    if not buf.strip() and line.lstrip().startswith("--"):
+        continue
+    buf += line
+    if sqlite3.complete_statement(buf):
+        stmt = buf.strip()
+        buf = ""
+        if not stmt:
+            continue
+        cur.execute(stmt)
+        if not quiet and cur.description is not None:
+            for row in cur.fetchall():
+                print("|".join("" if v is None else str(v) for v in row))
+conn.close()
+' "$db_path" "$@"
+    }
+fi
+
 TMP_OPS_DB=$(mktemp /tmp/weather_ops_verify_XXXXXX.db)
 TMP_TELEM_BAK=$(mktemp /tmp/weather_telemetry_bak_XXXXXX.db)
 trap 'rm -f "$TMP_OPS_DB" "${TMP_OPS_DB}-wal" "${TMP_OPS_DB}-shm" "$TMP_TELEM_BAK"' EXIT

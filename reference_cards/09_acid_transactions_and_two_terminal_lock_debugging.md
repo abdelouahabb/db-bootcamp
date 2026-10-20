@@ -435,7 +435,7 @@ SELECT pg_terminate_backend(12345);
 
 ### 4. MySQL InnoDB Lock Monitoring Equivalent
 
-> **Deep-Dive Reference:** For a complete explanation of InnoDB `Record Locks`, `Gap Locks`, `Next-Key Locks` (under `REPEATABLE READ`), and why unindexed `WHERE` updates lock every gap in the table, see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide (Sections 6 & 10)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#6-innodb-concurrency-locking-mechanics--the-next-key-lock-trap)**.
+> **Deep-Dive Reference:** For a complete explanation of InnoDB `Record Locks`, `Gap Locks`, `Next-Key Locks` (under `REPEATABLE READ`), and why unindexed `WHERE` updates lock every gap in the table, see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide (Sections 6 & 10)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#6-innodb-concurrency--locking-record-gap-next-key--insert-intention-locks)**.
 
 ```sql
 -- Inspect waiting transactions in MySQL 8.0+ (or query SELECT * FROM sys.innodb_lock_waits;):

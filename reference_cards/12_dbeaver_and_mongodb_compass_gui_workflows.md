@@ -124,4 +124,4 @@ Connect **MongoDB Compass** to `mongodb://localhost:27017` (or `mongodb://localh
 ### Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 14** | [Next Card](./13_database_observability_prometheus_grafana_and_alerts.md) | [⬆ Back to Top](#dbeaver--mongodb-compass-gui-workflows-cheatsheet-for-weather-engineers)
+> **Card Sequence:** [⬅ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 14** | [Next Card](./13_database_observability_prometheus_grafana_and_alerts.md) | [⬆ Back to Top](#db-browser-for-sqlite-dbeaver--mongodb-compass-gui-workflows-cheatsheet-for-weather-engineers)

@@ -33,8 +33,8 @@
 - [6. Performance Tuning & Diagnostic Directives](#6-performance-tuning--diagnostic-directives)
   - [6.1 Critical Production Configuration Parameters](#61-critical-production-configuration-parameters)
   - [6.2 Query Profiling: `EXPLAIN ANALYZE`](#62-query-profiling-explain-analyze)
-- [7. Ultimate 4-Engine Decision Matrix & Operational Checklist](#7-ultimate-4-engine-decision-matrix--operational-checklist)
-  - [7.1 Ultimate Decision Matrix: SQLite vs. DuckDB vs. PostgreSQL vs. MongoDB](#71-ultimate-decision-matrix-sqlite-vs-duckdb-vs-postgresql-vs-mongodb)
+- [7. Ultimate 5-Engine Decision Matrix & Operational Checklist](#7-ultimate-5-engine-decision-matrix--operational-checklist)
+  - [7.1 Ultimate Decision Matrix: SQLite vs. DuckDB vs. PostgreSQL vs. MySQL vs. MongoDB](#71-ultimate-decision-matrix-sqlite-vs-duckdb-vs-postgresql-vs-mysql-vs-mongodb)
   - [7.2 Summary Checklist: DuckDB Operational Rules](#72-summary-checklist-duckdb-operational-rules)
 
 ---

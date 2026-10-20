@@ -47,11 +47,11 @@ flowchart TD
    - [1.2 Installing Ubuntu 24.04, Enabling `openssh-server` & Finding `<VM_IP>`](#12-installing-ubuntu-2404-enabling-openssh-server--finding-vm_ip)
    - [1.3 Connecting from Windows Host via Windows Terminal & VS Code (`Remote - SSH`)](#13-connecting-from-windows-host-via-windows-terminal--vs-code-remote---ssh)
    - [1.4 Taking Snapshot 1: `00_Clean_Ubuntu_2404_Blank_Lab`](#14-taking-snapshot-1-00_clean_ubuntu_2404_blank_lab)
-3. [Phase 1 (Day 1 in VM): Install Native SQLite 3 $\rightarrow$ Switch to Day 1 Labs & Sentinel Simulator](#phase-1-day-1-in-vm-install-native-sqlite-3--switch-to-day-1-labs--sentinel-simulator)
-4. [Phase 2A (Day 2 in VM): Install Native PostgreSQL 16 Internals $\rightarrow$ Switch to Day 2 Labs & Tuple Tetris Simulator](#phase-2a-day-2-in-vm-install-native-postgresql-16-internals--switch-to-day-2-labs--tuple-tetris-simulator)
-5. [Phase 2B (Day 3 in VM): Enable PostGIS 3.4 & Partitioning $\rightarrow$ Switch to Day 3 Labs & BRIN Calculator](#phase-2b-day-3-in-vm-enable-postgis-34--partitioning--switch-to-day-3-labs--brin-calculator)
-6. [Phase 3 (Day 4 in VM): Install Native MongoDB 7.0 $\rightarrow$ Switch to Day 4 Labs & Windows Compass GUI](#phase-3-day-4-in-vm-install-native-mongodb-70--switch-to-day-4-labs--windows-compass-gui)
-7. [Phase 4 (Day 5 in VM): Install DuckDB, Python 3.12 `venv`, Mosquitto & Docker Alternative $\rightarrow$ Switch to Day 5 Labs & Final Quiz](#phase-4-day-5-in-vm-install-duckdb-python-312-venv-mosquitto--docker-alternative--switch-to-day-5-labs--final-quiz)
+3. [Phase 1 (Day 1 in VM): Install Native SQLite 3 — Switch to Day 1 Labs & Sentinel Simulator](#phase-1-day-1-in-vm-install-native-sqlite-3--switch-to-day-1-labs--sentinel-simulator)
+4. [Phase 2A (Day 2 in VM): Install Native PostgreSQL 16 Internals — Switch to Day 2 Labs & Tuple Tetris Simulator](#phase-2a-day-2-in-vm-install-native-postgresql-16-internals--switch-to-day-2-labs--tuple-tetris-simulator)
+5. [Phase 2B (Day 3 in VM): Enable PostGIS 3.4 & Partitioning — Switch to Day 3 Labs & BRIN Calculator](#phase-2b-day-3-in-vm-enable-postgis-34--partitioning--switch-to-day-3-labs--brin-calculator)
+6. [Phase 3 (Day 4 in VM): Install Native MongoDB 7.0 — Switch to Day 4 Labs & Windows Compass GUI](#phase-3-day-4-in-vm-install-native-mongodb-70--switch-to-day-4-labs--windows-compass-gui)
+7. [Phase 4 (Day 5 in VM): Install DuckDB, Python 3.12 `venv`, Mosquitto & Docker Alternative — Switch to Day 5 Labs & Final Quiz](#phase-4-day-5-in-vm-install-duckdb-python-312-venv-mosquitto--docker-alternative--switch-to-day-5-labs--final-quiz)
 
 ---
 
@@ -160,7 +160,7 @@ Before installing any database engines, take a snapshot in VMware (**VM $\righta
 
 ---
 
-## Phase 1 (Day 1 in VM): Install Native SQLite 3 $\rightarrow$ Switch to Day 1 Labs & Sentinel Simulator
+## Phase 1 (Day 1 in VM): Install Native SQLite 3 — Switch to Day 1 Labs & Sentinel Simulator
 
 Inside your SSH terminal connected to the Ubuntu VM (`meteo@weather-lab:~/db-bootcamp$`), install **SQLite 3** from scratch:
 
@@ -208,7 +208,7 @@ python3 generate_weather_db.py
 
 ---
 
-## Phase 2A (Day 2 in VM): Install Native PostgreSQL 16 Internals $\rightarrow$ Switch to Day 2 Labs & Tuple Tetris Simulator
+## Phase 2A (Day 2 in VM): Install Native PostgreSQL 16 Internals — Switch to Day 2 Labs & Tuple Tetris Simulator
 
 Welcome to **Day 2**! Inside the Ubuntu VM, we install **PostgreSQL 16** from the official PGDG repository, enable its C-level forensic extensions (`pageinspect`, `pgstattuple`), and expose port `5432` to the VMware network so **DBeaver on your Windows Host** can connect directly to `<VM_IP>:5432`.
 
@@ -276,7 +276,7 @@ psql -d weather_ops -f day2/weather_ops_pg.sql
 
 ---
 
-## Phase 2B (Day 3 in VM): Enable PostGIS 3.4 & Partitioning $\rightarrow$ Switch to Day 3 Labs & BRIN Calculator
+## Phase 2B (Day 3 in VM): Enable PostGIS 3.4 & Partitioning — Switch to Day 3 Labs & BRIN Calculator
 
 Welcome to **Day 3**! Inside the Ubuntu VM, we install **PostGIS 3.4** (`GEOGRAPHY(Point, 4326)` & `GiST` spatial indexing) and **partitioning extensions** (`pg_partman`, `pg_cron`, `btree_gist`).
 
@@ -324,7 +324,7 @@ psql -d weather_ops_db -f day3/day3_postgis_5m_benchmark.sql
 
 ---
 
-## Phase 3 (Day 4 in VM): Install Native MongoDB 7.0 $\rightarrow$ Switch to Day 4 Labs & Windows Compass GUI
+## Phase 3 (Day 4 in VM): Install Native MongoDB 7.0 — Switch to Day 4 Labs & Windows Compass GUI
 
 Welcome to **Day 4**! To save RAM on our 4 GB VM, we stop PostgreSQL while working on MongoDB (`sudo systemctl stop postgresql` — optional, frees ~300 MB RAM immediately), install **MongoDB 7.0 + `mongosh`** inside the VM, and bind port `27017` to `0.0.0.0` so **MongoDB Compass on your Windows Host** connects directly to `mongodb://<VM_IP>:27017`!
 
@@ -404,7 +404,7 @@ rs.initiate({
 
 ---
 
-## Phase 4 (Day 5 in VM): Install DuckDB, Python 3.12 `venv`, Mosquitto & Docker Alternative $\rightarrow$ Switch to Day 5 Labs & Final Quiz
+## Phase 4 (Day 5 in VM): Install DuckDB, Python 3.12 `venv`, Mosquitto & Docker Alternative — Switch to Day 5 Labs & Final Quiz
 
 Welcome to **Day 5**! Today we install the **Vectorized Analytical OLAP & Polyglot Lakehouse Stack** (`DuckDB`, `PyArrow`, `Apache Parquet`, `xarray`/`NetCDF4`, `Mosquitto MQTT`, and `FastAPI`) natively inside the Ubuntu VM, and then install **Docker Engine & Docker Compose v2** as the multi-container orchestration alternative.
 

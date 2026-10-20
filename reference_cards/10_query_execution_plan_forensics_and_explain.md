@@ -768,7 +768,7 @@ Execution Time: 0.075 ms
 ================================================================================
 ```
 
-> **Cross-Reference:** For the full **Unified 10-Layer Performance Optimization Master Matrices**, see [Day 2 Master Coursebook — Section 7.3 (PostgreSQL)](../day2/day2_master_coursebook.md#73-advanced-query--ingestion-acceleration-jit-parallel-ddl-plan-caching--the-10-layer-optimization-matrix), [Day 2 MVCC Guide — Section 6.3 (`postgresql.conf` vs. `my.cnf` Translator)](../day2/day2_postgres_vs_mysql_mvcc_guide.md#63-side-by-side-performance-tuning-translator-postgresql-postgresqlconf-vs-mysql-innodb-mycnf), and [Reference Card 14 — Section 10.4 (MySQL 8.0/8.4 & MariaDB)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#104-the-unified-10-layer-mysql-8084--mariadb-performance-optimization-master-matrix).
+> **Cross-Reference:** For the full **Unified 10-Layer Performance Optimization Master Matrices**, see [Day 2 Master Coursebook — Section 7.3 (PostgreSQL)](../day2/day2_master_coursebook.md#73-advanced-production-performance-engineering-jit-compilation-traps-parallel-bulk-index-builds-prepared-plan-modes--the-10-layer-master-optimization-matrix), [Day 2 MVCC Guide — Section 6 (`postgresql.conf` vs. `my.cnf` Translator)](../day2/day2_postgres_vs_mysql_mvcc_guide.md#6-side-by-side-performance-tuning-translator-postgresql-postgresqlconf-vs-mysql-innodb-mycnf), and [Reference Card 14 — Section 10.4 (MySQL 8.0/8.4 & MariaDB)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#104-the-unified-10-layer-mysql-8084--mariadb-performance-optimization-master-matrix).
 
 ---
 

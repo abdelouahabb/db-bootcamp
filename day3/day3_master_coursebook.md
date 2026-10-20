@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | **Day 3 Coursebook** | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | **Day 3 Coursebook** | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 
 # Weather Forecast Engineering Database Bootcamp
 ## Day 3 Master Coursebook: Advanced Production PostgreSQL — Time-Series Partitioning, BRIN/GIN/Partial Indexing, Window Analytics, PostGIS Geodesy & Hybrid JSONB
@@ -10,8 +10,8 @@
 
 **Companion Files in Day 3 Directory & `reference_cards/`:**
 - [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)**
-- [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) ([📖 Course Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md)) — Partitioned synoptic tables (`synoptic.observations_part`), BRIN/Partial/Covering/GIN indexes, `JSONB` sensor payloads, and Materialized Views (`nwp.mv_daily_model_verification`)
-- [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) ([📖 Course Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)) — Automated 5,000,000-row partitioned telemetry seed (`raw_telemetry_partitioned`), B-Tree vs. BRIN benchmark, and PostGIS `ST_DWithin` geodesic radial queries
+- [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) ([Course Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md)) — Partitioned synoptic tables (`synoptic.observations_part`), BRIN/Partial/Covering/GIN indexes, `JSONB` sensor payloads, and Materialized Views (`nwp.mv_daily_model_verification`)
+- [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) ([Course Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)) — Automated 5,000,000-row partitioned telemetry seed (`raw_telemetry_partitioned`), B-Tree vs. BRIN benchmark, and PostGIS `ST_DWithin` geodesic radial queries
 - [day3_postgres_advanced_cheatsheet.md](./day3_postgres_advanced_cheatsheet.md) — Quick-reference guide for Partitioning, Index Selection, PostGIS Geodesy, Window Functions, `UPSERT`, and `JSONB`
 - [day3_postgres_extensions_guide.md](./day3_postgres_extensions_guide.md) — Complete production reference for `PostGIS`, `TimescaleDB`, `pg_partman`, `pg_cron`, `pg_stat_statements`, `pageinspect`, `pg_buffercache`, `pgstattuple`, `pg_repack`, and `btree_gist`
 - [day3_postgres_ha_patroni_and_ops_guide.md](./day3_postgres_ha_patroni_and_ops_guide.md) — Enterprise High Availability (CAP/PACELC, Patroni + `etcd` + HAProxy), Streaming & Logical Replication, RBAC, `PgBouncer`, and PITR Backups
@@ -19,7 +19,7 @@
 ---
 
 > [!CAUTION]
-> ### 🚨 STOP & READ FIRST — Day 3 PostgreSQL Databases (`weather_ops` vs. `weather_ops_db`), SQL Scripts & Tables Master Map
+> ### STOP & READ FIRST — Day 3 PostgreSQL Databases (`weather_ops` vs. `weather_ops_db`), SQL Scripts & Tables Master Map
 >
 > Day 3 uses **two SQL scripts** inside `day3/` that operate on **two separate PostgreSQL databases (`weather_ops` and `weather_ops_db`)** so the 5,000,000-row high-frequency benchmark does not overwrite your 7-station WMO synoptic tables from Day 2.  
 > If you ever get `ERROR: relation "..." does not exist` or `ERROR: schema "synoptic" does not exist`, check the table below and switch databases inside `psql` with **`\c weather_ops`** or **`\c weather_ops_db`**:
@@ -29,7 +29,7 @@
 > | **1. [`day3/day3_weather_advanced_pg.sql`](./day3_weather_advanced_pg.sql)**<br/>*(WMO Synoptic Partitioning, Indexes, MV & JSONB)* | ```bash\ncd day3\npsql -d weather_ops -f day3_weather_advanced_pg.sql\npsql -d weather_ops\n```<br/>*(Prerequisite: `day2/weather_ops_pg.sql` loaded in `weather_ops`)* | Database: **`weather_ops`** *(Switch in `psql`: `\c weather_ops`)*<br/>• **`synoptic.observations_part`** (`obs_y2026m06`..`obs_y2026m10`, `obs_default` + `JSONB` `sensor_payload`)<br/>• **`synoptic.observations`** (`idx_obs_brin_time`, `idx_obs_btree_time`, `idx_obs_suspect_only`, `idx_obs_station_time_covering`)<br/>• **`nwp.mv_daily_model_verification`** (Materialized View)<br/>• **`synoptic.stations`** (`geog GEOGRAPHY(Point, 4326)`) | • **Lab 1** (`§1.4` — `synoptic.observations_part`)<br/>• **Lab 2A** (`§2.4` — Partial & Covering `INCLUDE` indexes)<br/>• **Lab 3** (`§3.3` — $\Delta P_{3\text{h}}$, 24h rain, `DENSE_RANK`)<br/>• **Lab 4** (`§4.3` — `UPSERT` & `REFRESH MATERIALIZED VIEW CONCURRENTLY`)<br/>• **Lab 5** (`§5.3` — `JSONB` `@>` + `GIN` index) |
 > | **2. [`day3/day3_postgis_5m_benchmark.sql`](./day3_postgis_5m_benchmark.sql)**<br/>*(5,000,000-Row Partitioned Telemetry & PostGIS Benchmark)* | ```bash\ncd day3\npsql -d postgres -f day3_postgis_5m_benchmark.sql\npsql -d weather_ops_db\n```<br/>*(Automatically creates `weather_ops_db`)* | Database: **`weather_ops_db`** *(Switch in `psql`: `\c weather_ops_db`)*<br/>• **`public.stations`** (`50` AWS stations `'AWS-001'`..`'AWS-050'` with `geom GEOMETRY(Point, 4326)`)<br/>• **`public.raw_telemetry_partitioned`** (`5,000,000` rows across `telemetry_y2026m09`..`telemetry_y2026m12`, `telemetry_default`) | • **Section 1.3** (`§1.3` — 5M-row partition distribution & pruning)<br/>• **Section 2.3** (`§2.3` — `ST_DWithin` 40 km Dellys Cape squall line)<br/>• **Lab 2B** (`§2.4` — 5M-row B-Tree `28 MB` vs. BRIN `32 KB`)<br/>• **Lab 2C** (`§2.4` — `ST_DWithin` + `raw_telemetry_partitioned` join) |
 >
-> #### 💡 Three Instant `psql` Commands to Check & Switch Databases on Day 3
+> #### Three Instant `psql` Commands to Check & Switch Databases on Day 3
 > ```sql
 > \conninfo          -- Check whether you are in 'weather_ops' or 'weather_ops_db'
 > \c weather_ops     -- Switch to 'weather_ops' (synoptic.*, nwp.*, alerts.*)
@@ -339,8 +339,8 @@ When a forecaster runs a query covering a 24-hour or 48-hour storm window, the q
 ### 1.3 Verifying Partition Row Distribution & Partition Pruning on 5M-Row Seed Data
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
--- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
 SELECT 
     c.relname AS partition_name,
     pg_size_pretty(pg_relation_size(c.oid)) AS heap_size,
@@ -367,8 +367,8 @@ ORDER BY c.relname;
 
 #### Partition Pruning in Action:
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
--- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
 EXPLAIN (COSTS OFF)
 SELECT 
     station_id, 
@@ -422,8 +422,8 @@ psql -d weather_ops -f day3_weather_advanced_pg.sql
 This walkthrough inspects the monthly partition hierarchy on `synoptic.observations_part` (`obs_y2026m06` .. `obs_y2026m10`), verifies partition pruning via `EXPLAIN (ANALYZE, BUFFERS)` for an October storm window, and creates a new monthly child partition for **November 2026 (`synoptic.obs_y2026m11`)** while verifying physical routing via `tableoid::regclass`:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
--- 📜 PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
+-- PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
 
 -- 1. View all child partitions and their individual disk sizes
 SELECT
@@ -527,12 +527,12 @@ Why does `EXPLAIN` on a `BRIN` index **always** show `Bitmap Index Scan` $\right
 
 | PostgreSQL Index Type | What It Stores Physically | Relative Size (per 1M rows) | Supports `UNIQUE`? | Supports `Index Only Scan`? | Ideal Meteorological Workload |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **1. `B-Tree` *(Default)*** | Sorted key + `6B ctid` for **every row** | `~22–28 MB` | ✅ Yes | ✅ Yes | Primary keys, `(station_id, obs_time)` uniqueness, high-selectivity point/range lookups. |
-| **2. `BRIN`** | Only `[min, max]` per $N$ heap pages (`pages_per_range`) | **`~24–48 KB`** *(99.8% smaller!)* | ❌ **No** *(lossy block index)* | ❌ **No** *(always rechecks heap)* | Append-only chronological timestamp columns (`recorded_at`, `obs_time`) with `correlation > 0.95`. |
-| **3. `Partial B-Tree` (`WHERE`)** | Sorted key + `ctid` **only for rows matching `WHERE`** | `~1 MB` *(if 4% match)* | ✅ Yes *(partial uniqueness)* | ✅ Yes | Filtering rare anomalies (`WHERE qc_flag != 'VALID'`) or active alerts (`WHERE is_active = TRUE`). |
-| **4. `Covering B-Tree` (`INCLUDE`)** | Key in all nodes + extra payload columns in **leaf nodes only** | `~35–45 MB` | ✅ Yes *(on key columns)* | ✅ **Yes (`Heap Fetches: 0`)** | High-QPS station time-series charts (`SELECT obs_time, temp_c FROM ... WHERE station_id = ?`). |
-| **5. `GIN` (Inverted Index)** | Each nested JSONB key/path or array element $\rightarrow$ posting list of `ctid`s | `~15–40 MB` | ❌ No | ❌ No | Semi-structured `JSONB` sensor diagnostics (`WHERE sensor_payload @> '{"door_open": true}'`). |
-| **6. `GiST` (R-Tree Spatial)** | Hierarchical 2D/3D bounding boxes (`MBR`) over geometries | `~30–50 MB` | ❌ No *(supports `EXCLUDE`)* | ✅ Yes *(bounding box)* | PostGIS `GEOGRAPHY`/`GEOMETRY` spatial proximity (`ST_DWithin`, `ST_Intersects`) and range overlaps. |
+| **1. `B-Tree` *(Default)*** | Sorted key + `6B ctid` for **every row** | `~22–28 MB` | Yes | Yes | Primary keys, `(station_id, obs_time)` uniqueness, high-selectivity point/range lookups. |
+| **2. `BRIN`** | Only `[min, max]` per $N$ heap pages (`pages_per_range`) | **`~24–48 KB`** *(99.8% smaller!)* | **No** *(lossy block index)* | **No** *(always rechecks heap)* | Append-only chronological timestamp columns (`recorded_at`, `obs_time`) with `correlation > 0.95`. |
+| **3. `Partial B-Tree` (`WHERE`)** | Sorted key + `ctid` **only for rows matching `WHERE`** | `~1 MB` *(if 4% match)* | Yes *(partial uniqueness)* | Yes | Filtering rare anomalies (`WHERE qc_flag != 'VALID'`) or active alerts (`WHERE is_active = TRUE`). |
+| **4. `Covering B-Tree` (`INCLUDE`)** | Key in all nodes + extra payload columns in **leaf nodes only** | `~35–45 MB` | Yes *(on key columns)* | **Yes (`Heap Fetches: 0`)** | High-QPS station time-series charts (`SELECT obs_time, temp_c FROM ... WHERE station_id = ?`). |
+| **5. `GIN` (Inverted Index)** | Each nested JSONB key/path or array element $\rightarrow$ posting list of `ctid`s | `~15–40 MB` | No | No | Semi-structured `JSONB` sensor diagnostics (`WHERE sensor_payload @> '{"door_open": true}'`). |
+| **6. `GiST` (R-Tree Spatial)** | Hierarchical 2D/3D bounding boxes (`MBR`) over geometries | `~30–50 MB` | No *(supports `EXCLUDE`)* | Yes *(bounding box)* | PostGIS `GEOGRAPHY`/`GEOMETRY` spatial proximity (`ST_DWithin`, `ST_Intersects`) and range overlaps. |
 
 ---
 
@@ -563,8 +563,8 @@ Meteorological phenomena are spatial. Atmospheric fronts, convective cells, and 
 Find all active meteorological stations within a $40\text{ km}$ ($40,000\text{ m}$) radius of an advancing squall line offshore from Dellys Cape at coordinates $(36.95^\circ\text{N}, 3.90^\circ\text{E})$:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
--- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql (Table: public.stations)
+-- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql (Table: public.stations)
 SELECT 
     station_id,
     station_name,
@@ -602,8 +602,8 @@ ORDER BY distance_km ASC;
 This walkthrough compares the physical disk footprint (`pg_relation_size`) across `idx_obs_btree_time` (B-Tree), `idx_obs_brin_time` (BRIN), `idx_obs_suspect_only` (Partial), and `idx_obs_station_time_covering` (Covering) on `synoptic.observations`, and verifies both Partial Index selection and Covering `Index Only Scan` (`Heap Fetches: 0`) via `EXPLAIN (ANALYZE, BUFFERS)`:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
--- 📜 PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
+-- PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
 
 -- 1. Compare disk footprint: B-Tree vs. BRIN vs. Partial vs. Covering Index
 SELECT
@@ -632,8 +632,8 @@ WHERE station_id = 60390
 Empirically compare index creation time and physical disk footprint between a standard B-Tree and a BRIN index on the 1.27M-row October child partition (`telemetry_y2026m10`):
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
--- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
 
 -- 1. Create a B-Tree index on the October child partition
 \timing on
@@ -666,8 +666,8 @@ WHERE relname IN ('idx_oct_btree', 'idx_oct_brin');
 Find all weather stations within $50\text{ km}$ of the Boumerdes coastal zone (`3.4772E, 36.7664N`) and join them with their October 2026 average temperature and peak wind gust from the 5M-row partitioned table:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
--- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
 WITH nearby_stations AS (
     SELECT 
         station_id,
@@ -752,8 +752,8 @@ ORDER BY ns.dist_km ASC;
 These three queries on `weather_ops` compute (1) the **3-Hour Barometric Pressure Tendency ($\Delta P_{3\text{h}}$)** via `LAG(pressure_hpa, 3)` to flag approaching low-pressure storm fronts ($\le -2.5\text{ hPa}$), (2) a **Rolling 24-Hour Precipitation Accumulation & Moving Average Temperature** for Algiers (`60390`) using a named `WINDOW w_24h` (`RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW`), and (3) the **Top 3 Hottest Readings per Station** via `DENSE_RANK()`:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql (and day3/day3_weather_advanced_pg.sql)
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql (and day3/day3_weather_advanced_pg.sql)
 
 -- 1. Barometric Pressure Tendency (3-hour delta) to detect approaching low-pressure fronts
 WITH pressure_trends AS (
@@ -859,8 +859,8 @@ ORDER BY climate_zone, station_name, temp_rank;
 This walkthrough on `weather_ops` demonstrates an idempotent `INSERT INTO synoptic.observations ... ON CONFLICT (station_id, obs_time) DO UPDATE` statement with dead-tuple prevention (`IS DISTINCT FROM`) and `(xmax = 0) AS is_fresh_insert` inspection, queries the pre-computed `nwp.mv_daily_model_verification` materialized view, and refreshes it lock-free using `REFRESH MATERIALIZED VIEW CONCURRENTLY`:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
--- 📜 PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
+-- PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
 
 -- 1. Idempotent Synoptic Ingestion (UPSERT) with smart dead-tuple prevention
 INSERT INTO synoptic.observations (
@@ -963,8 +963,8 @@ When **80% of your schema is fixed WMO columns** and **20% is variable sensor di
 This walkthrough extracts typed sensor telemetry fields (`gust_3s_kt`, `battery_v`, `solar_w_m2`, and `diagnostics -> firmware`) from the `sensor_payload` `JSONB` column on `synoptic.observations_part`, uses the **`JSONB` Containment Operator (`@>`)** to trigger a `Bitmap Index Scan` on `idx_obs_part_sensor_gin`, and appends a new nested soil-moisture calibration object dynamically using the `||` concatenation operator without altering the table schema:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
--- 📜 PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
+-- PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
 
 -- 1. Extract typed fields from JSONB sensor_payload alongside relational columns
 SELECT
@@ -1081,11 +1081,11 @@ The following decision matrix summarizes **when to use PostgreSQL (`PARTITION BY
 
 > [!TIP]
 > **Next Step — Interactive BRIN Calculator & Installing MongoDB 7.0 + Compass (Day 4)**
-> - 🧪 **Test in the Interactive Simulator:** [Switch to Portal Tab 04: Storage & BRIN vs B-Tree Calculator](../bootcamp_portal.html#tab-scaling)
-> - 📖 **Review the 2 Day 3 SQL Walkthroughs:** [day3_weather_advanced_pg](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [day3_postgis_5m_benchmark](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)
-> - 💿 **Install Day 4 MongoDB & Compass From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 3: Native MongoDB 7.0, `mongosh` & Compass)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install MongoDB 7.0 before starting Day 4!
+> - **Test in the Interactive Simulator:** [Switch to Portal Tab 04: Storage & BRIN vs B-Tree Calculator](../bootcamp_portal.html#tab-scaling)
+> - **Review the 2 Day 3 SQL Walkthroughs:** [day3_weather_advanced_pg](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [day3_postgis_5m_benchmark](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)
+> - **Install Day 4 MongoDB & Compass From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 3: Native MongoDB 7.0, `mongosh` & Compass)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install MongoDB 7.0 before starting Day 4!
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | **Day 3 Coursebook** | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | **Day 3 Coursebook** | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 

@@ -2,10 +2,10 @@
 
 ## Cost Modeling, Physical Access Methods, Join Algorithms, Memory Forensics, and Cross-Engine Plan Debugging
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card ➡️](./11_python_database_drivers_for_weather_engineers.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card](./11_python_database_drivers_for_weather_engineers.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Systems & Database Engineers](#executive-summary-for-systems--database-engineers)
 - [1. The Query Optimizer Pipeline: `EXPLAIN` vs. `EXPLAIN ANALYZE`](#1-the-query-optimizer-pipeline-explain-vs-explain-analyze)
@@ -772,7 +772,7 @@ Execution Time: 0.075 ms
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card ➡️](./11_python_database_drivers_for_weather_engineers.md) | [⬆️ Back to Top](#query-execution-plan-forensics-the-explain--performance-optimization-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card](./11_python_database_drivers_for_weather_engineers.md) | [⬆ Back to Top](#query-execution-plan-forensics-the-explain--performance-optimization-reference-card)

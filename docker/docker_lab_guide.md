@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 4: MongoDB Replica Sets](../day4/day4_master_coursebook.md) | [➡️ Day 5: Polyglot Streaming Lakehouse](../day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 4: MongoDB Replica Sets](../day4/day4_master_coursebook.md) | [Day 5: Polyglot Streaming Lakehouse](../day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # Turnkey Docker Compose Lab Guide: 3-Node HA Replica Set & 5-Service Polyglot Streaming Lakehouse
 
@@ -145,4 +145,4 @@ python3 serving_api.py
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 4: MongoDB Replica Sets](../day4/day4_master_coursebook.md) | [➡️ Day 5: Polyglot Streaming Lakehouse](../day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 4: MongoDB Replica Sets](../day4/day4_master_coursebook.md) | [Day 5: Polyglot Streaming Lakehouse](../day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [Reference Cards](../reference_cards/README.md)

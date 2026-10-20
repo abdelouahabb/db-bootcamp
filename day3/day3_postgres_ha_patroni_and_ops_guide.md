@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](day3_master_coursebook.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](day3_master_coursebook.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 
 # PostgreSQL High Availability (HA), CAP/PACELC Architecture & Production Operations Guide
 
@@ -123,9 +123,9 @@ PostgreSQL provides two built-in replication engines. Weather centers often use 
 | :--- | :--- | :--- |
 | **How It Works** | Ships raw **8 KB page byte changes** (`pg_wal`) block-for-block from Primary to Standby. | Decodes WAL into logical row operations (`INSERT`, `UPDATE`, `DELETE`) for specific tables. |
 | **Scope** | Entire PostgreSQL cluster (all databases, schemas, and tables are identical). | **Selective tables** (e.g., replicate *only* `alerts.weather_alerts` to a public DMZ web database!). |
-| **Writes on Standby?** | ❌ Standby is strictly **Read-Only** (`pg_is_in_recovery() = true`). | ✅ Subscriber is a normal writable database (can have its own extra tables/indexes). |
+| **Writes on Standby?** | Standby is strictly **Read-Only** (`pg_is_in_recovery() = true`). | Subscriber is a normal writable database (can have its own extra tables/indexes). |
 | **PostgreSQL Versions** | Must be the **exact same major version** (e.g., PG 16 $\rightarrow$ PG 16) and OS architecture. | Can replicate **across major versions** (e.g., PG 14 $\rightarrow$ PG 16 for zero-downtime upgrades!). |
-| **DDL Replication** | ✅ Automatic (`CREATE TABLE`, `ADD PARTITION`, `CREATE INDEX` replicate automatically!). | ❌ DDL does not replicate automatically (must apply schema changes manually). |
+| **DDL Replication** | Automatic (`CREATE TABLE`, `ADD PARTITION`, `CREATE INDEX` replicate automatically!). | DDL does not replicate automatically (must apply schema changes manually). |
 | **Primary Weather Use Case** | **High Availability (HA) failover & Read Replicas for forecasters.** | **Publishing live CAP alerts to external web portals & zero-downtime version upgrades.** |
 
 ---
@@ -783,5 +783,5 @@ SELECT pg_terminate_backend(12345);
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](day3_master_coursebook.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](day3_master_coursebook.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 

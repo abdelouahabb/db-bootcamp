@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](./day3_master_coursebook.md) | [⚡ Advanced Weather PG Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](./day3_master_coursebook.md) | [Advanced Weather PG Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 
 # Day 3 SQL Course Walkthrough: 5,000,000-Row Partitioned Telemetry, B-Tree vs. BRIN Benchmark & PostGIS Geodesic Proximity (`day3_postgis_5m_benchmark.sql`)
 
@@ -732,4 +732,4 @@ Query 9B combines **every major Day 3 architectural pillar** in a single product
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](./day3_master_coursebook.md) | [⚡ Advanced Weather PG Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](./day3_master_coursebook.md) | [Advanced Weather PG Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)

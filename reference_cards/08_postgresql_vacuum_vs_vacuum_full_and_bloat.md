@@ -2,10 +2,10 @@
 
 ## Storage Engine Page Forensics, MVCC Dead Tuples, Locking Hierarchies, and Zero-Downtime Bloat Reclamation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card ➡️](./09_acid_transactions_and_two_terminal_lock_debugging.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card](./09_acid_transactions_and_two_terminal_lock_debugging.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Systems & Database Engineers](#executive-summary-for-systems--database-engineers)
 - [1. Physical Anatomy of Table Bloat Inside 8 KB Pages](#1-physical-anatomy-of-table-bloat-inside-8-kb-pages)
@@ -401,7 +401,7 @@ SELECT pg_size_pretty(pg_total_relation_size('bloat_lab')) AS size_after_vacuum_
 ```
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card ➡️](./09_acid_transactions_and_two_terminal_lock_debugging.md) | [⬆️ Back to Top](#postgresql-vacuum-mechanics-vacuum-vs-vacuum-full-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | [⬆ Back to Top](#postgresql-vacuum-mechanics-vacuum-vs-vacuum-full-reference-card)

@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [🐬 Reference Card 14: Complete MySQL & MariaDB Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Reference Card 14: Complete MySQL & MariaDB Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](day2_master_coursebook.md) | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Definitive Comparative Architecture Guide: PostgreSQL (Heap/MVCC) vs. MySQL InnoDB (Clustered B+Tree/Undo Logs) for Meteorological Workloads
 
@@ -216,21 +216,21 @@ Every clustered index row in InnoDB contains three hidden system fields:
 
 | Feature | PostgreSQL 16+ | MySQL 8.0 / 8.4 (InnoDB) | Winner for Meteorology |
 | :--- | :--- | :--- | :--- |
-| **Join Algorithms** | • **Nested Loop Join**<br>• **Hash Join**<br>• **Merge Join** (zips pre-sorted time-series in $O(M+N)$ with zero RAM spill!) | • **Nested Loop Join**<br>• **Hash Join** *(added in 8.0.18)*<br>• ❌ **No Sort-Merge Join!** | **PostgreSQL** (`Merge Join` on time-sorted observations & forecasts is unmatched). |
-| **Parallel Query Execution** | ✅ **Full Multi-Core Parallelism:** Parallel Seq Scan, Parallel Index Scan, Parallel Hash Join, Parallel Aggregate (`AVG`/`SUM` across 8+ cores). | ❌ **Single-Threaded:** Normal analytical `SELECT ... JOIN ... GROUP BY` queries execute on **only 1 CPU core**! | **PostgreSQL** ($4\times\text{–}16\times$ faster on multi-month climatology). |
-| **Index Access Methods** | • **B-Tree**<br>• **BRIN** (Block Range — $99.9\%$ smaller for time-series!)<br>• **GiST** (PostGIS spatial & temporal ranges)<br>• **GIN** (`JSONB` & arrays)<br>• **Hash** & **SP-GiST** | • **B+Tree**<br>• **R-Tree** (2D spatial)<br>• **Fulltext**<br>• ❌ **No BRIN Index!**<br>• ❌ **No GIN Index!** | **PostgreSQL** (`BRIN` + `GiST` + `GIN` are essential for weather data). |
-| **Partial Indexes (`WHERE`)** | ✅ **Native:** `CREATE INDEX ... WHERE qc_flag != 'VALID';` (indexes only the $2\%$ suspect rows). | ❌ **Not Supported!** Must index $100\%$ of rows in the table. | **PostgreSQL** |
-| **Covering Indexes (`INCLUDE`)** | ✅ **Native:** `CREATE INDEX ON tbl (station_id, obs_time) INCLUDE (temp_c);` (keeps payload out of upper B-Tree branch nodes). | Must append payload columns directly into the B+Tree key itself, bloating branch nodes. | **PostgreSQL** |
+| **Join Algorithms** | • **Nested Loop Join**<br>• **Hash Join**<br>• **Merge Join** (zips pre-sorted time-series in $O(M+N)$ with zero RAM spill!) | • **Nested Loop Join**<br>• **Hash Join** *(added in 8.0.18)*<br>• **No Sort-Merge Join!** | **PostgreSQL** (`Merge Join` on time-sorted observations & forecasts is unmatched). |
+| **Parallel Query Execution** | **Full Multi-Core Parallelism:** Parallel Seq Scan, Parallel Index Scan, Parallel Hash Join, Parallel Aggregate (`AVG`/`SUM` across 8+ cores). | **Single-Threaded:** Normal analytical `SELECT ... JOIN ... GROUP BY` queries execute on **only 1 CPU core**! | **PostgreSQL** ($4\times\text{–}16\times$ faster on multi-month climatology). |
+| **Index Access Methods** | • **B-Tree**<br>• **BRIN** (Block Range — $99.9\%$ smaller for time-series!)<br>• **GiST** (PostGIS spatial & temporal ranges)<br>• **GIN** (`JSONB` & arrays)<br>• **Hash** & **SP-GiST** | • **B+Tree**<br>• **R-Tree** (2D spatial)<br>• **Fulltext**<br>• **No BRIN Index!**<br>• **No GIN Index!** | **PostgreSQL** (`BRIN` + `GiST` + `GIN` are essential for weather data). |
+| **Partial Indexes (`WHERE`)** | **Native:** `CREATE INDEX ... WHERE qc_flag != 'VALID';` (indexes only the $2\%$ suspect rows). | **Not Supported!** Must index $100\%$ of rows in the table. | **PostgreSQL** |
+| **Covering Indexes (`INCLUDE`)** | **Native:** `CREATE INDEX ON tbl (station_id, obs_time) INCLUDE (temp_c);` (keeps payload out of upper B-Tree branch nodes). | Must append payload columns directly into the B+Tree key itself, bloating branch nodes. | **PostgreSQL** |
 
 ### 5.2 Data Types, Partitioning & SQL Dialect Matrix (PostgreSQL vs. MySQL vs. SQLite)
 
 | Feature / Task | PostgreSQL (16+) | MySQL (8.0+) | SQLite (3.38+) | Why It Matters to Weather Engineers |
 | :--- | :--- | :--- | :--- | :--- |
 | **UTC Timestamp Type & Range** | **`TIMESTAMPTZ`**<br>• 8 bytes (microseconds)<br>• **`4713 BC` to `294,276 AD`**<br>• Always UTC internally | **`TIMESTAMP`** (UTC, but **only `1970` to `2038-01-19`**!) vs. **`DATETIME(6)`** (`1000`–`9999`, **ignores timezones**!) | `TEXT` (ISO-8601) or `INTEGER` (Unix epoch) | **Dealbreaker in MySQL:** Cannot store pre-1970 historical WMO observations or post-2038 climate models in a timezone-aware `TIMESTAMP` column! |
-| **Native `INTERVAL` Column Type** | ✅ First-class `INTERVAL` type (`lead_interval INTERVAL`) | ❌ Expression keyword only; cannot create an `INTERVAL` column | ❌ None | PostgreSQL stores NWP forecast lead times (`INTERVAL '36 hours'`) natively. |
-| **Materialized Views** | ✅ `CREATE MATERIALIZED VIEW` + `REFRESH ... CONCURRENTLY` | ❌ **Not Supported!** Requires manual summary tables & triggers | ❌ Not Supported | Effortless pre-aggregated NWP verification dashboards in PostgreSQL. |
-| **Partitioned Tables + Foreign Keys** | ✅ Declarative `RANGE`/`LIST`/`HASH` partitioning **with full Foreign Key support** | ❌ **Foreign Keys are completely prohibited on partitioned tables in MySQL!** | ❌ No native declarative partitioning | Partitioning `observations` in MySQL destroys referential integrity to `stations`! |
-| **Transactional DDL** | ✅ `BEGIN; ALTER TABLE ...; ROLLBACK;` is $100\%$ atomic | ❌ Every DDL statement forces an **implicit `COMMIT`**! | ✅ Transactional DDL | Safe, atomic schema migrations in PostgreSQL. |
+| **Native `INTERVAL` Column Type** | First-class `INTERVAL` type (`lead_interval INTERVAL`) | Expression keyword only; cannot create an `INTERVAL` column | None | PostgreSQL stores NWP forecast lead times (`INTERVAL '36 hours'`) natively. |
+| **Materialized Views** | `CREATE MATERIALIZED VIEW` + `REFRESH ... CONCURRENTLY` | **Not Supported!** Requires manual summary tables & triggers | Not Supported | Effortless pre-aggregated NWP verification dashboards in PostgreSQL. |
+| **Partitioned Tables + Foreign Keys** | Declarative `RANGE`/`LIST`/`HASH` partitioning **with full Foreign Key support** | **Foreign Keys are completely prohibited on partitioned tables in MySQL!** | No native declarative partitioning | Partitioning `observations` in MySQL destroys referential integrity to `stations`! |
+| **Transactional DDL** | `BEGIN; ALTER TABLE ...; ROLLBACK;` is $100\%$ atomic | Every DDL statement forces an **implicit `COMMIT`**! | Transactional DDL | Safe, atomic schema migrations in PostgreSQL. |
 | **Conditional Aggregation** | `COUNT(*) FILTER (WHERE temp_c > 35)` | `SUM(CASE WHEN temp_c > 35 THEN 1 ELSE 0 END)` | `COUNT(*) FILTER (WHERE temp_c > 35)` | Cleaner, faster multi-threshold climatology SQL. |
 | **Idempotent `UPSERT`** | `INSERT ... ON CONFLICT (station_id, obs_time) DO UPDATE SET ... WHERE ... RETURNING *;` | `INSERT ... ON DUPLICATE KEY UPDATE ...` (no `WHERE` guard on update) | `INSERT ... ON CONFLICT(...) DO UPDATE SET ... WHERE ...` | PostgreSQL's `WHERE` guard avoids creating dead tuples when an identical synoptic bulletin is re-transmitted! |
 | **Identifier Quoting & Concat** | `"station_id"` and `'A' \|\| 'B'` (ANSI SQL) | `` `station_id` `` and `CONCAT('A', 'B')` | `"station_id"` and `'A' \|\| 'B'` | PostgreSQL follows strict ANSI SQL standards. |
@@ -282,7 +282,7 @@ innodb_io_capacity_max = 4000
 ### 6.2 MySQL InnoDB Forensics & MVCC History List Length (HLL) Queries
 > *Note: The diagnostic queries below are **MySQL 8.0 / 8.4 (`mysql` CLI) reference commands** for engineers operating external MySQL/InnoDB weather systems (do not run `SHOW ENGINE INNODB STATUS` inside PostgreSQL `psql`!).*
 ```sql
--- 📂 TARGET ENGINE: MySQL 8.0 / 8.4 CLI (mysql -u root -p weather_ops) — Reference Only
+-- TARGET ENGINE: MySQL 8.0 / 8.4 CLI (mysql -u root -p weather_ops) — Reference Only
 
 -- 1. Check InnoDB Engine Status (Buffer Pool, Semaphores, Undo History)
 SHOW ENGINE INNODB STATUS\G
@@ -340,6 +340,6 @@ If an attendee asks: *"In one sentence, when does MySQL InnoDB win, and why do m
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](day2_master_coursebook.md) | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 

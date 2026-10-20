@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](./day3_master_coursebook.md) | [⚡ 5M-Row PostGIS Benchmark Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](./day3_master_coursebook.md) | [5M-Row PostGIS Benchmark Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 
 # Day 3 SQL Course Walkthrough: Advanced Production PostgreSQL for Weather Engineers (`day3_weather_advanced_pg.sql`)
 
@@ -600,4 +600,4 @@ LIMIT 10;
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](./day3_master_coursebook.md) | [⚡ 5M-Row PostGIS Benchmark Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](./day3_master_coursebook.md) | [5M-Row PostGIS Benchmark Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)

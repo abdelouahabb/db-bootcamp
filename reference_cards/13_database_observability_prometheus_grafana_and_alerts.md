@@ -5,10 +5,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card ➡️](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [1. The Two Layers of Monitoring in a Weather Center](#1-the-two-layers-of-monitoring-in-a-weather-center)
 - [2. Layer 1: Database Engine Golden Signals & Alert Thresholds](#2-layer-1-database-engine-golden-signals--alert-thresholds)
@@ -161,7 +161,7 @@ db.synoptic_timeseries.aggregate([
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card ➡️](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [⬆️ Back to Top](#weather-database-observability--monitoring-cheatsheet-prometheus-grafana--meteorological-health-checks)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [⬆ Back to Top](#weather-database-observability--monitoring-cheatsheet-prometheus-grafana--meteorological-health-checks)

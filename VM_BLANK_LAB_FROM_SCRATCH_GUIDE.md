@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](./README.md) | [🌐 Interactive Portal](./bootcamp_portal.html) | [🛠️ Attendee Setup Guide](./ATTENDEE_SETUP_GUIDE.md) | **💿 Blank Ubuntu VM Lab Guide** | [📚 Reference Cards](./reference_cards/README.md)
+> **Navigation:** [Master README](./README.md) | [Interactive Portal](./bootcamp_portal.html) | [Attendee Setup Guide](./ATTENDEE_SETUP_GUIDE.md) | ** Blank Ubuntu VM Lab Guide** | [Reference Cards](./reference_cards/README.md)
 
 # Complete Blank Lab Runbook: 4 GB RAM-Optimized Hybrid Setup (Windows Host GUIs + Blank Ubuntu 24.04 VM in VMware)
 
@@ -26,15 +26,15 @@
 flowchart TD
     H0["Step 0 (Windows Host): Clone db-bootcamp,\nLaunch Web Portal, Install VS Code + DB Browser for SQLite + DBeaver + Compass"] --> VM["Part 1 (VMware): Create 4 GB Ubuntu 24.04 VM\n+ Enable SSH & Clone db-bootcamp Inside VM"]
     VM --> P1["Phase 1 (Day 1 in VM): Install SQLite 3 + .sqliterc"]
-    P1 --> L1["🚀 SWITCH TO DAY 1 LABS & PORTAL TAB 03\n• day1_master_coursebook.md\n• weather_ops_seed_sql_course_walkthrough.md\n• Portal Tab 03: Sentinel (-9999.0) & 3VL Lab"]
+    P1 --> L1["SWITCH TO DAY 1 LABS & PORTAL TAB 03\n• day1_master_coursebook.md\n• weather_ops_seed_sql_course_walkthrough.md\n• Portal Tab 03: Sentinel (-9999.0) & 3VL Lab"]
     L1 --> P2A["Phase 2A (Day 2 in VM): Install PostgreSQL 16 + pageinspect\n+ Open Port 5432 to Windows Host DBeaver"]
-    P2A --> L2["🚀 SWITCH TO DAY 2 LABS & PORTAL TAB 02\n• day2_master_coursebook.md + 3 SQL Walkthroughs\n• Portal Tab 02: PG Tuple Alignment Lab"]
+    P2A --> L2["SWITCH TO DAY 2 LABS & PORTAL TAB 02\n• day2_master_coursebook.md + 3 SQL Walkthroughs\n• Portal Tab 02: PG Tuple Alignment Lab"]
     L2 --> P2B["Phase 2B (Day 3 in VM): Install PostGIS 3.4 & pg_partman"]
-    P2B --> L3["🚀 SWITCH TO DAY 3 LABS & PORTAL TAB 04\n• day3_master_coursebook.md + 2 SQL Walkthroughs\n• Portal Tab 04: Storage & BRIN Calculator"]
+    P2B --> L3["SWITCH TO DAY 3 LABS & PORTAL TAB 04\n• day3_master_coursebook.md + 2 SQL Walkthroughs\n• Portal Tab 04: Storage & BRIN Calculator"]
     L3 --> P3["Phase 3 (Day 4 in VM): Install MongoDB 7.0 + mongosh\n+ Open Port 27017 to Windows Host Compass"]
-    P3 --> L4["🚀 SWITCH TO DAY 4 LABS\n• day4_master_coursebook.md + 3 MongoDB .js Walkthroughs"]
+    P3 --> L4["SWITCH TO DAY 4 LABS\n• day4_master_coursebook.md + 3 MongoDB .js Walkthroughs"]
     L4 --> P4["Phase 4 (Day 5 in VM): Install DuckDB CLI + Python venv\n+ Mosquitto + Docker Alternative"]
-    P4 --> L5["🚀 SWITCH TO DAY 5 LABS & PORTAL TABS 04, 05, 06\n• Day 5 Coursebooks + Docker Lab Guide\n• Portal Tab 05: Polyglot Architecture & Tab 06: 15-Question Quiz"]
+    P4 --> L5["SWITCH TO DAY 5 LABS & PORTAL TABS 04, 05, 06\n• Day 5 Coursebooks + Docker Lab Guide\n• Portal Tab 05: Polyglot Architecture & Tab 06: 15-Question Quiz"]
 ```
 
 ---
@@ -192,17 +192,17 @@ python3 generate_weather_db.py
 ```
 
 > [!IMPORTANT]
-> ### 🚀 STOP INSTALLATION HERE FOR DAY 1! Switch Now to Your Windows Host Browser Portal & Day 1 Docs
+> ### STOP INSTALLATION HERE FOR DAY 1! Switch Now to Your Windows Host Browser Portal & Day 1 Docs
 > Now that `sqlite3`, `~/.sqliterc`, `weather_ops.db`, and `weather_telemetry.db` are ready inside the VM, **do not install PostgreSQL yet**. On your **Windows Host**, click the links below to complete all **Day 1 SQLite & Hardware Sentinel Labs**:
 >
 > | Step | Resource / Interactive Tab to Open on Windows Host | What You Will Do |
 > | :---: | :--- | :--- |
-> | **1** | 📖 **[day1/weather_ops_seed_sql_course_walkthrough.md](./day1/weather_ops_seed_sql_course_walkthrough.md)** | Read the line-by-line explanation of every `PRAGMA`, `CHECK` constraint, `ON DELETE CASCADE`, `3NF` Normalization vs. Denormalization, all 7 SQL `JOIN`s, and planted anomalies in `weather_ops_seed.sql`. |
-> | **2** | 📖 **[day1/day1_master_coursebook.md](./day1/day1_master_coursebook.md)** | Follow Modules 1–7 in your SSH terminal: Declarative 8-step execution order, Three-Valued Logic (`3VL`), `-9999.0` sentinel hygiene (`NULLIF`), `1NF–3NF` Normalization vs. Denormalization, all 7 SQL `JOIN`s + SQLite `<3.39`/`3.39+` compatibility, `WITH RECURSIVE` outage grids, and `LAG() OVER` window functions. |
-> | **3** | 🧪 **[Switch to Portal Tab 03: Sentinel (`-9999.0`) & 3VL Simulator](./bootcamp_portal.html#tab-sentinel)** | Drag the sensor fault-rate slider to see how a `0.5%` `-9999.0` dropout corrupts Mediterranean temperatures into an Ice Age (`-27.7°C`) vs. `AVG(NULLIF(temp_c, -9999.0))`, and test the interactive 3VL Truth Table! |
-> | **4** | 📖 **[day1/day1_hardware_sentinels_and_qc_guide.md](./day1/day1_hardware_sentinels_and_qc_guide.md)** | Deep-dive into RS-485/Modbus/SDI-12 & Pt100 ADC hardware fault physics and WMO Code 306 quality flags. |
-> | **5** | 📋 **[day1/day1_sqlite_and_sql_cheatsheet.md](./day1/day1_sqlite_and_sql_cheatsheet.md)** | Keep open alongside your SSH terminal for `.mode`, `.timer`, `JOIN` compatibility & portable `<3.39` rewrites, date/time bucketing, and window frame syntax. |
-> | **6** | 🗄️ **DB Browser for SQLite & DBeaver on Windows Host:**<br>• In **DB Browser for SQLite (`DB4S`)**: Open `db-bootcamp\day1\weather_ops.db` $\rightarrow$ inspect the **Edit Pragmas** tab (`Foreign Keys` checkbox!), the **Database Structure** tab (`CHECK` constraints & `sqlite_autoindex_*`), and the **Browse Data** tab (color-coded `NULL` vs `-9999.0` cells).<br>• In **DBeaver**: Open `weather_ops.db` to inspect the visual Entity-Relationship (ER) diagram! |
+> | **1** | **[day1/weather_ops_seed_sql_course_walkthrough.md](./day1/weather_ops_seed_sql_course_walkthrough.md)** | Read the line-by-line explanation of every `PRAGMA`, `CHECK` constraint, `ON DELETE CASCADE`, `3NF` Normalization vs. Denormalization, all 7 SQL `JOIN`s, and planted anomalies in `weather_ops_seed.sql`. |
+> | **2** | **[day1/day1_master_coursebook.md](./day1/day1_master_coursebook.md)** | Follow Modules 1–7 in your SSH terminal: Declarative 8-step execution order, Three-Valued Logic (`3VL`), `-9999.0` sentinel hygiene (`NULLIF`), `1NF–3NF` Normalization vs. Denormalization, all 7 SQL `JOIN`s + SQLite `<3.39`/`3.39+` compatibility, `WITH RECURSIVE` outage grids, and `LAG() OVER` window functions. |
+> | **3** | **[Switch to Portal Tab 03: Sentinel (`-9999.0`) & 3VL Simulator](./bootcamp_portal.html#tab-sentinel)** | Drag the sensor fault-rate slider to see how a `0.5%` `-9999.0` dropout corrupts Mediterranean temperatures into an Ice Age (`-27.7°C`) vs. `AVG(NULLIF(temp_c, -9999.0))`, and test the interactive 3VL Truth Table! |
+> | **4** | **[day1/day1_hardware_sentinels_and_qc_guide.md](./day1/day1_hardware_sentinels_and_qc_guide.md)** | Deep-dive into RS-485/Modbus/SDI-12 & Pt100 ADC hardware fault physics and WMO Code 306 quality flags. |
+> | **5** | **[day1/day1_sqlite_and_sql_cheatsheet.md](./day1/day1_sqlite_and_sql_cheatsheet.md)** | Keep open alongside your SSH terminal for `.mode`, `.timer`, `JOIN` compatibility & portable `<3.39` rewrites, date/time bucketing, and window frame syntax. |
+> | **6** | **DB Browser for SQLite & DBeaver on Windows Host:**<br>• In **DB Browser for SQLite (`DB4S`)**: Open `db-bootcamp\day1\weather_ops.db` $\rightarrow$ inspect the **Edit Pragmas** tab (`Foreign Keys` checkbox!), the **Database Structure** tab (`CHECK` constraints & `sqlite_autoindex_*`), and the **Browse Data** tab (color-coded `NULL` vs `-9999.0` cells).<br>• In **DBeaver**: Open `weather_ops.db` to inspect the visual Entity-Relationship (ER) diagram! |
 >
 > *(Once you finish Day 1, return here and proceed to **Phase 2A** below!)*
 
@@ -260,17 +260,17 @@ psql -d weather_ops -f day2/weather_ops_pg.sql
 ```
 
 > [!IMPORTANT]
-> ### 🚀 STOP INSTALLATION HERE FOR DAY 2! Switch Now to the Day 2 Coursebooks, Walkthroughs & Tuple Tetris Simulator
+> ### STOP INSTALLATION HERE FOR DAY 2! Switch Now to the Day 2 Coursebooks, Walkthroughs & Tuple Tetris Simulator
 > PostgreSQL 16 and its forensic inspection extensions (`pageinspect`, `pgstattuple`) are now running inside the VM and listening on `<VM_IP>:5432`. Click the links below to execute all **Day 2 Storage Engine, MVCC & Concurrency Labs**:
 >
 > | Step | Resource / Interactive Tab to Open on Windows Host | What You Will Do |
 > | :---: | :--- | :--- |
-> | **1** | 📖 **[day2/day2_master_coursebook.md](./day2/day2_master_coursebook.md)** | Study PostgreSQL process/memory architecture (`shared_buffers` vs OS Page Cache), 8 KB heap pages, 23-byte `HeapTupleHeaderData`, CPU byte alignment, MVCC, WAL, `VACUUM`, and cost-based query planning. |
-> | **2** | 🧪 **[Switch to Portal Tab 02: PG Tuple Alignment ("Tuple Tetris") Lab](./bootcamp_portal.html#tab-tetris)** | Reorder columns interactively between Naive Unaligned (`80 bytes/row`) and Packed Aligned (`64 bytes/row`) to visualize 8-byte CPU word boundaries and save `16 GB` per billion rows! |
-> | **3** | 📖 **[day2/weather_ops_pg_sql_course_walkthrough.md](./day2/weather_ops_pg_sql_course_walkthrough.md)** | Understand the multi-schema DDL (`synoptic`, `nwp`, `alerts`), `TOAST` out-of-line compression, `GENERATED ALWAYS AS ... STORED`, and `generate_series()` wave synthesis. |
-> | **4** | 📖 **[day2/day2_pageinspect_and_storage_lab_course_walkthrough.md](./day2/day2_pageinspect_and_storage_lab_course_walkthrough.md)** | Run `psql -d weather_ops -f day2/day2_pageinspect_and_storage_lab.sql` in your SSH terminal alongside this walkthrough to inspect `lp_off`, `t_xmin`, `t_xmax`, `t_ctid`, `VACUUM` vs `VACUUM FULL`, and 1M-row `EXPLAIN (ANALYZE, BUFFERS)`. |
-> | **5** | 📖 **[day2/day2_two_terminal_acid_lab_course_walkthrough.md](./day2/day2_two_terminal_acid_lab_course_walkthrough.md)** | Open **two SSH tabs** in Windows Terminal (`[TERMINAL A]` and `[TERMINAL B]`) to trigger row locks, `pg_blocking_pids()`, `40P01` circular deadlocks, and `REPEATABLE READ` serialization errors (`40001`). |
-> | **6** | 🖥️ **DBeaver on Windows Host:** Connect DBeaver on Windows to **Host:** `<VM_IP>`, **Port:** `5432`, **Database:** `weather_ops`, **User:** `postgres`, **Password:** `meteo_password` and test `Ctrl+Shift+E` Visual Explain! |
+> | **1** | **[day2/day2_master_coursebook.md](./day2/day2_master_coursebook.md)** | Study PostgreSQL process/memory architecture (`shared_buffers` vs OS Page Cache), 8 KB heap pages, 23-byte `HeapTupleHeaderData`, CPU byte alignment, MVCC, WAL, `VACUUM`, and cost-based query planning. |
+> | **2** | **[Switch to Portal Tab 02: PG Tuple Alignment ("Tuple Tetris") Lab](./bootcamp_portal.html#tab-tetris)** | Reorder columns interactively between Naive Unaligned (`80 bytes/row`) and Packed Aligned (`64 bytes/row`) to visualize 8-byte CPU word boundaries and save `16 GB` per billion rows! |
+> | **3** | **[day2/weather_ops_pg_sql_course_walkthrough.md](./day2/weather_ops_pg_sql_course_walkthrough.md)** | Understand the multi-schema DDL (`synoptic`, `nwp`, `alerts`), `TOAST` out-of-line compression, `GENERATED ALWAYS AS ... STORED`, and `generate_series()` wave synthesis. |
+> | **4** | **[day2/day2_pageinspect_and_storage_lab_course_walkthrough.md](./day2/day2_pageinspect_and_storage_lab_course_walkthrough.md)** | Run `psql -d weather_ops -f day2/day2_pageinspect_and_storage_lab.sql` in your SSH terminal alongside this walkthrough to inspect `lp_off`, `t_xmin`, `t_xmax`, `t_ctid`, `VACUUM` vs `VACUUM FULL`, and 1M-row `EXPLAIN (ANALYZE, BUFFERS)`. |
+> | **5** | **[day2/day2_two_terminal_acid_lab_course_walkthrough.md](./day2/day2_two_terminal_acid_lab_course_walkthrough.md)** | Open **two SSH tabs** in Windows Terminal (`[TERMINAL A]` and `[TERMINAL B]`) to trigger row locks, `pg_blocking_pids()`, `40P01` circular deadlocks, and `REPEATABLE READ` serialization errors (`40001`). |
+> | **6** | **DBeaver on Windows Host:** Connect DBeaver on Windows to **Host:** `<VM_IP>`, **Port:** `5432`, **Database:** `weather_ops`, **User:** `postgres`, **Password:** `meteo_password` and test `Ctrl+Shift+E` Visual Explain! |
 >
 > *(Once you finish Day 2, return here and proceed to **Phase 2B** below for Day 3!)*
 
@@ -308,17 +308,17 @@ psql -d weather_ops_db -f day3/day3_postgis_5m_benchmark.sql
 ```
 
 > [!IMPORTANT]
-> ### 🚀 STOP INSTALLATION HERE FOR DAY 3! Switch Now to the Day 3 Coursebooks, PostGIS Walkthroughs & BRIN Calculator
+> ### STOP INSTALLATION HERE FOR DAY 3! Switch Now to the Day 3 Coursebooks, PostGIS Walkthroughs & BRIN Calculator
 > PostGIS 3.4 and the 5,000,000-row partitioned telemetry tables are now live inside the VM. Click the links below to complete all **Day 3 Partitioning, BRIN Indexing, PostGIS Geodesy & High-Availability Labs**:
 >
 > | Step | Resource / Interactive Tab to Open on Windows Host | What You Will Do |
 > | :---: | :--- | :--- |
-> | **1** | 📖 **[day3/day3_master_coursebook.md](./day3/day3_master_coursebook.md)** | Master Declarative Range Partitioning (`PARTITION BY RANGE`), zero-bloat `DETACH PARTITION CONCURRENTLY`, Index Selection (`B-Tree` vs `BRIN` vs `Partial` vs `INCLUDE` vs `GIN`), PostGIS `GEOGRAPHY(Point, 4326)`, `LAG()` pressure tendency ($\Delta P_{3\text{h}}$), idempotent `UPSERT`, and `REFRESH MATERIALIZED VIEW CONCURRENTLY`. |
-> | **2** | 🧪 **[Switch to Portal Tab 04: Storage & BRIN vs B-Tree Calculator](./bootcamp_portal.html#tab-scaling)** | Scale the row slider from 1 Million to 1 Billion rows to compare PostgreSQL B-Tree (`~28 MB / 1M rows`) against BRIN (`~32 KB / 1M rows` — 99.89% smaller!). |
-> | **3** | 📖 **[day3/day3_weather_advanced_pg_sql_course_walkthrough.md](./day3/day3_weather_advanced_pg_sql_course_walkthrough.md)** | Line-by-line walkthrough of `synoptic.observations_part`, the 5 specialized indexes, `nwp.mv_daily_model_verification`, and dynamic PostGIS `GEOGRAPHY`. |
-> | **4** | 📖 **[day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md](./day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md)** | Line-by-line walkthrough of the 5,000,000-row partitioned benchmark, WGS-84 Haversine great-circle math, B-Tree (`28 MB`) vs BRIN (`24 KB`) size audit, and `ST_DWithin` Dellys Cape squall-line queries. |
-> | **5** | 🖥️ **DBeaver Spatial Map Lab (on Windows Host):** In DBeaver on Windows, connect to `<VM_IP>:5432/weather_ops_db` (`postgres` / `meteo_password`), run `SELECT station_id, station_name, elevation_m, geom FROM stations;` (or in `weather_ops`, run `SELECT station_id, station_name, climate_zone, geog FROM synoptic.stations;`), and click the **Spatial** tab on the right of the result grid to view your Algerian weather stations on an interactive **OpenStreetMap / Leaflet map**! |
-> | **6** | 📋 **[day3/day3_postgres_extensions_guide.md](./day3/day3_postgres_extensions_guide.md)** & **[day3/day3_postgres_ha_patroni_and_ops_guide.md](./day3/day3_postgres_ha_patroni_and_ops_guide.md)** | Deep-dive reference guides on 15 essential extensions and Patroni + `etcd` + HAProxy High Availability. |
+> | **1** | **[day3/day3_master_coursebook.md](./day3/day3_master_coursebook.md)** | Master Declarative Range Partitioning (`PARTITION BY RANGE`), zero-bloat `DETACH PARTITION CONCURRENTLY`, Index Selection (`B-Tree` vs `BRIN` vs `Partial` vs `INCLUDE` vs `GIN`), PostGIS `GEOGRAPHY(Point, 4326)`, `LAG()` pressure tendency ($\Delta P_{3\text{h}}$), idempotent `UPSERT`, and `REFRESH MATERIALIZED VIEW CONCURRENTLY`. |
+> | **2** | **[Switch to Portal Tab 04: Storage & BRIN vs B-Tree Calculator](./bootcamp_portal.html#tab-scaling)** | Scale the row slider from 1 Million to 1 Billion rows to compare PostgreSQL B-Tree (`~28 MB / 1M rows`) against BRIN (`~32 KB / 1M rows` — 99.89% smaller!). |
+> | **3** | **[day3/day3_weather_advanced_pg_sql_course_walkthrough.md](./day3/day3_weather_advanced_pg_sql_course_walkthrough.md)** | Line-by-line walkthrough of `synoptic.observations_part`, the 5 specialized indexes, `nwp.mv_daily_model_verification`, and dynamic PostGIS `GEOGRAPHY`. |
+> | **4** | **[day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md](./day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md)** | Line-by-line walkthrough of the 5,000,000-row partitioned benchmark, WGS-84 Haversine great-circle math, B-Tree (`28 MB`) vs BRIN (`24 KB`) size audit, and `ST_DWithin` Dellys Cape squall-line queries. |
+> | **5** | **DBeaver Spatial Map Lab (on Windows Host):** In DBeaver on Windows, connect to `<VM_IP>:5432/weather_ops_db` (`postgres` / `meteo_password`), run `SELECT station_id, station_name, elevation_m, geom FROM stations;` (or in `weather_ops`, run `SELECT station_id, station_name, climate_zone, geog FROM synoptic.stations;`), and click the **Spatial** tab on the right of the result grid to view your Algerian weather stations on an interactive **OpenStreetMap / Leaflet map**! |
+> | **6** | **[day3/day3_postgres_extensions_guide.md](./day3/day3_postgres_extensions_guide.md)** & **[day3/day3_postgres_ha_patroni_and_ops_guide.md](./day3/day3_postgres_ha_patroni_and_ops_guide.md)** | Deep-dive reference guides on 15 essential extensions and Patroni + `etcd` + HAProxy High Availability. |
 >
 > *(Once you finish Day 3, return here and proceed to **Phase 3** below for Day 4!)*
 
@@ -388,17 +388,17 @@ rs.initiate({
 *(Notice `--wiredTigerCacheSizeGB 0.5`—that caps each node's WiredTiger cache at 512 MB so all 3 nodes run comfortably inside a 4 GB VM! To return to single-node `mongod` afterwards: `pkill -f "mongod --replSet rs_meteo" && sudo systemctl start mongod`).*
 
 > [!IMPORTANT]
-> ### 🚀 STOP INSTALLATION HERE FOR DAY 4! Switch Now to the Day 4 MongoDB Coursebooks, `.js` Walkthroughs & Windows Compass GUI
+> ### STOP INSTALLATION HERE FOR DAY 4! Switch Now to the Day 4 MongoDB Coursebooks, `.js` Walkthroughs & Windows Compass GUI
 > MongoDB 7.0 and `mongosh` are now running inside the VM and listening on `<VM_IP>:27017`. Click the links below on your **Windows Host** to complete all **Day 4 Labs**:
 >
 > | Step | Resource / GUI Workflow to Open on Windows Host | What You Will Do |
 > | :---: | :--- | :--- |
-> | **1** | 📖 **[day4/day4_master_coursebook.md](./day4/day4_master_coursebook.md)** | Work through Modules 1–5: `$jsonSchema` validation, BSON & WiredTiger internals, Radiosonde `$elemMatch`, Native Time-Series vs Manual Bucket Pattern, `$unwind` Aggregation Pipelines, `2dsphere` GeoJSON storm polygons, the `ESR` Compound Index Rule, Replica Sets, Tunable CAP, and Sharding. |
-> | **2** | 📖 **[day4/day4_weather_ops_mongo_js_course_walkthrough.md](./day4/day4_weather_ops_mongo_js_course_walkthrough.md)** | Line-by-line walkthrough of `stations` (`$jsonSchema`), `radiosonde_soundings`, `synoptic_timeseries` (`system.buckets.*`), and `cap_alerts`. |
-> | **3** | 📖 **[day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md](./day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md)** | Line-by-line walkthrough of `2dsphere` S2 cell indexing, GeoJSON Polygon Ring Closure rules (`storm_polygons`), `idx_sonde_esr`, and isobaric pressure level aggregations. |
-> | **4** | 📖 **[day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md](./day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)** | Line-by-line walkthrough of the 50,000-document batch ingestion across 4 sensor classes, Manual Bucket Pattern atomic upserts (`hourly_sensor_buckets`), Road Grip Safety & `$unwind` Fault Diagnostics, and WiredTiger vs Columnar `stats()`. |
-> | **5** | 🧭 **MongoDB Compass on Windows Host:** Open **MongoDB Compass** on Windows $\rightarrow$ connect to **`mongodb://<VM_IP>:27017`** $\rightarrow$ open `weather_nosql.stations` and `weather_nosql.storm_polygons` $\rightarrow$ click the **Schema** tab $\rightarrow$ click **Analyze Schema** to view the interactive **2dsphere GeoJSON Map**! |
-> | **6** | 📋 **[day4/day4_mongodb_complete_cheatsheet.md](./day4/day4_mongodb_complete_cheatsheet.md)** & **[day4/day4_mongodb_architecture_ha_and_sharding_guide.md](./day4/day4_mongodb_architecture_ha_and_sharding_guide.md)** | SQL-to-MQL translator, Aggregation stages, and Replica Set / Sharding administration commands. |
+> | **1** | **[day4/day4_master_coursebook.md](./day4/day4_master_coursebook.md)** | Work through Modules 1–5: `$jsonSchema` validation, BSON & WiredTiger internals, Radiosonde `$elemMatch`, Native Time-Series vs Manual Bucket Pattern, `$unwind` Aggregation Pipelines, `2dsphere` GeoJSON storm polygons, the `ESR` Compound Index Rule, Replica Sets, Tunable CAP, and Sharding. |
+> | **2** | **[day4/day4_weather_ops_mongo_js_course_walkthrough.md](./day4/day4_weather_ops_mongo_js_course_walkthrough.md)** | Line-by-line walkthrough of `stations` (`$jsonSchema`), `radiosonde_soundings`, `synoptic_timeseries` (`system.buckets.*`), and `cap_alerts`. |
+> | **3** | **[day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md](./day4/day4_weather_ops_mongo_advanced_js_course_walkthrough.md)** | Line-by-line walkthrough of `2dsphere` S2 cell indexing, GeoJSON Polygon Ring Closure rules (`storm_polygons`), `idx_sonde_esr`, and isobaric pressure level aggregations. |
+> | **4** | **[day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md](./day4/day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)** | Line-by-line walkthrough of the 50,000-document batch ingestion across 4 sensor classes, Manual Bucket Pattern atomic upserts (`hourly_sensor_buckets`), Road Grip Safety & `$unwind` Fault Diagnostics, and WiredTiger vs Columnar `stats()`. |
+> | **5** | **MongoDB Compass on Windows Host:** Open **MongoDB Compass** on Windows $\rightarrow$ connect to **`mongodb://<VM_IP>:27017`** $\rightarrow$ open `weather_nosql.stations` and `weather_nosql.storm_polygons` $\rightarrow$ click the **Schema** tab $\rightarrow$ click **Analyze Schema** to view the interactive **2dsphere GeoJSON Map**! |
+> | **6** | **[day4/day4_mongodb_complete_cheatsheet.md](./day4/day4_mongodb_complete_cheatsheet.md)** & **[day4/day4_mongodb_architecture_ha_and_sharding_guide.md](./day4/day4_mongodb_architecture_ha_and_sharding_guide.md)** | SQL-to-MQL translator, Aggregation stages, and Replica Set / Sharding administration commands. |
 >
 > *(Once you finish Day 4, return here and proceed to **Phase 4** below for Day 5!)*
 
@@ -522,17 +522,17 @@ docker compose version
 Take a second snapshot in VMware (`VM -> Snapshot -> Take Snapshot...`) named **`01_Full_Bootcamp_Native_And_Docker_Ready`** so you can jump between **`00_Clean_Ubuntu_2404_Blank_Lab`** (100% blank Ubuntu) and **`01_Full_Bootcamp_Native_And_Docker_Ready`** (every native engine + Docker installed) in seconds.
 
 > [!IMPORTANT]
-> ### 🚀 SWITCH NOW TO DAY 5 LABS, POLYGLOT ARCHITECTURE MAP & FINAL CERTIFICATION QUIZ!
+> ### SWITCH NOW TO DAY 5 LABS, POLYGLOT ARCHITECTURE MAP & FINAL CERTIFICATION QUIZ!
 > Click the links below on your **Windows Host** to complete the **Day 5 Vectorized OLAP, Gridded Data, Polyglot Streaming Capstone & 15-Question Certification Quiz**:
 >
 > | Step | Resource / Interactive Tab to Open on Windows Host | What You Will Do |
 > | :---: | :--- | :--- |
-> | **1** | 📖 **[day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md](./day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md)** | Study Volcano vs. Vectorized SIMD execution, Apache Parquet binary internals (`RLE`, Dictionary, `ZSTD`), Hive partitioning, DuckDB zero-copy Arrow scans, and 4D Gridded Data (`GRIB2`, `NetCDF4`, `Zarr`, `COG`, `BUFR`). |
-> | **2** | 📖 **[day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md](./day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md)** | Build the Grand Unified National Weather Center Polyglot Architecture (`simulate_edge_sensors.py` $\rightarrow$ `stream_router.py` $\rightarrow$ PostGIS + MongoDB $\rightarrow$ `compact_hot_to_cold.py` $\rightarrow$ `serving_api.py` Sub-10ms FastAPI Gateway at `http://<VM_IP>:8000/docs`) and solve the Dellys Cape Squall Line Capstone! |
-> | **3** | 🐳 **[docker/docker_lab_guide.md](./docker/docker_lab_guide.md)** | Execute the Docker Compose Multi-Node HA & Chaos Engineering live Primary crash election lab. |
-> | **4** | 🗺️ **[Switch to Portal Tab 05: Interactive Polyglot Architecture Map](./bootcamp_portal.html#tab-arch)** | Click each tier of the National Meteorological Data Center architecture to inspect SLAs, storage formats, tuning parameters, and failure modes. |
-> | **5** | 📖 **[day5/bootcamp_capstone_troubleshooting_and_quiz.md](./day5/bootcamp_capstone_troubleshooting_and_quiz.md)** | Review the 15 production troubleshooting scenarios and architectural trade-offs. |
-> | **6** | 🏆 **[Switch to Portal Tab 06: 15-Question Bootcamp Certification Quiz](./bootcamp_portal.html#tab-quiz)** | Take the interactive 15-question certification quiz with instant explanations and live scoring! |
+> | **1** | **[day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md](./day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md)** | Study Volcano vs. Vectorized SIMD execution, Apache Parquet binary internals (`RLE`, Dictionary, `ZSTD`), Hive partitioning, DuckDB zero-copy Arrow scans, and 4D Gridded Data (`GRIB2`, `NetCDF4`, `Zarr`, `COG`, `BUFR`). |
+> | **2** | **[day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md](./day5/day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md)** | Build the Grand Unified National Weather Center Polyglot Architecture (`simulate_edge_sensors.py` $\rightarrow$ `stream_router.py` $\rightarrow$ PostGIS + MongoDB $\rightarrow$ `compact_hot_to_cold.py` $\rightarrow$ `serving_api.py` Sub-10ms FastAPI Gateway at `http://<VM_IP>:8000/docs`) and solve the Dellys Cape Squall Line Capstone! |
+> | **3** | **[docker/docker_lab_guide.md](./docker/docker_lab_guide.md)** | Execute the Docker Compose Multi-Node HA & Chaos Engineering live Primary crash election lab. |
+> | **4** | **[Switch to Portal Tab 05: Interactive Polyglot Architecture Map](./bootcamp_portal.html#tab-arch)** | Click each tier of the National Meteorological Data Center architecture to inspect SLAs, storage formats, tuning parameters, and failure modes. |
+> | **5** | **[day5/bootcamp_capstone_troubleshooting_and_quiz.md](./day5/bootcamp_capstone_troubleshooting_and_quiz.md)** | Review the 15 production troubleshooting scenarios and architectural trade-offs. |
+> | **6** | **[Switch to Portal Tab 06: 15-Question Bootcamp Certification Quiz](./bootcamp_portal.html#tab-quiz)** | Take the interactive 15-question certification quiz with instant explanations and live scoring! |
 
 ---
 
@@ -547,4 +547,4 @@ cd ~/db-bootcamp
 
 ---
 
-> **Navigation:** [🏠 Master README](./README.md) | [🌐 Interactive Portal](./bootcamp_portal.html) | [🛠️ Attendee Setup Guide](./ATTENDEE_SETUP_GUIDE.md) | **💿 Blank Ubuntu VM Lab Guide** | [📚 Reference Cards](./reference_cards/README.md)
+> **Navigation:** [Master README](./README.md) | [Interactive Portal](./bootcamp_portal.html) | [Attendee Setup Guide](./ATTENDEE_SETUP_GUIDE.md) | ** Blank Ubuntu VM Lab Guide** | [Reference Cards](./reference_cards/README.md)

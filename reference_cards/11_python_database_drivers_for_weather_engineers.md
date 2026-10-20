@@ -5,10 +5,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card ➡️](./12_dbeaver_and_mongodb_compass_gui_workflows.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [1. How Python Talks to Databases: PEP 249 (`DB-API 2.0`) Architecture](#1-how-python-talks-to-databases-pep-249-db-api-20-architecture)
   - [1.1 The Two-Tier Object Model: `Connection` vs. `Cursor`](#11-the-two-tier-object-model-connection-vs-cursor)
@@ -101,7 +101,7 @@ Exception
 **Never** interpolate variables into SQL using Python `f-strings`, `.format()`, or `%`:
 
 ```python
-# ❌ CATASTROPHIC ANTI-PATTERN (SQL Injection + Syntax Crash + Plan Cache Pollution):
+# CATASTROPHIC ANTI-PATTERN (SQL Injection + Syntax Crash + Plan Cache Pollution):
 station_name = "M'Sila"
 cur.execute(f"SELECT * FROM stations WHERE station_name = '{station_name}';")
 # Crashes immediately: near "Sila": syntax error (unbalanced single quote!)
@@ -150,10 +150,10 @@ In Python's standard library `sqlite3`, the default connection behavior (`sqlite
 
 | Mode | How to Configure | What Python's `_sqlite3` C Wrapper Actually Does | Pros & Pitfalls in Weather Telemetry |
 | :--- | :--- | :--- | :--- |
-| **1. Legacy Default Mode** | `sqlite3.connect("db")` *(where default `isolation_level = ""`)* | Python inspects the first word of every SQL string you pass to `execute()`. It **only** sends an implicit `BEGIN` before DML (`INSERT`, `UPDATE`, `DELETE`, `REPLACE`). Statements like `SELECT` or `PRAGMA` do not start a transaction! | ⚠️ **Pitfall:** Because Python automatically injects `BEGIN` before `INSERT`, if you try to run `conn.execute("BEGIN IMMEDIATE;")` yourself after a DML statement, SQLite throws `OperationalError: cannot start a transaction within a transaction`! Also, `PRAGMA` settings that cannot run inside a transaction behave unpredictably if mixed with uncommitted DML. |
-| **2. Explicit Lock-Acquisition Mode** | `sqlite3.connect("db", isolation_level="IMMEDIATE")` *(or `"DEFERRED"` / `"EXCLUSIVE"`)* | Whenever Python implicitly starts a DML transaction, it issues `BEGIN IMMEDIATE` (acquiring the write lock immediately and honoring `PRAGMA busy_timeout`) instead of a deferred `BEGIN`. | ✅ Prevents the `SQLITE_BUSY_SNAPSHOT` read-to-write upgrade failure on concurrent writers! |
-| **3. Native SQLite Autocommit / Manual Control** | `sqlite3.connect("db", isolation_level=None)` *(Python 3.x)*<br>**OR**<br>`sqlite3.connect("db", autocommit=True)` *(Python 3.12+)* | **Disables Python's magic SQL-string sniffing completely!** `libsqlite3` runs in its native C autocommit mode (just like the `sqlite3` CLI shell). Every statement auto-commits unless you explicitly execute `conn.execute("BEGIN IMMEDIATE;")` ... `conn.execute("COMMIT;")`. | ✅ **Preferred by Database Architects** who want 100% deterministic control over `BEGIN IMMEDIATE;`, `COMMIT;`, `ROLLBACK;`, and `PRAGMA` execution without Python secretly injecting `BEGIN` statements behind the scenes. |
-| **4. Strict PEP 249 Mode (Python 3.12+)** | `sqlite3.connect("db", autocommit=False)` *(Python 3.12+, PEP 249 v2)* | Uses SQLite's native C `sqlite3_get_autocommit()` state machine instead of string-parsing SQL statements, keeping a transaction open at all times until `conn.commit()` or `conn.rollback()`. | ✅ Clean modern PEP 249 semantics on Python 3.12+. |
+| **1. Legacy Default Mode** | `sqlite3.connect("db")` *(where default `isolation_level = ""`)* | Python inspects the first word of every SQL string you pass to `execute()`. It **only** sends an implicit `BEGIN` before DML (`INSERT`, `UPDATE`, `DELETE`, `REPLACE`). Statements like `SELECT` or `PRAGMA` do not start a transaction! | **Pitfall:** Because Python automatically injects `BEGIN` before `INSERT`, if you try to run `conn.execute("BEGIN IMMEDIATE;")` yourself after a DML statement, SQLite throws `OperationalError: cannot start a transaction within a transaction`! Also, `PRAGMA` settings that cannot run inside a transaction behave unpredictably if mixed with uncommitted DML. |
+| **2. Explicit Lock-Acquisition Mode** | `sqlite3.connect("db", isolation_level="IMMEDIATE")` *(or `"DEFERRED"` / `"EXCLUSIVE"`)* | Whenever Python implicitly starts a DML transaction, it issues `BEGIN IMMEDIATE` (acquiring the write lock immediately and honoring `PRAGMA busy_timeout`) instead of a deferred `BEGIN`. | Prevents the `SQLITE_BUSY_SNAPSHOT` read-to-write upgrade failure on concurrent writers! |
+| **3. Native SQLite Autocommit / Manual Control** | `sqlite3.connect("db", isolation_level=None)` *(Python 3.x)*<br>**OR**<br>`sqlite3.connect("db", autocommit=True)` *(Python 3.12+)* | **Disables Python's magic SQL-string sniffing completely!** `libsqlite3` runs in its native C autocommit mode (just like the `sqlite3` CLI shell). Every statement auto-commits unless you explicitly execute `conn.execute("BEGIN IMMEDIATE;")` ... `conn.execute("COMMIT;")`. | **Preferred by Database Architects** who want 100% deterministic control over `BEGIN IMMEDIATE;`, `COMMIT;`, `ROLLBACK;`, and `PRAGMA` execution without Python secretly injecting `BEGIN` statements behind the scenes. |
+| **4. Strict PEP 249 Mode (Python 3.12+)** | `sqlite3.connect("db", autocommit=False)` *(Python 3.12+, PEP 249 v2)* | Uses SQLite's native C `sqlite3_get_autocommit()` state machine instead of string-parsing SQL statements, keeping a transaction open at all times until `conn.commit()` or `conn.rollback()`. | Clean modern PEP 249 semantics on Python 3.12+. |
 
 ---
 
@@ -169,7 +169,7 @@ Look at the exact implementation difference between `sqlite3` and `psycopg3`:
 | :--- | :--- | :--- | :--- |
 | **Block exits normally (no exception)** | Calls `conn.commit()` | Calls `conn.commit()` **AND `conn.close()`** | Calls `COMMIT` (or `RELEASE SAVEPOINT`) |
 | **Exception raised inside block** | Calls `conn.rollback()` and re-raises exception | Calls `conn.rollback()` **AND `conn.close()`** | Calls `ROLLBACK` (or `ROLLBACK TO SAVEPOINT`) |
-| **Is the database connection closed after the `with` block?** | ❌ **NO! Connection stays OPEN!** (Holds `.db-wal` / `.db-shm` file handles open until Python garbage collection runs!) | ✅ **YES! Socket is closed deterministically.** | Connection stays open (only the transaction block ends). |
+| **Is the database connection closed after the `with` block?** | **NO! Connection stays OPEN!** (Holds `.db-wal` / `.db-shm` file handles open until Python garbage collection runs!) | **YES! Socket is closed deterministically.** | Connection stays open (only the transaction block ends). |
 
 #### How to Write Leak-Free `sqlite3` Context Managers (`contextlib.closing`)
 
@@ -179,13 +179,13 @@ In `sqlite3`, always combine **`contextlib.closing()`** (which guarantees `conn.
 import sqlite3
 from contextlib import closing
 
-# ❌ WRONG: Connection stays open after the 'with' block exits!
+# WRONG: Connection stays open after the 'with' block exits!
 with sqlite3.connect("weather_ops.db") as conn:
     conn.execute("INSERT INTO stations VALUES (60602, 'In Salah', 27.25, 2.51, 269.0, 'Arid', 1);")
 # Here, the transaction is committed, but `conn` is STILL OPEN!
 # On Windows or in WAL mode, trying to delete/move weather_ops.db or checkpoint .db-wal may fail!
 
-# ✅ CORRECT: Outer `closing()` guarantees conn.close(); inner `with conn:` guarantees commit/rollback!
+# CORRECT: Outer `closing()` guarantees conn.close(); inner `with conn:` guarantees commit/rollback!
 with closing(sqlite3.connect("weather_ops.db", timeout=5.0)) as conn:
     conn.execute("PRAGMA foreign_keys = ON;")
     with conn:  # <-- Transaction context manager: auto-commits on exit, auto-rollbacks on exception!
@@ -212,11 +212,11 @@ Python has **two** mature C-extension drivers for SQLite:
 | **API Standard** | **PEP 249 (`DB-API 2.0`)** compliant (`conn.commit()`, `cur.fetchall()`, `isolation_level`). | **Deliberately NOT PEP 249!** Mirrors the exact C `sqlite3_*` semantics (`cursor.execute()` is a direct generator; no hidden `BEGIN` injection). |
 | **Transaction Behavior** | Intercepts DML strings to inject `BEGIN` (`isolation_level=""`) unless `isolation_level=None` or `autocommit=True` is set. | **100% Native SQLite:** Starts in autocommit mode (just like the `sqlite3` CLI). Use `with conn:` in APSW for clean, nestable `BEGIN` / `SAVEPOINT` transactions! |
 | **`with conn:` Context Manager** | Commits or rolls back top-level transaction only (**cannot** nest `with conn:` blocks in `sqlite3`!). | **Supports arbitrarily nested `with conn:` blocks!** Outer `with conn:` issues `BEGIN`/`COMMIT`; inner `with conn:` blocks automatically use SQLite **`SAVEPOINT`**s! |
-| **Multi-Statement Strings in `execute()`** | ❌ `cur.execute("SELECT 1; SELECT 2;")` raises `ProgrammingError: You can only execute one statement at a time` (requires `executescript()`). | ✅ **`cur.execute("PRAGMA foreign_keys=ON; INSERT ...; SELECT ...;")` natively executes multiple semicolon-separated statements** with parameter bindings and yields rows from all of them! |
+| **Multi-Statement Strings in `execute()`** | `cur.execute("SELECT 1; SELECT 2;")` raises `ProgrammingError: You can only execute one statement at a time` (requires `executescript()`). | **`cur.execute("PRAGMA foreign_keys=ON; INSERT ...; SELECT ...;")` natively executes multiple semicolon-separated statements** with parameter bindings and yields rows from all of them! |
 | **Prepared Statement Caching** | Caches compiled `sqlite3_stmt` handles per connection (default `cached_statements=128`). | Transparent high-speed statement cache with explicit `apsw.ext.query_info()` bytecode/index inspection. |
 | **Incremental BLOB Streaming (`sqlite3_blob_open`)** | *(Added basic `conn.blobopen()` in Python 3.11+)* | Full native **`conn.blob_open(db, table, col, rowid, writeable)`** streaming I/O for reading/writing multi-MB binary radar tiles without loading into RAM. |
-| **Custom WAL Checkpoint Hook (`sqlite3_wal_hook`)** | ❌ Not exposed. | ✅ **`conn.set_wal_hook(callable)`**: Python callback invoked after every commit with the exact count of pages currently in `.db-wal`! |
-| **Virtual Tables & Custom VFS (`sqlite3_vfs`)** | ❌ Not exposed. | ✅ Full Python **Virtual Table (`VTModule`)** and **Custom VFS (`apsw.VFS`)** support (e.g., querying raw WMO BUFR/CSV directories as SQL tables or encrypting page I/O). |
+| **Custom WAL Checkpoint Hook (`sqlite3_wal_hook`)** | Not exposed. | **`conn.set_wal_hook(callable)`**: Python callback invoked after every commit with the exact count of pages currently in `.db-wal`! |
+| **Virtual Tables & Custom VFS (`sqlite3_vfs`)** | Not exposed. | Full Python **Virtual Table (`VTModule`)** and **Custom VFS (`apsw.VFS`)** support (e.g., querying raw WMO BUFR/CSV directories as SQL tables or encrypting page I/O). |
 | **Execution Speed (Micro-queries & Iteration)** | Baseline ($1\times$) | **$\approx 2\text{--}3.5\times$ faster** on high-frequency cursor loops due to zero DB-API layer overhead. |
 
 #### When to Choose `sqlite3` vs. `APSW` in Meteorological Engineering
@@ -421,7 +421,7 @@ import psycopg
 
 PG_DSN = "postgresql://postgres:meteo_password@localhost:5432/weather_ops"
 
-# ✅ Constant-Memory Streaming of 10,000,000 Rows via Named Server-Side Cursor:
+# Constant-Memory Streaming of 10,000,000 Rows via Named Server-Side Cursor:
 with psycopg.connect(PG_DSN) as conn:
     # Passing `name="stream_obs"` creates a PostgreSQL Server-Side Cursor!
     with conn.cursor(name="stream_obs") as cur:
@@ -711,17 +711,17 @@ with analytics_coll.aggregate(pipeline, batch_size=1000) as cursor:
 
 | Feature / Trap | `sqlite3` (Stdlib) | `APSW` (SQLite C Wrapper) | `psycopg` v3 (PostgreSQL) | `duckdb` (Columnar OLAP) | `PyMongo` (MongoDB) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Implements PEP 249 (`DB-API 2.0`)?** | ✅ Yes | ❌ No (Direct 1:1 SQLite C API) | ✅ Yes | ✅ Yes (+ Relational/Arrow API) | ❌ No (BSON Document API) |
+| **Implements PEP 249 (`DB-API 2.0`)?** | Yes | No (Direct 1:1 SQLite C API) | Yes | Yes (+ Relational/Arrow API) | No (BSON Document API) |
 | **Parameter Placeholder** | `?` or `:name` | `?` or `:name` | `%s` or `%(name)s` | `?`, `$1`, or `$name` | Native Python `dict` |
 | **Default Transaction Mode** | Quirky DML-only implicit `BEGIN` (`isolation_level=""`); use `isolation_level=None` or Python 3.12 `autocommit=True` | Native SQLite autocommit (no hidden `BEGIN`) | Strict PEP 249 (`autocommit=False`, starts transaction on first statement) | Autocommit unless `BEGIN` executed | Single-document atomic (`w="majority"`); multi-doc via `with client.start_session() as s:` |
-| **Does `with conn:` close the connection?** | ❌ **NO!** (Only commits/rolls back; wrap in `contextlib.closing()`) | ❌ **NO!** (Manages nestable `BEGIN` / `SAVEPOINT`s) | ✅ **YES!** (Commits/rolls back **and** closes socket; `with conn.transaction():` for savepoints) | ✅ **YES!** (`with duckdb.connect() as con:` closes on exit) | ✅ **YES!** (`with MongoClient() as client:` closes pools on exit) |
+| **Does `with conn:` close the connection?** | **NO!** (Only commits/rolls back; wrap in `contextlib.closing()`) | **NO!** (Manages nestable `BEGIN` / `SAVEPOINT`s) | **YES!** (Commits/rolls back **and** closes socket; `with conn.transaction():` for savepoints) | **YES!** (`with duckdb.connect() as con:` closes on exit) | **YES!** (`with MongoClient() as client:` closes pools on exit) |
 | **UUID (`UUIDv7` RFC 9562) Binding** | Pass `u.bytes` (`16B BLOB`) or `str(u)` (`36B TEXT`) | Pass `u.bytes` (`16B BLOB`) or `str(u)` (`36B TEXT`) | Pass `uuid.UUID` directly (`16B` native PG `UUID`) | Pass `uuid.UUID` or `str(u)` (`16B` `UUID` type) | Native `bson.ObjectId` (`12B`) or `Binary.from_uuid(u)` (`16B`) |
 | **Fastest Bulk Write Method** | `BEGIN IMMEDIATE;` + `cur.executemany()` | `with conn:` + `cur.executemany()` | `with cur.copy("COPY ... FROM STDIN (FORMAT BINARY)")` | `INSERT INTO tbl SELECT * FROM arrow_or_polars_df` | `coll.bulk_write(ops, ordered=False)` |
 | **Fastest Million-Row Read Method** | `pd.read_sql_query()` or `APSW` | `cur.execute()` generator | Named Server-Side Cursor (`conn.cursor(name="...")`) or `COPY TO STDOUT` | **Zero-Copy `.pl()` / `.arrow()`** (Never `.fetchall()`!) | `coll.find(..., batch_size=5000)` |
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card ➡️](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | [⬆️ Back to Top](#python-database-drivers-pep-249-db-api-20-internals--engine-integration-guide-sqlite3-vs-apsw-psycopg3-duckdb-geopandas-pymongo)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | [⬆ Back to Top](#python-database-drivers-pep-249-db-api-20-internals--engine-integration-guide-sqlite3-vs-apsw-psycopg3-duckdb-geopandas-pymongo)

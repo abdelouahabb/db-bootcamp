@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Weather Forecast Engineering Database Bootcamp — Day 2 Master Coursebook
 ## PostgreSQL Architecture, Storage Engine Internals, Production Hardening & The Row-Store Bottleneck
@@ -12,14 +12,14 @@
 - [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md) — Complete Installation, `postgresql.conf` Weather Tuning, WAL, Vacuum, Lock Debugging & `EXPLAIN` Reference Card
 - [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) — Definitive Comparative Guide: PostgreSQL Heap/MVCC vs. MySQL InnoDB Clustered B+Tree/Undo Logs
 - [../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) — **Dedicated MySQL 8.0/8.4 & MariaDB Complete Engineering Guide** (InnoDB 16 KB Clustered B+Trees, `MyRocks` LSM-Tree, In-Place MVCC, Change Buffer, Next-Key Locking, GTID/InnoDB Cluster HA, and `my.cnf` production reference)
-- [weather_ops_pg.sql](./weather_ops_pg.sql) ([📖 Course Walkthrough](./weather_ops_pg_sql_course_walkthrough.md)) — Multi-schema PostgreSQL DDL (`synoptic`, `nwp`, `alerts`) + `generate_series()` synthetic time-series generator (18,000+ synoptic observations & 9,000+ NWP forecasts) + table-level autovacuum tuning
-- [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) ([📖 Course Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md)) — Standalone Runnable Forensics Lab: Tuple Tetris (`pg_column_size`), `pageinspect` 8KB Block & MVCC Header Inspection, `pgstattuple` Vacuum Lab, and 1,000,000-Row `EXPLAIN (ANALYZE, BUFFERS)` Row-Store Penalty Lab
-- [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) ([📖 Course Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md)) — Standalone Two-Terminal ACID Concurrency, Snapshot Isolation, Row Lock Contention, Deadlock Circular Wait & `pg_blocking_pids()` Lab
+- [weather_ops_pg.sql](./weather_ops_pg.sql) ([Course Walkthrough](./weather_ops_pg_sql_course_walkthrough.md)) — Multi-schema PostgreSQL DDL (`synoptic`, `nwp`, `alerts`) + `generate_series()` synthetic time-series generator (18,000+ synoptic observations & 9,000+ NWP forecasts) + table-level autovacuum tuning
+- [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql) ([Course Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md)) — Standalone Runnable Forensics Lab: Tuple Tetris (`pg_column_size`), `pageinspect` 8KB Block & MVCC Header Inspection, `pgstattuple` Vacuum Lab, and 1,000,000-Row `EXPLAIN (ANALYZE, BUFFERS)` Row-Store Penalty Lab
+- [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) ([Course Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md)) — Standalone Two-Terminal ACID Concurrency, Snapshot Isolation, Row Lock Contention, Deadlock Circular Wait & `pg_blocking_pids()` Lab
 
 ---
 
 > [!CAUTION]
-> ### 🚨 STOP & READ FIRST — Day 2 PostgreSQL Database (`weather_ops`), SQL Scripts, Schemas & Tables Master Map
+> ### STOP & READ FIRST — Day 2 PostgreSQL Database (`weather_ops`), SQL Scripts, Schemas & Tables Master Map
 >
 > All Day 2 labs execute inside the **PostgreSQL 16+ database named `weather_ops`** (`psql -d weather_ops`), **NOT** SQLite (`sqlite3`)!  
 > However, Day 2 uses **three different `.sql` scripts** inside the `day2/` directory, and **four different PostgreSQL schemas (`synoptic`, `nwp`, `alerts`, `public`)**. If you get `ERROR: relation "..." does not exist`, check the table below to see which script creates that table and which schema it lives in:
@@ -30,7 +30,7 @@
 > | **2. [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)**<br/>*(8 KB Block, Bloat & 1M-Row Plan Forensics)* | ```bash\ncd day2\npsql -d weather_ops -f day2_pageinspect_and_storage_lab.sql\n```<br/>*(Or inside `psql`: `\i day2_pageinspect_and_storage_lab.sql`)* | Enables `pageinspect` & `pgstattuple` extensions and creates in **`public`** schema:<br/>• **`public.telemetry_unaligned`** & **`public.telemetry_aligned`** (`10k` rows — `80B` vs. `64B`)<br/>• **`public.layout_padded`** & **`public.layout_packed`** (`10k` rows — `48B` vs. `40B`)<br/>• **`public.mvcc_demo`** (`1` row updated — `t_xmin`, `t_xmax`, `t_ctid`)<br/>• **`public.bloat_lab`** (`100k` rows — `pgstattuple` `VACUUM` vs. `VACUUM FULL`)<br/>• **`public.plan_lab`** (`1,000,000` rows — Row-Store Scan Penalty & `Index Only Scan`) | • **Lab 2B** (`§4.8` — Tuple Tetris & `pageinspect`)<br/>• **Lab 3A Part 2 & 3B** (`§5.5` — `mvcc_demo` & `bloat_lab`)<br/>• **Lab 5B** (`§7.2` — `plan_lab` 1,000,000-row scan penalty & covering index) |
 > | **3. [`day2/day2_two_terminal_acid_lab.sql`](./day2_two_terminal_acid_lab.sql)**<br/>*(Interactive Two-Terminal Locking & Deadlock Lab)* | **Do NOT run with `-f` all at once!**<br/>Open **Terminal A** & **Terminal B** side-by-side (`psql -d weather_ops`) and paste steps interactively. | Creates in **`public`** schema:<br/>• **`public.station_calibration`** (`3` rows: `'AWS-001'`, `'AWS-002'`, `'AWS-003'`) | • **Lab 3A Companion** (`§5.5` — Two-Terminal Snapshot Isolation, Row Lock Waits, `pg_blocking_pids()`, Deadlock `40P01`) |
 >
-> #### 💡 Three Instant `psql` Commands If You Ever Get `"ERROR: relation ... does not exist"`
+> #### Three Instant `psql` Commands If You Ever Get `"ERROR: relation ... does not exist"`
 > 1. **Check which database & directory you are connected to:**
 >    ```sql
 >    \conninfo
@@ -267,9 +267,9 @@ psql -d weather_ops -f weather_ops_pg.sql
 Now connect via `psql -d weather_ops` (or **DBeaver**) to inspect physical cluster paths, verify active background daemons (`checkpointer`, `background writer`, `walwriter`, `autovacuum launcher`) in `pg_stat_activity`, apply non-restart UTC and memory tuning via `ALTER SYSTEM`, and measure the database's **Buffer Cache Hit Ratio** in `pg_stat_database` (target: **> 99%**):
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Connect with: psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql (\i weather_ops_pg.sql)
--- 🗄️ TABLES / CATALOGS QUERIED: pg_stat_activity, pg_stat_database
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Connect with: psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql (\i weather_ops_pg.sql)
+-- TABLES / CATALOGS QUERIED: pg_stat_activity, pg_stat_database
 
 -- 1. Locate physical cluster and configuration files
 SHOW data_directory;
@@ -421,10 +421,10 @@ One of the biggest misconceptions in PostgreSQL is assuming that `TIMESTAMP WITH
 
 | Temporal Type | Physical Size | Timezone-Aware? | When to Use It in Weather Engineering | Example in `weather_ops` |
 | :--- | :---: | :---: | :--- | :--- |
-| **1. `TIMESTAMPTZ`** | `8 Bytes` (`int64`) | ✅ **Yes** (Normalized to UTC) | **99% of timestamps:** Every physical observation (`obs_time`), NWP model run (`init_time`, `valid_time`), and alert issuance (`issued_at`). | `obs_time TIMESTAMPTZ NOT NULL` |
+| **1. `TIMESTAMPTZ`** | `8 Bytes` (`int64`) | **Yes** (Normalized to UTC) | **99% of timestamps:** Every physical observation (`obs_time`), NWP model run (`init_time`, `valid_time`), and alert issuance (`issued_at`). | `obs_time TIMESTAMPTZ NOT NULL` |
 | **2. `DATE`** | `4 Bytes` (`int32`) | N/A (Calendar day) | Daily climatological aggregations, materialized view keys (`valid_date`), and sensor calibration dates. | `valid_date DATE` in `mv_daily_model_verification` |
 | **3. `INTERVAL`** | `16 Bytes` (`months`, `days`, `µs`) | Duration | Forecast lead times (`INTERVAL '6 hours'`), rolling window frames (`RANGE BETWEEN INTERVAL '23 hours' PRECEDING`), and retention policies. | `lead_interval INTERVAL NOT NULL` |
-| **4. `TIMESTAMP`** *(without TZ)* | `8 Bytes` (`int64`) | ❌ **No** | **Rarely used directly:** Only inside internal `AT TIME ZONE 'UTC'` immutable expressions or abstract local calendar schedules where UTC instants do not apply. | Intermediate step in `GENERATED ALWAYS AS` |
+| **4. `TIMESTAMP`** *(without TZ)* | `8 Bytes` (`int64`) | **No** | **Rarely used directly:** Only inside internal `AT TIME ZONE 'UTC'` immutable expressions or abstract local calendar schedules where UTC instants do not apply. | Intermediate step in `GENERATED ALWAYS AS` |
 
 ---
 
@@ -450,10 +450,10 @@ Why did `weather_ops_pg.sql` use `NUMERIC(4,1)` and `NUMERIC(7,4)` on `synoptic.
 
 | PostgreSQL Numeric Type | Storage Size & Alignment | Exact or Approximate? | CPU Math Speed | When to Use It in Meteorology | Examples in Bootcamp |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1. `NUMERIC(p, s)`** | Variable (`~5–8 Bytes`, `1B` short `varlena` header) | ✅ **100% Exact Base-10** | Software math (~$3\times\text{–}5\times$ slower than FPU) | Official WMO synoptic archives, legal/contractual weather alerts, station `latitude`/`longitude` (`NUMERIC(7,4)`), and exact equality checks. | `synoptic.observations` (`temp_c NUMERIC(4,1)`, `pressure_hpa NUMERIC(6,1)`) |
-| **2. `REAL` (`float4`)** | Fixed **`4 Bytes`** (`4B` alignment) | ⚠️ **Approx.** (~7 decimal digits) | ⚡ **Fastest** (16 ops/cycle in AVX-512) | High-frequency (1Hz–10Hz) raw IoT telemetry, 5M+ row partitioned streams, and Parquet/NetCDF float arrays where `4B` compact width halves RAM/disk vs. `8B`. | Day 3 `raw_telemetry_partitioned` (`temperature REAL`, `wind_speed REAL`) |
-| **3. `DOUBLE PRECISION` (`float8`)** | Fixed **`8 Bytes`** (`8B` alignment) | ⚠️ **Approx.** (~15 decimal digits) | ⚡ **Fast Hardware FPU** | Geodesic trigonometry (`ST_Distance`, Haversine `sin`/`cos`), scientific accumulation, and coordinates when PostGIS `GEOGRAPHY` is not used. | Day 2 `day2_pageinspect_and_storage_lab.sql` (`latitude DOUBLE PRECISION`) |
-| **4. `SMALLINT` / `INTEGER` / `BIGINT`** | Fixed **`2B` / `4B` / `8B`** | ✅ **100% Exact Integer** | ⚡ **Fastest ALU** | Discrete identifiers (`station_id INTEGER`), compass degrees (`wind_direction SMALLINT` `0–359`), and 64-bit surrogate keys (`obs_id BIGSERIAL` = `BIGINT`). | `wind_direction SMALLINT`, `station_id INTEGER`, `obs_id BIGSERIAL` |
+| **1. `NUMERIC(p, s)`** | Variable (`~5–8 Bytes`, `1B` short `varlena` header) | **100% Exact Base-10** | Software math (~$3\times\text{–}5\times$ slower than FPU) | Official WMO synoptic archives, legal/contractual weather alerts, station `latitude`/`longitude` (`NUMERIC(7,4)`), and exact equality checks. | `synoptic.observations` (`temp_c NUMERIC(4,1)`, `pressure_hpa NUMERIC(6,1)`) |
+| **2. `REAL` (`float4`)** | Fixed **`4 Bytes`** (`4B` alignment) | **Approx.** (~7 decimal digits) | **Fastest** (16 ops/cycle in AVX-512) | High-frequency (1Hz–10Hz) raw IoT telemetry, 5M+ row partitioned streams, and Parquet/NetCDF float arrays where `4B` compact width halves RAM/disk vs. `8B`. | Day 3 `raw_telemetry_partitioned` (`temperature REAL`, `wind_speed REAL`) |
+| **3. `DOUBLE PRECISION` (`float8`)** | Fixed **`8 Bytes`** (`8B` alignment) | **Approx.** (~15 decimal digits) | **Fast Hardware FPU** | Geodesic trigonometry (`ST_Distance`, Haversine `sin`/`cos`), scientific accumulation, and coordinates when PostGIS `GEOGRAPHY` is not used. | Day 2 `day2_pageinspect_and_storage_lab.sql` (`latitude DOUBLE PRECISION`) |
+| **4. `SMALLINT` / `INTEGER` / `BIGINT`** | Fixed **`2B` / `4B` / `8B`** | **100% Exact Integer** | **Fastest ALU** | Discrete identifiers (`station_id INTEGER`), compass degrees (`wind_direction SMALLINT` `0–359`), and 64-bit surrogate keys (`obs_id BIGSERIAL` = `BIGINT`). | `wind_direction SMALLINT`, `station_id INTEGER`, `obs_id BIGSERIAL` |
 
 ---
 
@@ -470,10 +470,10 @@ Engineers are often surprised to discover that in SQLite, PostgreSQL, DuckDB, an
 
 | Constraint Pattern | Allows `NULL`? | Max `NULL` Rows Allowed | Automatically Creates B-Tree Index? | Default Target for Foreign Keys & Logical Replication? | When to Use It |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **1. `PRIMARY KEY`** | ❌ **No** (Implicitly forces `NOT NULL`) | `0` | ✅ Yes (`<table>_pkey`) | ✅ **Yes** (1 per table; default `REPLICA IDENTITY`) | The primary row identifier (`station_id`, `obs_id`, or `(obs_time, station_id)`). |
-| **2. `UNIQUE NOT NULL`** | ❌ **No** | `0` | ✅ Yes | Candidate key | Secondary natural keys that must always exist and never repeat (`station_name VARCHAR(100) NOT NULL UNIQUE`, `(station_id, obs_time)`). |
-| **3. Nullable `UNIQUE`** *(Default `NULLS DISTINCT`)* | ✅ **Yes** | **Unlimited `NULL`s!** | ✅ Yes | No | Optional external identifiers (e.g., `icao_airport_code CHAR(4) UNIQUE`—only airport stations have one; non-airport stations are all `NULL`). |
-| **4. `UNIQUE NULLS NOT DISTINCT`** *(PG 15+)* | ✅ **Yes** | **At most `1` `NULL`!** | ✅ Yes | No | When `NULL` represents a singleton default slot that must not be duplicated. |
+| **1. `PRIMARY KEY`** | **No** (Implicitly forces `NOT NULL`) | `0` | Yes (`<table>_pkey`) | **Yes** (1 per table; default `REPLICA IDENTITY`) | The primary row identifier (`station_id`, `obs_id`, or `(obs_time, station_id)`). |
+| **2. `UNIQUE NOT NULL`** | **No** | `0` | Yes | Candidate key | Secondary natural keys that must always exist and never repeat (`station_name VARCHAR(100) NOT NULL UNIQUE`, `(station_id, obs_time)`). |
+| **3. Nullable `UNIQUE`** *(Default `NULLS DISTINCT`)* | **Yes** | **Unlimited `NULL`s!** | Yes | No | Optional external identifiers (e.g., `icao_airport_code CHAR(4) UNIQUE`—only airport stations have one; non-airport stations are all `NULL`). |
+| **4. `UNIQUE NULLS NOT DISTINCT`** *(PG 15+)* | **Yes** | **At most `1` `NULL`!** | Yes | No | When `NULL` represents a singleton default slot that must not be duplicated. |
 
 ---
 
@@ -590,11 +590,11 @@ FROM (
 
 | Identifier Strategy | PostgreSQL Declaration | Disk Size | B-Tree Append Locality | Offline Edge Generation? | When to Use It in Weather Engineering |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **1. `BIGINT IDENTITY`** *(SQL Standard replacement for `BIGSERIAL`)* | `BIGINT GENERATED ALWAYS AS IDENTITY` | **`8 Bytes`** (`int8`, `8B` aligned) | ✅ **100% Monotonic** (Fastest B-Tree & smallest FK joins) | ❌ **No** (Requires central DB sequence) | **Default for centralized tables** (`synoptic.observations.obs_id`, `nwp.forecasts`) where the PostgreSQL database assigns the ID at insert time. |
-| **2. `UUIDv7` (RFC 9562)** *(Time-ordered 128-bit UUID)* | `UUID DEFAULT uuid_generate_v7()` *(or `uuidv7()` in PG 18+)* | **`16 Bytes`** (`uuid`, `1B` aligned) | ✅ **Monotonic by ms** (Rightmost leaf appends; minimal WAL FPW) | ✅ **Yes** (Zero central coordination) | **Default for distributed / edge-generated IDs:** Offline weather stations, mobile radiosonde units, microservice APIs, or multi-region active-active ingest. |
-| **3. `UUIDv4` (RFC 9562)** *(Purely random 128-bit UUID)* | `UUID DEFAULT gen_random_uuid()` | **`16 Bytes`** (`uuid`, `1B` aligned) | ❌ **Worst (Uniformly Random!)** (`500x` WAL FPW amplification & 50/50 page splits) | ✅ **Yes** | **Avoid for indexed Primary Keys on large tables!** Only use for non-indexed security tokens, API keys, or tiny lookup tables ($< 100\text{k}$ rows) that fit permanently in RAM. |
-| **4. `ULID`** *(Crockford Base32 48b ts + 80b rand)* | Stored as `UUID` (`16B`) or `CHAR(26)` (`27B`) | **`16B` or `27B`** | ✅ **Monotonic by ms** | ✅ **Yes** | Predecessor to `UUIDv7`. Prefer **`UUIDv7`** in new greenfield PostgreSQL systems because `UUIDv7` is an official IETF standard (`RFC 9562`) supported natively by every database driver's `uuid` type. |
-| **5. MongoDB `ObjectId`** *(BSON 12-byte ID)* | N/A *(Day 4 MongoDB `_id`)* | **`12 Bytes`** (`4B` sec + `5B` host/proc + `3B` counter) | ✅ **Monotonic by second** | ✅ **Yes** | Native default `_id` in MongoDB (`weather_nosql`). Note that Day 4 often overrides `_id` with natural string keys (like `'DZ-ONM-2026-10-07-001'`) for idempotent alert upserts. |
+| **1. `BIGINT IDENTITY`** *(SQL Standard replacement for `BIGSERIAL`)* | `BIGINT GENERATED ALWAYS AS IDENTITY` | **`8 Bytes`** (`int8`, `8B` aligned) | **100% Monotonic** (Fastest B-Tree & smallest FK joins) | **No** (Requires central DB sequence) | **Default for centralized tables** (`synoptic.observations.obs_id`, `nwp.forecasts`) where the PostgreSQL database assigns the ID at insert time. |
+| **2. `UUIDv7` (RFC 9562)** *(Time-ordered 128-bit UUID)* | `UUID DEFAULT uuid_generate_v7()` *(or `uuidv7()` in PG 18+)* | **`16 Bytes`** (`uuid`, `1B` aligned) | **Monotonic by ms** (Rightmost leaf appends; minimal WAL FPW) | **Yes** (Zero central coordination) | **Default for distributed / edge-generated IDs:** Offline weather stations, mobile radiosonde units, microservice APIs, or multi-region active-active ingest. |
+| **3. `UUIDv4` (RFC 9562)** *(Purely random 128-bit UUID)* | `UUID DEFAULT gen_random_uuid()` | **`16 Bytes`** (`uuid`, `1B` aligned) | **Worst (Uniformly Random!)** (`500x` WAL FPW amplification & 50/50 page splits) | **Yes** | **Avoid for indexed Primary Keys on large tables!** Only use for non-indexed security tokens, API keys, or tiny lookup tables ($< 100\text{k}$ rows) that fit permanently in RAM. |
+| **4. `ULID`** *(Crockford Base32 48b ts + 80b rand)* | Stored as `UUID` (`16B`) or `CHAR(26)` (`27B`) | **`16B` or `27B`** | **Monotonic by ms** | **Yes** | Predecessor to `UUIDv7`. Prefer **`UUIDv7`** in new greenfield PostgreSQL systems because `UUIDv7` is an official IETF standard (`RFC 9562`) supported natively by every database driver's `uuid` type. |
+| **5. MongoDB `ObjectId`** *(BSON 12-byte ID)* | N/A *(Day 4 MongoDB `_id`)* | **`12 Bytes`** (`4B` sec + `5B` host/proc + `3B` counter) | **Monotonic by second** | **Yes** | Native default `_id` in MongoDB (`weather_nosql`). Note that Day 4 often overrides `_id` with natural string keys (like `'DZ-ONM-2026-10-07-001'`) for idempotent alert upserts. |
 
 ### 4.3 Unclustered Heap vs. Clustered B+Tree Storage
 
@@ -688,7 +688,7 @@ If a schema designer interleaves 1-byte `BOOLEAN` or 2-byte `SMALLINT` columns w
  A. telemetry_unaligned (56 Bytes Payload + 24B Header = 80 Bytes/Row!)
  Offset: 0      1..7        8..15       16..17   18..23      24..31    32     33..39      40..47     48..51   52..55
         ┌──────┬───────────┬───────────┬────────┬───────────┬─────────┬──────┬───────────┬──────────┬────────┬────────┐
-        │is_act│ 7B PAD ❌ │recorded_at│wind_dir│ 6B PAD ❌ │latitude │fault │ 7B PAD ❌ │longitude │station │ temp   │
+        │is_act│  7B PAD!  │recorded_at│wind_dir│  6B PAD!  │latitude │fault │  7B PAD!  │longitude │station │ temp   │
         │ (1B) │ (Wasted!) │   (8B)    │  (2B)  │ (Wasted!) │  (8B)   │ (1B) │ (Wasted!) │   (8B)   │  (4B)  │  (4B)  │
         └──────┴───────────┴───────────┴────────┴───────────┴─────────┴──────┴───────────┴──────────┴────────┴────────┘
         Total Wasted Internal Padding = 7 + 6 + 7 = 20 Bytes (16 Bytes Net Row Inflation!)
@@ -722,9 +722,9 @@ PostgreSQL does not allow a single tuple to span across two 8 KB heap pages. Wha
 Run these queries in `psql -d weather_ops` (requires [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql) loaded in Lab 1):
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
--- 🗄️ TABLES QUERIED: pg_stat_user_tables, synoptic.observations, synoptic.stations
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TABLES QUERIED: pg_stat_user_tables, synoptic.observations, synoptic.stations
 
 -- 1. Inspect table sizes, index sizes, TOAST sizes, and exact 8KB heap page counts
 SELECT
@@ -762,9 +762,9 @@ FROM synoptic.stations;
 Run this lab in `psql -d weather_ops` (either paste the block below directly or run `\i day2_pageinspect_and_storage_lab.sql` from [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql) Lab 1) to verify both the **16-byte Tuple Tetris savings** (`80B` vs. `64B` on `public.telemetry_unaligned` vs. `public.telemetry_aligned`) and the **8-byte block inspection** (`48B` vs. `40B` on `public.layout_padded` vs. `public.layout_packed`):
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 SOURCE SCRIPT: day2/day2_pageinspect_and_storage_lab.sql (Lab 1A & 1B)
--- 🗄️ TABLES CREATED & QUERIED (in 'public' schema):
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- SOURCE SCRIPT: day2/day2_pageinspect_and_storage_lab.sql (Lab 1A & 1B)
+-- TABLES CREATED & QUERIED (in 'public' schema):
 --    public.telemetry_unaligned, public.telemetry_aligned, public.layout_padded, public.layout_packed
 
 CREATE EXTENSION IF NOT EXISTS pageinspect;
@@ -991,8 +991,8 @@ $$
 ```
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPTS:
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPTS:
 --    • Part 1 & Part 3 use synoptic.stations & synoptic.observations (from day2/weather_ops_pg.sql)
 --    • Part 2 creates public.mvcc_demo (also in day2/day2_pageinspect_and_storage_lab.sql Lab 2)
 --    • Optional: For the 4-part Two-Terminal Lab on public.station_calibration, open day2/day2_two_terminal_acid_lab.sql
@@ -1166,9 +1166,9 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
 ### Lab 4 Walkthrough: Tuning Checkpoints, Tracking WAL Volume (`LSN`) & Benchmarking `\copy`
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
--- 🗄️ TABLES QUERIED / WRITTEN: nwp.forecasts, synoptic.observations, synoptic.observations_staging
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TABLES QUERIED / WRITTEN: nwp.forecasts, synoptic.observations, synoptic.observations_staging
 
 \timing on
 
@@ -1289,9 +1289,9 @@ $$
 Run in `psql -d weather_ops` (requires [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql)):
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
--- 🗄️ TABLES QUERIED: pg_stats, nwp.forecasts, synoptic.observations
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TABLES QUERIED: pg_stats, nwp.forecasts, synoptic.observations
 
 -- 1. Tune Planner for modern SSD/NVMe & enable I/O timing
 ALTER SYSTEM SET random_page_cost = 1.1;
@@ -1346,14 +1346,14 @@ WHERE f.station_id = 60390
 
 #### Lab 5B: Mathematical Proof of the Row-Store Analytical Scan Penalty (`public.plan_lab` — 1,000,000 to 2,000,000 Rows)
 > [!IMPORTANT]
-> **📂 Which Script & Table Does Lab 5B Use?**
+> ** Which Script & Table Does Lab 5B Use?**
 > - Lab 5B uses the **`public.plan_lab`** table created in **Lab 4 of [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)** (NOT Day 1's SQLite `raw_telemetry` table!).
 > - If you have not already run `psql -d weather_ops -f day2_pageinspect_and_storage_lab.sql`, the SQL block below includes the `CREATE TABLE IF NOT EXISTS plan_lab` + `1,000,000`-row generator so you can paste and run it directly in `psql -d weather_ops`!
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 SOURCE SCRIPT: day2/day2_pageinspect_and_storage_lab.sql (Lab 4: Lines 249–332)
--- 🗄️ TABLE CREATED & QUERIED: public.plan_lab (1,000,000 rows across 11,236 8KB pages)
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- SOURCE SCRIPT: day2/day2_pageinspect_and_storage_lab.sql (Lab 4: Lines 249–332)
+-- TABLE CREATED & QUERIED: public.plan_lab (1,000,000 rows across 11,236 8KB pages)
 
 -- Step 0: Create and populate public.plan_lab (if you haven't already run day2_pageinspect_and_storage_lab.sql)
 DROP TABLE IF EXISTS plan_lab CASCADE;
@@ -1503,11 +1503,11 @@ Tomorrow on **Day 3**, we solve these exact time-series and spatial scale challe
 
 > [!TIP]
 > **Next Step — Interactive Tuple Tetris Simulator & Installing PostGIS 3.4 (Day 3)**
-> - 🧪 **Test in the Interactive Simulator:** [Switch to Portal Tab 02: PG Tuple Alignment ("Tuple Tetris") Lab](../bootcamp_portal.html#tab-tetris)
-> - 📖 **Review the 3 Day 2 SQL Walkthroughs:** [weather_ops_pg](./weather_ops_pg_sql_course_walkthrough.md) | [pageinspect & Storage Lab](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | [Two-Terminal ACID Lab](./day2_two_terminal_acid_lab_course_walkthrough.md)
-> - 💿 **Install Day 3 Spatial Extensions From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 2B: PostGIS 3.4 & Partitioning)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install PostGIS 3.4 before starting Day 3!
+> - **Test in the Interactive Simulator:** [Switch to Portal Tab 02: PG Tuple Alignment ("Tuple Tetris") Lab](../bootcamp_portal.html#tab-tetris)
+> - **Review the 3 Day 2 SQL Walkthroughs:** [weather_ops_pg](./weather_ops_pg_sql_course_walkthrough.md) | [pageinspect & Storage Lab](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | [Two-Terminal ACID Lab](./day2_two_terminal_acid_lab_course_walkthrough.md)
+> - **Install Day 3 Spatial Extensions From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 2B: PostGIS 3.4 & Partitioning)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install PostGIS 3.4 before starting Day 3!
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 

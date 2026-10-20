@@ -1,6 +1,6 @@
 # Day 4 Course Walkthrough: `day4_weather_ops_mongo.js` — MongoDB & NoSQL Fundamentals for Weather Forecast Engineers
 
-[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⚙️ Original Script](./day4_weather_ops_mongo.js) | [🚀 Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [📊 50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
+[Home](../README.md) | [Portal](../bootcamp_portal.html) | [Day 4 Coursebook](./day4_master_coursebook.md) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Original Script](./day4_weather_ops_mongo.js) | [Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
 
 ---
 
@@ -543,4 +543,4 @@ Notice that `db.synoptic_timeseries.countDocuments()` returns **`6`** logical ob
 
 ---
 
-[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⚙️ Original Script](./day4_weather_ops_mongo.js) | [🚀 Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [📊 50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
+[Home](../README.md) | [Portal](../bootcamp_portal.html) | [Day 4 Coursebook](./day4_master_coursebook.md) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Original Script](./day4_weather_ops_mongo.js) | [Advanced Script Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)

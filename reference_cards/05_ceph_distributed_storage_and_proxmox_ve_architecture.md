@@ -7,10 +7,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card ➡️](./06_dbt_for_meteorological_telemetry_engineering.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card](./06_dbt_for_meteorological_telemetry_engineering.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Meteorological Systems & Infrastructure Architects](#executive-summary-for-meteorological-systems--infrastructure-architects)
 - [1. Core Ceph Daemons & Proxmox VE Hyperconverged Topology](#1-core-ceph-daemons--proxmox-ve-hyperconverged-topology)
@@ -944,7 +944,7 @@ ceph osd set-full-ratio 0.95
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card ➡️](./06_dbt_for_meteorological_telemetry_engineering.md) | [⬆️ Back to Top](#sovereign-on-premises-ceph-distributed-storage--proxmox-ve-hyperconverged-architecture-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card](./06_dbt_for_meteorological_telemetry_engineering.md) | [⬆ Back to Top](#sovereign-on-premises-ceph-distributed-storage--proxmox-ve-hyperconverged-architecture-reference-card)

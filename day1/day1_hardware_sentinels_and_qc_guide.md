@@ -1,11 +1,11 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [📘 Day 1 Coursebook](day1_master_coursebook.md) | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](day1_master_coursebook.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 
 # Deep-Dive Engineering Guide: Hardware Sentinels, In-Band Signaling & Telemetry Quality Control
 
 ## Managing Electrical Artifacts, 3VL SQL Logic, and Quality Assurance in Meteorological Data Pipelines
 
 > [!CAUTION]
-> ### 🚨 STOP & READ FIRST — Which SQLite `.db` File Do I Open?
+> ### STOP & READ FIRST — Which SQLite `.db` File Do I Open?
 > All SQL queries in this guide target **`day1/weather_telemetry.db`** (`raw_telemetry`, where `-999.0` is planted), **EXCEPT** Pattern 1B in Section 6 which targets **`day1/weather_ops.db`** (`observations`, where `-9999.0` is planted on `precip_1h_mm`).
 >
 > | Database File | Tables Inside | Planted Hardware Sentinel | How to Open / Switch in `sqlite3` |
@@ -213,8 +213,8 @@ Execute this sequence in SQLite (`day1/weather_telemetry.db`) to observe sentine
 Running a standard summary query across the raw 250,000-row network without sentinel filtering produces the following result:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     COUNT(*) AS total_records,
     ROUND(AVG(temperature), 2) AS network_avg_temp,
@@ -244,8 +244,8 @@ FROM raw_telemetry;
 Inspect the specific observations emitting sentinel values:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT station_id, recorded_at, temperature, pressure, wind_speed 
 FROM raw_telemetry 
 WHERE temperature <= -900.0 
@@ -284,8 +284,8 @@ LIMIT 5;
 
 **Pattern 1A — On `day1/weather_telemetry.db` (`raw_telemetry` uses `-999.0`):**
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     COUNT(*) AS total_rows,
     COUNT(NULLIF(temperature, -999.0)) AS valid_temp_readings,
@@ -296,8 +296,8 @@ FROM raw_telemetry;
 
 **Pattern 1B — On `day1/weather_ops.db` (`observations` uses `-9999.0` on `precip_1h_mm`):**
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 SELECT
     station_id,
     ROUND(AVG(NULLIF(precip_1h_mm, -9999.0)), 2) AS clean_avg_precip_mm
@@ -316,8 +316,8 @@ GROUP BY station_id;
 In the real world, failing sensors do not always emit cleanly configured `-999.0` constants. A degraded thermistor might output `-998.2` or an electrical short might register `9999.0`. Bounding attributes within known physical limits handles unpredictable failures:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     station_id,
     strftime('%Y-%m-%d %H:00:00', recorded_at) AS obs_hour,
@@ -345,8 +345,8 @@ LIMIT 5;
 In Day 2 (PostgreSQL), demonstrate how ANSI SQL provides a clean syntax that eliminates verbose `CASE` blocks:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 -- Native PostgreSQL syntax (ANSI SQL Standard, also supported in SQLite 3.30+)
 SELECT 
     station_id,
@@ -383,8 +383,8 @@ Before building a multi-tier database architecture, engineers must determine whe
 * **Implementation:** Expose sanitization through analytical views or downsampled tables:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 CREATE VIEW IF NOT EXISTS v_clean_telemetry AS
 SELECT 
     id,
@@ -423,5 +423,5 @@ Under this model, the ingestion service converts `-999.0` / `-9999.0` to `NULL` 
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [📘 Day 1 Coursebook](day1_master_coursebook.md) | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](day1_master_coursebook.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 

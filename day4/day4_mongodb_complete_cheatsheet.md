@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [📘 Day 4 Coursebook](day4_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 4 Coursebook](day4_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # Day 4 Complete Cheatsheet: MongoDB CLI, SQL-to-MQL Translator, Time-Series, Aggregations, Geospatial `2dsphere` & `ESR` Indexing
 
@@ -115,10 +115,10 @@ operationProfiling:
 
 | Query Pattern | Matches `{ temp_c: 24.5 }`? | Matches `{ temp_c: null }` (Explicit Null)? | Matches `{}` (Missing Key)? | Meteorological Use Case |
 | :--- | :---: | :---: | :---: | :--- |
-| **`{ temp_c: null }`** *(Ambiguous Default!)* | ❌ No | **✅ YES** | **✅ YES** | Catching all records lacking a temperature reading (whether omitted or explicitly `null`). |
-| **`{ temp_c: { $type: 10 } }`** *(or `bsonType: "null"`)* | ❌ No | **✅ YES** | ❌ No | Finding stations that **have** a thermistor installed (`temp_c` key exists) but experienced a **sensor dropout (`null`)**. |
-| **`{ temp_c: { $exists: false } }`** | ❌ No | ❌ No | **✅ YES** | Finding polymorphic stations (e.g., rain-only gauges) that **never send** a `temp_c` key. |
-| **`{ temp_c: { $exists: true, $ne: null } }`** | **✅ YES** | ❌ No | ❌ No | Filtering for **present, non-null** readings before running math in `$project`. |
+| **`{ temp_c: null }`** *(Ambiguous Default!)* | No | ** YES** | ** YES** | Catching all records lacking a temperature reading (whether omitted or explicitly `null`). |
+| **`{ temp_c: { $type: 10 } }`** *(or `bsonType: "null"`)* | No | ** YES** | No | Finding stations that **have** a thermistor installed (`temp_c` key exists) but experienced a **sensor dropout (`null`)**. |
+| **`{ temp_c: { $exists: false } }`** | No | No | ** YES** | Finding polymorphic stations (e.g., rain-only gauges) that **never send** a `temp_c` key. |
+| **`{ temp_c: { $exists: true, $ne: null } }`** | ** YES** | No | No | Filtering for **present, non-null** readings before running math in `$project`. |
 
 ---
 
@@ -270,10 +270,10 @@ db.cap_alerts.createIndex({ affected_stations: 1 });
 ### 8.2 The 4-Pattern MongoDB Shard Key Decision Matrix (Black Box 4D)
 | Pattern | Shard Key Declaration | Live Write Distribution | Station + Time Range Query (`station_id = X AND obs_time BETWEEN ...`) | Risk of Jumbo Chunks? | Engineering Verdict |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or `ObjectId`)* | **❌ 100% on 1 Shard (`MaxKey` Hotspot!)** — All new writes hit the single highest chunk. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
-| **2. Low-Cardinality Enum** *(Anti-Pattern)* | `{ station_type: 1 }` or `{ radar_site_id: 1 }` *(4–8 values)* | ❌ Capped at 4–8 chunks total. | Scatter-Gather unless `station_type` is in every query. | **❌ YES (Fatal Jumbo Chunks!)** | **NEVER USE alone.** Chunks with identical key values cannot be split past 64 MB. |
-| **3. Hashed Single Key** | `{ station_id: "hashed" }` *(or `{ obs_time: "hashed" }`)* | **✅ 100% Evenly Distributed** via MD5 hash. | `station_id: "hashed"` targets 1 shard for equality, **but `obs_time: "hashed"` forces Scatter-Gather on EVERY time-range query!** | Low | Use `{ sensor_uuid: "hashed" }` only for point lookups; **never hash `obs_time`**. |
-| **4. Compound Prefix + Time** *(Production Gold Standard)* | **`{ "station_meta.station_id": 1, obs_time: 1 }`** | **✅ Evenly Distributed** across all shards simultaneously by `station_id`. | **✅ Targeted Single-Shard Scan!** `station_id` pins 1 shard; `obs_time: 1` scans contiguous chronological pages! | **Zero** (`obs_time` splits any large station) | **MANDATORY for meteorological time-series, radiosondes & radar scans.** |
+| **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or `ObjectId`)* | ** 100% on 1 Shard (`MaxKey` Hotspot!)** — All new writes hit the single highest chunk. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
+| **2. Low-Cardinality Enum** *(Anti-Pattern)* | `{ station_type: 1 }` or `{ radar_site_id: 1 }` *(4–8 values)* | Capped at 4–8 chunks total. | Scatter-Gather unless `station_type` is in every query. | ** YES (Fatal Jumbo Chunks!)** | **NEVER USE alone.** Chunks with identical key values cannot be split past 64 MB. |
+| **3. Hashed Single Key** | `{ station_id: "hashed" }` *(or `{ obs_time: "hashed" }`)* | ** 100% Evenly Distributed** via MD5 hash. | `station_id: "hashed"` targets 1 shard for equality, **but `obs_time: "hashed"` forces Scatter-Gather on EVERY time-range query!** | Low | Use `{ sensor_uuid: "hashed" }` only for point lookups; **never hash `obs_time`**. |
+| **4. Compound Prefix + Time** *(Production Gold Standard)* | **`{ "station_meta.station_id": 1, obs_time: 1 }`** | ** Evenly Distributed** across all shards simultaneously by `station_id`. | ** Targeted Single-Shard Scan!** `station_id` pins 1 shard; `obs_time: 1` scans contiguous chronological pages! | **Zero** (`obs_time` splits any large station) | **MANDATORY for meteorological time-series, radiosondes & radar scans.** |
 
 ---
 
@@ -289,4 +289,4 @@ db.cap_alerts.createIndex({ affected_stations: 1 });
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [📘 Day 4 Coursebook](day4_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 4 Coursebook](day4_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)

@@ -1,10 +1,10 @@
 # Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook (Using Bootcamp Weather Data)
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards Index](./README.md) | [📘 Day 1 (SQLite)](../day1/day1_master_coursebook.md) | [🐘 Day 2 (PostgreSQL)](../day2/day2_master_coursebook.md) | [🍃 Day 4 (MongoDB)](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards Index](./README.md) | [Day 1 (SQLite)](../day1/day1_master_coursebook.md) | [Day 2 (PostgreSQL)](../day2/day2_master_coursebook.md) | [Day 4 (MongoDB)](../day4/day4_master_coursebook.md)
 
 ---
 
-## 🧭 Purpose of This Playbook: Master the Basics First!
+## Purpose of This Playbook: Master the Basics First!
 
 Before diving into hardware sentinels (`-9999.0`), `3VL` truth tables, `pageinspect` 8 KB heap blocks, or multi-stage `$facet` pipelines, every attendee needs **100% fluency in the core daily commands to view, filter, sort, insert, update, and delete data (`CRUD`)** on the exact databases used in this bootcamp.
 
@@ -12,7 +12,7 @@ Every single command in this guide is **copy-and-paste runnable** against the ac
 
 ---
 
-## 🚨 Master Orientation Map: Which Database, File, Schema & Exact Column Names Am I Using?
+## Master Orientation Map: Which Database, File, Schema & Exact Column Names Am I Using?
 
 | Bootcamp Day & Engine | How to Connect from Your Terminal | Database / File Name | Exact Tables / Collections & Column Names Inside | Seed Script (To Reset to Clean State) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -22,7 +22,7 @@ Every single command in this guide is **copy-and-paste runnable** against the ac
 | **Day 4 — MongoDB 7.0 (`mongosh`)** | ```bash\ncd day4\nmongosh weather_nosql\n``` | **`weather_nosql`** *(MongoDB database)* | • **`stations`** (`6` docs): `_id` *(Int32)*, `station_name`, `station_type`, `climate_zone`, `elevation_m`, `is_active`, `location` *(GeoJSON)*, `sensors` *(Array)*, `calibration`<br/>• **`synoptic_timeseries`** (`6` docs): `obs_time`, `station_meta` *(`station_id`, `station_type`, `climate_zone`)*, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm`, `diagnostics`<br/>• **`radiosonde_soundings`** (`3` docs): `station_id`, `station_name`, `launch_time`, `sonde_serial`, `burst_altitude_m`, `cape_j_kg`, `k_index`, `vertical_levels` *(Array)*<br/>• **`cap_alerts`** (`2` docs): `_id` *(String)*, `issued_at`, `expires_at`, `phenomenon`, `severity`, `certainty`, `affected_stations` *(Array)*, `max_observed_gust_kt`, `headline` | `cd day4 && mongosh weather_nosql day4_weather_ops_mongo.js` |
 
 > [!WARNING]
-> **⚠️ Watch Out for Column Name Differences Between the Two Day 1 SQLite Files!**
+> ** Watch Out for Column Name Differences Between the Two Day 1 SQLite Files!**
 > | Physical Metric | Column Name in `weather_ops.db` (`observations`) | Column Name in `weather_telemetry.db` (`raw_telemetry`) |
 > | :--- | :--- | :--- |
 > | **Station ID Type** | `station_id` (`INTEGER`: `60390`, `60490`, `60419`...) | `station_id` (`TEXT`: `'AWS-001'`, `'AWS-013'`, `'AWS-042'`...) |
@@ -34,7 +34,7 @@ Every single command in this guide is **copy-and-paste runnable** against the ac
 
 ---
 
-## ⚡ The Cross-Engine CRUD Rosetta Stone (`SQLite` vs. `PostgreSQL` vs. `MongoDB`)
+## The Cross-Engine CRUD Rosetta Stone (`SQLite` vs. `PostgreSQL` vs. `MongoDB`)
 
 | Operation | Day 1: SQLite (`sqlite3`) | Days 2–3: PostgreSQL (`psql`) | Day 4: MongoDB (`mongosh`) |
 | :--- | :--- | :--- | :--- |
@@ -67,8 +67,8 @@ sqlite3 weather_ops.db
 Now run these commands inside the `sqlite>` prompt to format the output into clean ASCII boxes and inspect the schema:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. Turn on column headers and box-drawing tables:
 .headers on
@@ -99,8 +99,8 @@ SELECT 'weather_alerts',               COUNT(*)              FROM weather_alerts
 ## 1.2 Basic `SELECT` — Viewing Rows, Choosing Columns, Aliases & Math Expressions
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. Show ALL columns and ALL rows from 'stations' (7 Algerian WMO stations):
 SELECT * FROM stations;
@@ -154,8 +154,8 @@ SELECT DISTINCT model_name, lead_hours FROM forecasts;
 ## 1.3 Filtering Rows with `WHERE` (`=`, `!=`, `>`, `<`, `BETWEEN`, `IN`, `LIKE`, `AND`/`OR`, `IS NULL`)
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. Exact Equality (=): Show all observations for Algiers Dar El Beida (WMO ID 60390)
 SELECT station_id, obs_time, temp_c, pressure_hpa, wind_speed_kt, precip_1h_mm
@@ -194,7 +194,7 @@ WHERE (climate_zone = 'Arid' OR climate_zone = 'Highland')
   AND is_active = 1;
 
 -- 8. Finding Missing Sensor Readings (IS NULL vs. IS NOT NULL):
---    ⚠️ Remember: "WHERE temp_c = NULL" NEVER returns rows in SQL! Always use IS NULL:
+--    Remember: "WHERE temp_c = NULL" NEVER returns rows in SQL! Always use IS NULL:
 SELECT obs_id, station_id, obs_time, temp_c, dewpoint_c, wind_speed_kt, qc_flag
 FROM observations
 WHERE temp_c IS NULL
@@ -207,8 +207,8 @@ WHERE temp_c IS NULL
 ## 1.4 Sorting & Pagination (`ORDER BY`, `ASC`, `DESC`, `LIMIT`, `OFFSET`)
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. Sort stations from highest elevation to lowest (DESC = Descending):
 SELECT station_id, station_name, climate_zone, elevation_m
@@ -239,8 +239,8 @@ SELECT obs_id, station_id, obs_time, temp_c FROM observations ORDER BY obs_id AS
 ## 1.5 Basic Aggregations (`COUNT`, `MIN`, `MAX`, `AVG`, `SUM`) & `GROUP BY` / `HAVING`
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. Count how many stations exist in each climate_zone:
 SELECT
@@ -304,8 +304,8 @@ LIMIT 10;
 > **The Golden Classroom Safety Rule:** When practicing `INSERT`, `UPDATE`, and `DELETE`, you can wrap your changes in `BEGIN;` ... `ROLLBACK;` to test safely, or clean up the test row at the end so your `weather_ops.db` stays identical to the seed script!
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 PRAGMA foreign_keys = ON;
 
 -- ============================================================================
@@ -398,8 +398,8 @@ SELECT COUNT(*) AS obs_60580_count     FROM observations WHERE station_id = 6058
 When a Day 1 exercise queries `raw_telemetry`, switch to `weather_telemetry.db`:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 
 .open weather_telemetry.db
 .tables
@@ -457,8 +457,8 @@ psql -d weather_ops
 Run inside `psql`:
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
 
 -- 1. Check current connection, schemas, and tables across all schemas:
 \conninfo
@@ -489,8 +489,8 @@ SELECT 'alerts.weather_alerts',               COUNT(*)              FROM alerts.
 ## 2.2 Basic `SELECT`, `WHERE` (`ILIKE`, `TIMESTAMPTZ`, `INTERVAL`), `ORDER BY` & `GROUP BY` in PostgreSQL
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
 
 -- 1. View all 7 WMO stations (excluding the large 5.8 KB raw_metadata TOAST column):
 SELECT
@@ -571,8 +571,8 @@ ORDER BY mean_temp_c DESC NULLS LAST;
 Unlike older SQL engines where you have to run a second `SELECT` after an `INSERT`, `UPDATE`, or `DELETE` to see what changed or what `BIGSERIAL` ID was generated, PostgreSQL supports **`RETURNING`** on every DML statement!
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
 
 -- ============================================================================
 -- A. INSERT INTO ... RETURNING (Create rows and immediately see generated IDs!)
@@ -667,8 +667,8 @@ mongosh weather_nosql
 Run inside `mongosh`:
 
 ```javascript
-// 📂 TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
-// 📜 PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+// TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
+// PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
 
 // 1. Verify current database and list all collections:
 db.getName();
@@ -699,8 +699,8 @@ In MongoDB:
 - `.limit(N)` = `LIMIT N` and `.skip(N)` = `OFFSET N`.
 
 ```javascript
-// 📂 TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
-// 📜 PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+// TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
+// PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
 
 // 1. Show ALL documents in 'stations' (Equivalent to: SELECT * FROM stations;)
 db.stations.find().toArray();
@@ -788,8 +788,8 @@ db.stations.find(
 > **Schema Validation Note on `db.stations`:** Recall from [`day4/day4_weather_ops_mongo.js`](../day4/day4_weather_ops_mongo.js) that `db.stations` has a `$jsonSchema` validator requiring `_id` (`Int32`), `station_name` (`string`), `station_type` (`"SURFACE_AWS"`, `"COASTAL_BUOY"`, `"UPPER_AIR_RADIOSONDE"`, or `"AGRO_SOIL"`), `is_active` (`bool`), and `location` (`{ type: "Point", coordinates: [lon, lat] }`).
 
 ```javascript
-// 📂 TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
-// 📜 PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+// TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
+// PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
 
 // 1. insertOne() — Insert a new Saharan station (WMO 60580: Ouargla - Ain Beida):
 db.stations.insertOne({
@@ -847,8 +847,8 @@ db.synoptic_timeseries.find({ "station_meta.station_id": 60580 }).toArray();
 > **Critical MongoDB Rule:** Always use atomic update operators (`$set`, `$inc`, `$push`, `$addToSet`, `$pull`) inside `updateOne()` / `updateMany()`!
 
 ```javascript
-// 📂 TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
-// 📜 PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+// TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
+// PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
 
 // 1. $set — Update scalar and nested fields on station 60580:
 db.stations.updateOne(
@@ -915,8 +915,8 @@ db.cap_alerts.findOne({ _id: "DZ-ONM-2026-10-06-TEST" });
 ## 3.5 Basic Delete (`deleteOne()` & `deleteMany()`) in MongoDB
 
 ```javascript
-// 📂 TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
-// 📜 PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+// TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
+// PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
 
 // 1. deleteOne() — Delete the test CAP alert we created above:
 db.cap_alerts.deleteOne({ _id: "DZ-ONM-2026-10-06-TEST" });
@@ -944,8 +944,8 @@ In SQL, you write `SELECT climate_zone, COUNT(*), AVG(elevation_m) FROM stations
 In MongoDB, you pass an array of pipeline stages to `db.collection.aggregate([ ... ])`:
 
 ```javascript
-// 📂 TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
-// 📜 PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+// TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
+// PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
 
 // 1. Group 'stations' by climate_zone (Equivalent to SQL GROUP BY climate_zone):
 db.stations.aggregate([
@@ -1024,4 +1024,4 @@ db.synoptic_timeseries.aggregate([
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards Index](./README.md) | [📘 Day 1 (SQLite)](../day1/day1_master_coursebook.md) | [🐘 Day 2 (PostgreSQL)](../day2/day2_master_coursebook.md) | [🍃 Day 4 (MongoDB)](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards Index](./README.md) | [Day 1 (SQLite)](../day1/day1_master_coursebook.md) | [Day 2 (PostgreSQL)](../day2/day2_master_coursebook.md) | [Day 4 (MongoDB)](../day4/day4_master_coursebook.md)

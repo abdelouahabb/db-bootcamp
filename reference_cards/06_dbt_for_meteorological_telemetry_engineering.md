@@ -4,10 +4,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | **Card 06 of 14** | [Next Card ➡️](./07_wal_crash_recovery_sqlite_postgres_mysql.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | **Card 06 of 14** | [Next Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Weather & Systems Engineers](#executive-summary-for-weather--systems-engineers)
 - [1. Where dbt Fits in the National Meteorological Architecture](#1-where-dbt-fits-in-the-national-meteorological-architecture)
@@ -438,7 +438,7 @@ dbt docs serve --port 8080
 ```
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | **Card 06 of 14** | [Next Card ➡️](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | [⬆️ Back to Top](#dbt-data-build-tool--modern-telemetry-lakehouse-architecture-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | **Card 06 of 14** | [Next Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | [⬆ Back to Top](#dbt-data-build-tool--modern-telemetry-lakehouse-architecture-reference-card)

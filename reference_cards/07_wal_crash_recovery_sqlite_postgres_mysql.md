@@ -2,10 +2,10 @@
 
 ## A Comparative Architectural Study Across SQLite, PostgreSQL, and MySQL / MariaDB
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card ➡️](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary](#executive-summary)
 - [1. The Core Theoretical Problem: Why Databases Cannot Just Write to Disk](#1-the-core-theoretical-problem-why-databases-cannot-just-write-to-disk)
@@ -206,12 +206,12 @@ Because appending to the WAL causes `.db-wal` to grow continuously, SQLite perio
 
 | Checkpoint Mode / Pragma | SQL Syntax | Blocks Writers / Readers? | Rewinds WAL Write Pointer to Byte `0`? | Truncates `.db-wal` on Disk? | Operational Use Case |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **`PASSIVE`** *(Auto-Checkpoint Default)* | `PRAGMA wal_checkpoint(PASSIVE);` | ❌ **Never blocks** (stops at oldest active reader Read-Mark) | Only if `checkpointed == log` and no active readers remain | ❌ No (keeps file size unless `journal_size_limit` set) | Triggered automatically by `PRAGMA wal_autocheckpoint = 1000;` ($\approx 4\text{ MB}$) or low-impact background crons. |
-| **`FULL`** | `PRAGMA wal_checkpoint(FULL);` | ⏳ **Waits** (up to `busy_timeout`) for current writers/readers | Only if no new reader started during the flush | ❌ No | Scheduled maintenance flush when readers are intermittent. |
-| **`RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | ⏳ **Waits** for all readers **after** flushing so next writer **must** start at frame 1 | ✅ **Guaranteed** | ❌ No (reuses allocated disk blocks for speed) | High-rate telemetry daemons to prevent `.db-wal` from growing while avoiding `ftruncate()` metadata stalls. |
-| **`TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | ⏳ **Waits** for all writers & readers, flushes all frames, and rewinds | ✅ **Guaranteed** | ✅ **Yes (`0` bytes)** | Pre-backup / pre-archival hook to fold all state cleanly into `.db` and zero out `.db-wal`. |
+| **`PASSIVE`** *(Auto-Checkpoint Default)* | `PRAGMA wal_checkpoint(PASSIVE);` | **Never blocks** (stops at oldest active reader Read-Mark) | Only if `checkpointed == log` and no active readers remain | No (keeps file size unless `journal_size_limit` set) | Triggered automatically by `PRAGMA wal_autocheckpoint = 1000;` ($\approx 4\text{ MB}$) or low-impact background crons. |
+| **`FULL`** | `PRAGMA wal_checkpoint(FULL);` | **Waits** (up to `busy_timeout`) for current writers/readers | Only if no new reader started during the flush | No | Scheduled maintenance flush when readers are intermittent. |
+| **`RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | **Waits** for all readers **after** flushing so next writer **must** start at frame 1 | **Guaranteed** | No (reuses allocated disk blocks for speed) | High-rate telemetry daemons to prevent `.db-wal` from growing while avoiding `ftruncate()` metadata stalls. |
+| **`TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | **Waits** for all writers & readers, flushes all frames, and rewinds | **Guaranteed** | **Yes (`0` bytes)** | Pre-backup / pre-archival hook to fold all state cleanly into `.db` and zero out `.db-wal`. |
 | **`wal_autocheckpoint`** | `PRAGMA wal_autocheckpoint = 1000;` | — | Triggers `PASSIVE` at $N$ pages | — | Default `1000` pages (`4 MB`). Set to `<= 0` only if managing checkpoints manually via a dedicated thread. |
-| **`journal_size_limit`** | `PRAGMA journal_size_limit = 67108864;` | — | — | ✅ Truncates `.db-wal` to cap (`64 MiB`) on rewind | Prevents a temporary burst spike from leaving a multi-GB `.db-wal` file allocated on disk forever. |
+| **`journal_size_limit`** | `PRAGMA journal_size_limit = 67108864;` | — | — | Truncates `.db-wal` to cap (`64 MiB`) on rewind | Prevents a temporary burst spike from leaving a multi-GB `.db-wal` file allocated on disk forever. |
 
 #### Production WAL Pitfalls: "WAL Starvation" & `SQLITE_BUSY_SNAPSHOT`
 
@@ -708,7 +708,7 @@ ls -la weather_monitoring.db*
 ```
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card ➡️](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | [⬆️ Back to Top](#deep-dive-engineering-guide-write-ahead-logging-wal--crash-recovery-mechanics)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | [⬆ Back to Top](#deep-dive-engineering-guide-write-ahead-logging-wal--crash-recovery-mechanics)

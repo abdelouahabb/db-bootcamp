@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [📘 Day 4 Coursebook](day4_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 4 Coursebook](day4_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # MongoDB Architecture, Storage Internals, High Availability (Replica Sets) & Sharding Reference Guide
 
@@ -568,4 +568,4 @@ db.serverStatus().wiredTiger.concurrentTransactions;
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [📘 Day 4 Coursebook](day4_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 4 Coursebook](day4_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)

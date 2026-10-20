@@ -2,10 +2,10 @@
 
 ## A Hands-On Guide to Concurrency, Snapshot Isolation, Lock Waits, and Deadlocks
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card ➡️](./10_query_execution_plan_forensics_and_explain.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card](./10_query_execution_plan_forensics_and_explain.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary: The Two-Terminal Mental Model](#executive-summary-the-two-terminal-mental-model)
 - [1. Quick Lab Setup: The Weather Station Registry](#1-quick-lab-setup-the-weather-station-registry)
@@ -476,7 +476,7 @@ JOIN information_schema.innodb_trx r
 ```
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card ➡️](./10_query_execution_plan_forensics_and_explain.md) | [⬆️ Back to Top](#database-transactions--acid-internals-two-terminal-debugging-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card](./10_query_execution_plan_forensics_and_explain.md) | [⬆ Back to Top](#database-transactions--acid-internals-two-terminal-debugging-reference-card)

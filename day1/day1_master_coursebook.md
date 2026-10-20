@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 
 # Weather Forecast Engineering Database Bootcamp
 ## Day 1 Master Coursebook: SQL Foundations, WMO Relational Modeling & Telemetry Wrangling with SQLite
@@ -11,13 +11,13 @@
 2. **`day1/weather_telemetry.db` (`generate_weather_db.py`):** 250,000 synthetic high-frequency observations across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) with injected hardware sentinels (`-999.0`), barometric plunges, thermal spikes, and a 6-hour communications blackout (`stations`, `raw_telemetry`).
 
 > [!IMPORTANT]
-> **🚨 STOP & READ FIRST — Which SQLite `.db` File Do I Open? (Fixing `"no such table: raw_telemetry"` / `"no such table: observations"`)**  
+> ** STOP & READ FIRST — Which SQLite `.db` File Do I Open? (Fixing `"no such table: raw_telemetry"` / `"no such table: observations"`)**  
 > Day 1 uses **TWO separate SQLite database files** inside the `day1/` folder. Because each SQLite file is a standalone database, running a `raw_telemetry` query while connected to `weather_ops.db` (or running `sqlite3` from the wrong folder so SQLite creates an empty 0-byte file!) immediately throws `Parse error: no such table: raw_telemetry`.
 >
 > | Database File (`cd day1` first!) | How to Build / Open It | Exact Tables Inside This File | Key Columns | Coursebook Sections Using This File |
 > | :--- | :--- | :--- | :--- | :--- |
-> | **📂 File 1: `weather_ops.db`**<br>*(69 rows — WMO Synoptic & NWP)* | `sqlite3 weather_ops.db < weather_ops_seed.sql`<br>Open: **`sqlite3 weather_ops.db`**<br>*(or inside `sqlite>`: **`.open weather_ops.db`**)* | • `stations` *(7 WMO stations: `60390`..`60680`)*<br>• **`observations`** *(36 hourly rows)*<br>• **`forecasts`** *(22 NWP rows)*<br>• **`weather_alerts`** *(4 CAP alerts)* | `obs_time`, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm` (`-9999.0`), `qc_flag` | • **§3.2** (Dataset 1 Setup)<br>• **§4.2 Lab 1** (DDL & CRUD)<br>• **§6.5 Lab 2** (Synoptic Cleaning)<br>• **§7.3 & §7.4 Lab 3** (All 7 `JOIN`s)<br>• **§9 Part A** (NWP Verification) |
-> | **📂 File 2: `weather_telemetry.db`**<br>*(250,050 rows — 50 AWS Stream)* | `python3 generate_weather_db.py`<br>Open: **`sqlite3 weather_telemetry.db`**<br>*(or inside `sqlite>`: **`.open weather_telemetry.db`**)* | • `stations` *(50 AWS stations: `'AWS-001'`..`'AWS-050'``)*<br>• **`raw_telemetry`** *(250,000 1-min rows)* | `recorded_at`, `temperature` (`-999.0`), `pressure` (`-999.0`), `wind_speed`, `wind_direction`, `rain_accum_1m` | • **§3.3** (Dataset 2 Setup)<br>• **§5.3–5.4** (`WHERE` vs `HAVING`)<br>• **§6.2–6.4** (`-999.0` Sentinels)<br>• **§8.1–8.3** (CTEs & Window `OVER`)<br>• **§9 Part B & §10.2** (Diagnostics) |
+> | ** File 1: `weather_ops.db`**<br>*(69 rows — WMO Synoptic & NWP)* | `sqlite3 weather_ops.db < weather_ops_seed.sql`<br>Open: **`sqlite3 weather_ops.db`**<br>*(or inside `sqlite>`: **`.open weather_ops.db`**)* | • `stations` *(7 WMO stations: `60390`..`60680`)*<br>• **`observations`** *(36 hourly rows)*<br>• **`forecasts`** *(22 NWP rows)*<br>• **`weather_alerts`** *(4 CAP alerts)* | `obs_time`, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm` (`-9999.0`), `qc_flag` | • **§3.2** (Dataset 1 Setup)<br>• **§4.2 Lab 1** (DDL & CRUD)<br>• **§6.5 Lab 2** (Synoptic Cleaning)<br>• **§7.3 & §7.4 Lab 3** (All 7 `JOIN`s)<br>• **§9 Part A** (NWP Verification) |
+> | ** File 2: `weather_telemetry.db`**<br>*(250,050 rows — 50 AWS Stream)* | `python3 generate_weather_db.py`<br>Open: **`sqlite3 weather_telemetry.db`**<br>*(or inside `sqlite>`: **`.open weather_telemetry.db`**)* | • `stations` *(50 AWS stations: `'AWS-001'`..`'AWS-050'``)*<br>• **`raw_telemetry`** *(250,000 1-min rows)* | `recorded_at`, `temperature` (`-999.0`), `pressure` (`-999.0`), `wind_speed`, `wind_direction`, `rain_accum_1m` | • **§3.3** (Dataset 2 Setup)<br>• **§5.3–5.4** (`WHERE` vs `HAVING`)<br>• **§6.2–6.4** (`-999.0` Sentinels)<br>• **§8.1–8.3** (CTEs & Window `OVER`)<br>• **§9 Part B & §10.2** (Diagnostics) |
 >
 > **3 Instant Rules so You Never Get Lost:**
 > 1. **Check which file you are inside right now:** Type **`.databases`** and **`.tables`** at the `sqlite>` prompt (if `.tables` is blank, you opened `sqlite3` in the wrong folder—type `.quit`, run `cd day1`, and reopen!).
@@ -100,8 +100,8 @@ Dot-commands are evaluated directly by the `sqlite3` client shell (not the SQL p
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
--- 👉 In sqlite3 CLI, verify or switch with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- In sqlite3 CLI, verify or switch with:   .open weather_ops.db
 -- ============================================================================
 .help                  -- Show available shell commands
 .databases             -- Confirm you are connected to day1/weather_ops.db
@@ -130,8 +130,8 @@ Before we dive into engine pragmas or hardware sentinels, run these foundational
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
--- 👉 In sqlite3 CLI, verify or switch with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- In sqlite3 CLI, verify or switch with:   .open weather_ops.db
 -- ============================================================================
 PRAGMA foreign_keys = ON;
 
@@ -428,10 +428,10 @@ erDiagram
 
    | Pattern | SQL Declaration Syntax | Allows `NULL`? | Restricts Domain / Range? | When to Use It in Telemetry & Forecasting | Examples in `weather_ops.db` |
    | :--- | :--- | :---: | :---: | :--- | :--- |
-   | **Pattern 1: Mandatory Presence Only** | `col TYPE NOT NULL` | ❌ No | ❌ No (any value of `TYPE` accepted) | Mandatory identity, timestamp, free-text, or unbounded continuous variables where `NULL` is invalid, and any value of the data type is acceptable. | `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL`, `message TEXT NOT NULL` |
-   | **Pattern 2: Mandatory + Domain Rule** | `col TYPE NOT NULL CHECK (...)` | ❌ No | ✅ Yes | Mandatory attributes that **must always be present** AND **must fall within a strict physical range or enumeration**. | `latitude`, `longitude`, `elevation_m`, `climate_zone`, `pred_wind_kt`, `qc_flag` |
-   | **Pattern 3: Nullable Sensor + Physical Guard** | `col TYPE CHECK (col IS NULL OR (...))` | ✅ Yes | ✅ Yes (when non-null) | Real-world field sensor readings that **can legitimately be `NULL`** when a probe drops offline, **but if a number is reported**, it must obey physical laws. | `humidity_pct` (`0–100%`), `wind_speed_kt` (`>= 0.0`), Day 2 `precip_1h_mm` (`>= 0.0`) |
-   | **Pattern 4: Raw Landing / Unconstrained Nullable** | `col TYPE` *(no `NOT NULL`, no `CHECK`)* | ✅ Yes | ❌ No | **Bronze / Raw staging columns** that must ingest raw wire frames containing in-band hardware sentinels (`-9999.0`) or uncalibrated spikes (`68.5°C`) without aborting the batch, so downstream SQL (`NULLIF` / `qc_flag`) can audit and clean them. | Day 1 `precip_1h_mm` (holds `-9999.0` sentinel), `temp_c` (holds `68.5°C` spike marked `'ERRONEOUS'`) |
+   | **Pattern 1: Mandatory Presence Only** | `col TYPE NOT NULL` | No | No (any value of `TYPE` accepted) | Mandatory identity, timestamp, free-text, or unbounded continuous variables where `NULL` is invalid, and any value of the data type is acceptable. | `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL`, `message TEXT NOT NULL` |
+   | **Pattern 2: Mandatory + Domain Rule** | `col TYPE NOT NULL CHECK (...)` | No | Yes | Mandatory attributes that **must always be present** AND **must fall within a strict physical range or enumeration**. | `latitude`, `longitude`, `elevation_m`, `climate_zone`, `pred_wind_kt`, `qc_flag` |
+   | **Pattern 3: Nullable Sensor + Physical Guard** | `col TYPE CHECK (col IS NULL OR (...))` | Yes | Yes (when non-null) | Real-world field sensor readings that **can legitimately be `NULL`** when a probe drops offline, **but if a number is reported**, it must obey physical laws. | `humidity_pct` (`0–100%`), `wind_speed_kt` (`>= 0.0`), Day 2 `precip_1h_mm` (`>= 0.0`) |
+   | **Pattern 4: Raw Landing / Unconstrained Nullable** | `col TYPE` *(no `NOT NULL`, no `CHECK`)* | Yes | No | **Bronze / Raw staging columns** that must ingest raw wire frames containing in-band hardware sentinels (`-9999.0`) or uncalibrated spikes (`68.5°C`) without aborting the batch, so downstream SQL (`NULLIF` / `qc_flag`) can audit and clean them. | Day 1 `precip_1h_mm` (holds `-9999.0` sentinel), `temp_c` (holds `68.5°C` spike marked `'ERRONEOUS'`) |
 
    > [!TIP]
    > **The Text Empty-String Trap (`NOT NULL` $\neq$ Non-Empty `''`) & Multi-Engine `CHECK` Support:**  
@@ -466,7 +466,7 @@ erDiagram
    - **Operational Rule:** Never run an `UPDATE` or `DELETE` statement on production telemetry without first testing the exact `WHERE` predicate using a `SELECT` query.
 
 ### 4.2 Lab 1 Walkthrough: DDL, Physical Constraints & CRUD on `weather_ops.db`
-> **📂 Active Database File for Lab 1:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
+> ** Active Database File for Lab 1:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
 > - **In `sqlite3` CLI:** Type **`.open weather_ops.db`** first (if you were previously in `weather_telemetry.db`).  
 > - **In DBeaver / DB Browser:** Select **`weather_ops.db`** in the active connection dropdown.
 
@@ -474,8 +474,8 @@ In this walkthrough on `weather_ops.db`, we verify foreign-key and physical `CHE
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 
 -- Enable referential integrity enforcement on the current connection
@@ -544,15 +544,15 @@ flowchart LR
 ```
 
 ### 5.3 The Premature Alias Bug (Why `WHERE` Cannot Reference `SELECT` Aliases)
-> **📂 Active Database File for Sections 5.3 & 5.4:** **`day1/weather_telemetry.db`** (`stations`, `raw_telemetry`)  
-> - **⚠️ SWITCH DATABASE NOW:** If you are still in `weather_ops.db` from Lab 1, type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running `FROM raw_telemetry`!
+> ** Active Database File for Sections 5.3 & 5.4:** **`day1/weather_telemetry.db`** (`stations`, `raw_telemetry`)  
+> - ** SWITCH DATABASE NOW:** If you are still in `weather_ops.db` from Lab 1, type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running `FROM raw_telemetry`!
 
 Executing this query against `weather_telemetry.db` triggers an immediate planner error:
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 
 -- DELIBERATE FAILURE: Run directly in SQLite terminal
@@ -569,8 +569,8 @@ WHERE temp_f > 85.0;
 * **Production Fix (Expression Repetition or CTE):**
   ```sql
   -- ============================================================================
-  -- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
-  -- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+  -- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+  -- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
   -- ============================================================================
   SELECT 
       station_id,
@@ -589,8 +589,8 @@ Comparing filter placement on 250,000 rows in **`weather_telemetry.db`** demonst
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 
 -- POOR: Allocates memory for 250,000 rows across 50 stations before discarding 48
@@ -631,14 +631,14 @@ In embedded systems and legacy WMO/Fortran files, sensors communicate over fixed
 *(See `day1_hardware_sentinels_and_qc_guide.md` for the full ADC physics and variance explosion math).*
 
 ### 6.2 Naive Query Contamination Across Both Datasets
-> **📂 Active Database File for Sections 6.2–6.4:** **`day1/weather_telemetry.db`** (`raw_telemetry`, 250,000 rows)  
+> ** Active Database File for Sections 6.2–6.4:** **`day1/weather_telemetry.db`** (`raw_telemetry`, 250,000 rows)  
 > - **In `sqlite3` CLI:** Ensure you are connected via **`.open weather_telemetry.db`**.
 
 1. **In `weather_telemetry.db` (250,000 rows):**
    ```sql
    -- ============================================================================
-   -- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
-   -- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+   -- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+   -- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
    -- ============================================================================
    SELECT 
        COUNT(*) AS total_records,
@@ -668,8 +668,8 @@ Inspect an anomaly row in **`weather_telemetry.db`**:
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT station_id, recorded_at, temperature, pressure, wind_speed 
 FROM raw_telemetry 
@@ -692,8 +692,8 @@ LIMIT 3;
 #### Pattern A: `NULLIF()` (Exact Sentinel Matching on `weather_telemetry.db`)
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT 
     COUNT(*) AS total_rows,
@@ -708,8 +708,8 @@ Handles real-world variations such as dying sensor drift (`-998.2`) or electrica
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT 
     station_id,
@@ -727,15 +727,15 @@ LIMIT 5;
 ```
 
 ### 6.5 Lab 2 Walkthrough: Synoptic Filtering, Data Cleaning & Operational Classification (`weather_ops.db`)
-> **📂 Active Database File for Lab 2:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
-> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_ops.db`** at the `sqlite>` prompt (or select `weather_ops.db` in DBeaver) before running `FROM observations`!
+> ** Active Database File for Lab 2:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
+> - ** SWITCH DATABASE NOW:** Type **`.open weather_ops.db`** at the `sqlite>` prompt (or select `weather_ops.db` in DBeaver) before running `FROM observations`!
 
 In this walkthrough on `weather_ops.db`, we isolate observations with non-valid QC flags or out-of-range measurements (`precip_1h_mm < 0` or `temp_c > 58.0`), remediate the `-9999.0` sentinel and `68.5°C` thermal spike into proper SQL `NULL`s, and classify wind speeds into operational Beaufort warning tiers (`Light Breeze`, `Moderate Wind`, `Strong Wind`, `Gale Warning`):
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 
 -- 1. Inspect suspect/erroneous or out-of-range rows
@@ -797,7 +797,7 @@ Before writing multi-table `JOIN` queries, a database engineer must understand *
 Suppose a developer designs a single flat table that repeats station metadata inside every hourly observation row:
 
 ```text
-❌ ANTI-PATTERN: UNNORMALIZED FLAT TABLE (observations_flat)
+ANTI-PATTERN: UNNORMALIZED FLAT TABLE (observations_flat)
 ┌────────────┬────────────────────────┬───────────┬──────────┬─────────────┬───────────────┬─────────────────────┬────────┐
 │ station_id │ station_name           │ latitude  │ longitude│ elevation_m │ climate_zone  │ obs_time            │ temp_c │
 ├────────────┼────────────────────────┼───────────┼──────────┼─────────────┼───────────────┼─────────────────────┼────────┤
@@ -826,10 +826,10 @@ In a row-oriented database (`SQLite` or `PostgreSQL`), this flat design triggers
 
 Relational **Normalization** (formulated by Edgar F. Codd) eliminates redundancy and modification anomalies by decomposing tables according to functional dependencies ($X \rightarrow Y$):
 
-| Normal Form | Core Rule | Meteorological Violation Example (❌ Bad) | Normalized WMO Design (✅ Good) |
+| Normal Form | Core Rule | Meteorological Violation Example (Bad) | Normalized WMO Design (Good) |
 | :--- | :--- | :--- | :--- |
 | **`1NF`**<br>*(First Normal Form)* | **Atomic columns & no repeating column groups.** Every cell holds a single scalar value. | • Storing a comma-separated string: `temps_csv = '19.4,27.8,23.1'`<br>• Or wide hour columns: `temp_00z`, `temp_06z`, `temp_12z`, `temp_18z` | One row per `(station_id, obs_time)` with a single scalar `temp_c REAL` column. |
-| **`2NF`**<br>*(Second Normal Form)* | **`1NF` + No Partial Dependencies on a composite key.** Every non-key column must depend on the *whole* composite key, not just part of it. | In a table keyed by `(station_id, obs_time)`:<br>• `temp_c` depends on **both** `station_id` + `obs_time` ✅<br>• `station_name` and `elevation_m` depend **only on `station_id`** ❌ *(Partial Dependency!)* | Move `station_name`, `latitude`, `longitude`, `elevation_m`, `climate_zone` into a parent **`stations`** table keyed solely by `station_id`. |
+| **`2NF`**<br>*(Second Normal Form)* | **`1NF` + No Partial Dependencies on a composite key.** Every non-key column must depend on the *whole* composite key, not just part of it. | In a table keyed by `(station_id, obs_time)`:<br>• `temp_c` depends on **both** `station_id` + `obs_time`<br>• `station_name` and `elevation_m` depend **only on `station_id`** *(Partial Dependency!)* | Move `station_name`, `latitude`, `longitude`, `elevation_m`, `climate_zone` into a parent **`stations`** table keyed solely by `station_id`. |
 | **`3NF`**<br>*(Third Normal Form)* | **`2NF` + No Transitive Dependencies.** No non-key column may depend on another non-key column ($A \rightarrow B \rightarrow C$). | Storing `climate_zone`, `koppen_code`, and `zone_arid_index` inside `stations` where `station_id -> climate_zone -> koppen_code`. | Either keep only `climate_zone` in `stations` and move zone definitions to a lookup table `climate_zones(climate_zone PRIMARY KEY, koppen_code, ...)`, or ensure all attributes depend directly on `station_id`. |
 
 ```mermaid
@@ -931,16 +931,16 @@ When data is normalized into `stations`, `observations`, `forecasts`, and `weath
 
 | SQL `JOIN` Type / Feature | SQLite `< 3.39.0`<br>*(Legacy Edge)* | SQLite `3.39.0+`<br>*(Ubuntu 24.04)* | MySQL 8.0 / 8.4<br>*(Ref Card 14)* | PostgreSQL 16<br>*(Days 2–3)* | DuckDB OLAP<br>*(Day 5)* | Portable Workaround / Engineering Notes |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **`INNER JOIN`** (`JOIN`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps only rows matching the `ON` predicate in both tables. |
-| **`LEFT [OUTER] JOIN`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Keeps 100% of left table rows; fills unmatched right columns with `NULL`. |
-| **`LEFT ANTI-JOIN`** (`LEFT JOIN ... WHERE B.id IS NULL`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes *(+ native `ANTI JOIN`)* | Finds left rows with **zero** matches in the right table (e.g., silent stations). |
-| **`RIGHT [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | **Portable `< 3.39` Rewrite:** Swap table order from `A RIGHT JOIN B` to **`B LEFT JOIN A`**! |
-| **`FULL [OUTER] JOIN`** | ❌ **No!** | ✅ Yes | ❌ **No!** | ✅ Yes | ✅ Yes | **Portable Rewrite (for SQLite `< 3.39` & MySQL):** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
-| **`CROSS JOIN`** (Cartesian $M \times N$) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Generates every combination of rows (no `ON` clause). |
-| **`SELF JOIN`** (`FROM t AS t1 JOIN t AS t2`) | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | Joins a table to itself using distinct table aliases (`t1`, `t2`). |
-| **`NATURAL JOIN`** / **`JOIN ... USING (col)`** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ **Avoid `NATURAL JOIN` in production** (breaks silently when schemas add columns). `USING (station_id)` is safe. |
-| **`LATERAL` Join** (`CROSS / LEFT JOIN LATERAL (...)`) | ❌ **No** | ❌ **No** | ✅ **Yes (8.0.14+)** | ✅ **Yes** | ✅ **Yes** | Allows a subquery on the right to reference columns from the left row (e.g., *"Top 3 gusts per station"*). In SQLite, use **`ROW_NUMBER() OVER (PARTITION BY ...)`** inside a CTE instead. |
-| **`ASOF JOIN`** *(Temporal Nearest-Match Join)* | ❌ **No** | ❌ **No** | ❌ **No** *(uses `LATERAL`)* | ❌ **No** *(uses `LATERAL ... LIMIT 1`)* | ✅ **Native `ASOF JOIN`!** | Matches asynchronous 1-min sensor pings to the closest prior NWP forecast timestamp (`ON s.station_id = f.station_id AND s.obs_time >= f.valid_time`). |
+| **`INNER JOIN`** (`JOIN`) | Yes | Yes | Yes | Yes | Yes | Keeps only rows matching the `ON` predicate in both tables. |
+| **`LEFT [OUTER] JOIN`** | Yes | Yes | Yes | Yes | Yes | Keeps 100% of left table rows; fills unmatched right columns with `NULL`. |
+| **`LEFT ANTI-JOIN`** (`LEFT JOIN ... WHERE B.id IS NULL`) | Yes | Yes | Yes | Yes | Yes *(+ native `ANTI JOIN`)* | Finds left rows with **zero** matches in the right table (e.g., silent stations). |
+| **`RIGHT [OUTER] JOIN`** | **No!** | Yes | Yes | Yes | Yes | **Portable `< 3.39` Rewrite:** Swap table order from `A RIGHT JOIN B` to **`B LEFT JOIN A`**! |
+| **`FULL [OUTER] JOIN`** | **No!** | Yes | **No!** | Yes | Yes | **Portable Rewrite (for SQLite `< 3.39` & MySQL):** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
+| **`CROSS JOIN`** (Cartesian $M \times N$) | Yes | Yes | Yes | Yes | Yes | Generates every combination of rows (no `ON` clause). |
+| **`SELF JOIN`** (`FROM t AS t1 JOIN t AS t2`) | Yes | Yes | Yes | Yes | Yes | Joins a table to itself using distinct table aliases (`t1`, `t2`). |
+| **`NATURAL JOIN`** / **`JOIN ... USING (col)`** | Yes | Yes | Yes | Yes | Yes | **Avoid `NATURAL JOIN` in production** (breaks silently when schemas add columns). `USING (station_id)` is safe. |
+| **`LATERAL` Join** (`CROSS / LEFT JOIN LATERAL (...)`) | **No** | **No** | **Yes (8.0.14+)** | **Yes** | **Yes** | Allows a subquery on the right to reference columns from the left row (e.g., *"Top 3 gusts per station"*). In SQLite, use **`ROW_NUMBER() OVER (PARTITION BY ...)`** inside a CTE instead. |
+| **`ASOF JOIN`** *(Temporal Nearest-Match Join)* | **No** | **No** | **No** *(uses `LATERAL`)* | **No** *(uses `LATERAL ... LIMIT 1`)* | **Native `ASOF JOIN`!** | Matches asynchronous 1-min sensor pings to the closest prior NWP forecast timestamp (`ON s.station_id = f.station_id AND s.obs_time >= f.valid_time`). |
 | **Physical Execution Algorithms** | **Nested Loop Only** *(+ auto-index)* | **Nested Loop Only** *(+ auto-index)* | **Nested Loop + Hash Join** *(8.0.18+; no Merge Join)* | **1. Nested Loop**<br>**2. Parallel Hash**<br>**3. Sort-Merge Join** | **Vectorized SIMD Hash & Piece-wise Merge Join** | Because SQLite lacks `Hash Join` and `Merge Join`, joining two multi-million-row tables in SQLite is $10\times\text{–}50\times$ slower than in PostgreSQL, MySQL 8.0+, or DuckDB! |
 
 > [!WARNING]
@@ -951,7 +951,7 @@ When data is normalized into `stations`, `observations`, `forecasts`, and `weath
 
 #### 3. Complete Runnable Examples of All 7 `JOIN` Types on `weather_ops.db`
 
-> **📂 Active Database File for Sections 7.3 & 7.4 (Lab 3):** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
+> ** Active Database File for Sections 7.3 & 7.4 (Lab 3):** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
 > - **In `sqlite3` CLI:** Ensure you are connected via **`.open weather_ops.db`**.
 
 Every query below runs directly against `day1/weather_ops.db` (`sqlite3 -header -box weather_ops.db`):
@@ -960,8 +960,8 @@ Every query below runs directly against `day1/weather_ops.db` (`sqlite3 -header 
 Returns **only** stations that have at least one matching row in `weather_alerts` (4 rows; stations without alerts like `Oran`, `Tlemcen`, and `Bejaia` are excluded):
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, weather_alerts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, weather_alerts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 SELECT
     s.station_id,
@@ -980,8 +980,8 @@ ORDER BY a.issued_at;
 Preserves **all 7 stations** from the left table (`stations`), even **`60402 Bejaia - Soummam`** which has `0` observations (`COUNT(o.obs_id)` returns `0`, whereas `COUNT(*)` would mistakenly return `1` for the `NULL`-padded row!):
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 SELECT
     s.station_id,
@@ -1000,8 +1000,8 @@ ORDER BY obs_count ASC, s.station_id;
 Finds stations in `stations` that have **zero** NWP forecasts in `forecasts` (`Oran 60490`, `Tamanrasset 60680`, `Tlemcen 60531`, and `Bejaia 60402`):
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, forecasts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, forecasts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 SELECT
     s.station_id,
@@ -1018,8 +1018,8 @@ ORDER BY s.station_id;
 Suppose a query puts `weather_alerts` on the left and `stations` on the right, and we want **all 7 stations** even if they have no alert:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: weather_alerts, stations)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: weather_alerts, stations)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 
 -- A) Native Syntax (Supported in SQLite 3.39.0+, PostgreSQL, DuckDB):
@@ -1049,8 +1049,8 @@ ORDER BY s.station_id;
 Suppose we want to reconcile `forecasts` at `2026-10-05 12:00:00` (which exist only for `Algiers`, `Constantine`, and `Bechar`) against `weather_alerts` (which exist for `Algiers`, `Constantine`, `Bechar`, and `Tamanrasset`), returning rows present in **either** set:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: forecasts, weather_alerts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: forecasts, weather_alerts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 
 -- A) Native FULL OUTER JOIN (SQLite 3.39.0+, PostgreSQL, DuckDB):
@@ -1098,8 +1098,8 @@ ORDER BY station_id;
 A `CROSS JOIN` generates the Cartesian product ($7 \text{ stations} \times 3 \text{ models} = 21 \text{ expected pairs}$). Combining `CROSS JOIN` with `LEFT JOIN` is the standard data-engineering pattern to audit **missing NWP model coverage** per station:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, forecasts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, forecasts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 WITH models AS (
     SELECT 'ECMWF-HRES' AS model_name
@@ -1125,8 +1125,8 @@ ORDER BY s.station_id, m.model_name;
 By joining `stations` to itself (`stations s1 INNER JOIN stations s2`) using the inequality predicate `s1.station_id < s2.station_id` (which eliminates both self-pairs like `Algiers = Algiers` and mirror duplicates like `(Oran, Algiers)` after `(Algiers, Oran)`), we can compare elevation differences between stations sharing the same `climate_zone`:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Table: stations)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Table: stations)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 SELECT
     s1.climate_zone,
@@ -1147,8 +1147,8 @@ The following queries on **`weather_ops.db`** compute per-station sensor uptime 
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Table: observations)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Table: observations)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 
 -- 1. Station Summary & Sensor Uptime Report
@@ -1194,16 +1194,16 @@ ORDER BY daily_rain_mm DESC;
 
 ## 8. Module 6: CTE Time Pipelines, Recursive Outage Grids & Window Functions
 
-> **📂 Active Database File for All of Module 6 (Sections 8.1, 8.2 & 8.3):** **`day1/weather_telemetry.db`** (`stations`, `raw_telemetry` — 250,000 rows)  
-> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running any query in Module 6!
+> ** Active Database File for All of Module 6 (Sections 8.1, 8.2 & 8.3):** **`day1/weather_telemetry.db`** (`stations`, `raw_telemetry` — 250,000 rows)  
+> - ** SWITCH DATABASE NOW:** Type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running any query in Module 6!
 
 ### 8.1 Constructing Multi-Stage Pipelines with CTEs (`WITH`)
 CTEs (`WITH` blocks) transform queries from deeply nested subqueries into readable linear Directed Acyclic Graphs (DAGs). Run this on **`weather_telemetry.db`**:
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 WITH stage1_cleansed AS (
     -- Stage 1: Strip out electrical artifacts and invalid bounds
@@ -1242,8 +1242,8 @@ A standard `GROUP BY` cannot report on hours where a station sent zero packets. 
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 WITH RECURSIVE time_grid(slot) AS (
     -- Start 48 hours ago
@@ -1288,9 +1288,9 @@ A classic SQL "black box" is wondering why moving a condition like `o.qc_flag = 
 
 | Station State in `weather_ops.db` | What `LEFT JOIN` Produces Before `WHERE` | Filter in `ON`:<br>`LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'` | Filter in `WHERE`:<br>`LEFT JOIN observations o ON s.station_id = o.station_id WHERE o.qc_flag = 'VALID'` |
 | :--- | :--- | :--- | :--- |
-| **`60390 Algiers`** (Has `'VALID'` rows) | Matched rows with `o.qc_flag = 'VALID'` | ✅ **Kept** (with `'VALID'` rows) | ✅ **Kept** (`'VALID' = 'VALID'` is `TRUE`) |
-| **`60571 Bechar` at `12:00`** (Only has `'ERRONEOUS'` row) | Unmatched in `ON` $\rightarrow$ padded with `o.qc_flag = NULL` | ✅ **Kept!** (Station preserved with `o.* = NULL`) | ❌ **DROPPED!** (`'ERRONEOUS' = 'VALID'` is `FALSE`) |
-| **`60402 Bejaia`** (0 observations in DB) | Unmatched in `ON` $\rightarrow$ padded with `o.qc_flag = NULL` | ✅ **Kept!** (Station preserved with `o.* = NULL`) | ❌ **SILENTLY DROPPED!** (`NULL = 'VALID'` is `UNKNOWN` $\neq$ `TRUE`!) |
+| **`60390 Algiers`** (Has `'VALID'` rows) | Matched rows with `o.qc_flag = 'VALID'` | **Kept** (with `'VALID'` rows) | **Kept** (`'VALID' = 'VALID'` is `TRUE`) |
+| **`60571 Bechar` at `12:00`** (Only has `'ERRONEOUS'` row) | Unmatched in `ON` $\rightarrow$ padded with `o.qc_flag = NULL` | **Kept!** (Station preserved with `o.* = NULL`) | **DROPPED!** (`'ERRONEOUS' = 'VALID'` is `FALSE`) |
+| **`60402 Bejaia`** (0 observations in DB) | Unmatched in `ON` $\rightarrow$ padded with `o.qc_flag = NULL` | **Kept!** (Station preserved with `o.* = NULL`) | **SILENTLY DROPPED!** (`NULL = 'VALID'` is `UNKNOWN` $\neq$ `TRUE`!) |
 
 > [!WARNING]
 > **The Silent `LEFT`-to-`INNER` Downgrade Trap:**  
@@ -1300,10 +1300,10 @@ A classic SQL "black box" is wondering why moving a condition like `o.qc_flag = 
 
 | Pattern | SQL Placement | Keeps Unmatched Left Rows? | When to Use It | Concrete Example in `weather_ops.db` |
 | :--- | :--- | :---: | :--- | :--- |
-| **Pattern 1: Right-Table Filter in `ON`** | `LEFT JOIN right r ON l.id = r.id AND r.col = 'X'` | ✅ **Yes** (unmatched Left rows kept with `NULL`s) | You want **100% of Left rows** (all stations or all clock hours) and only want to attach Right rows that meet a criterion. | `LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'` |
-| **Pattern 2: Left-Table Filter in `WHERE`** | `LEFT JOIN right r ON l.id = r.id WHERE l.col = 'Y'` | ✅ **Yes** (for matching Left rows) | You want to restrict **which Left rows** enter the report (e.g., only `'Mediterranean'` stations), while still keeping silent stations in that zone. | `FROM stations s LEFT JOIN observations o ON s.station_id = o.station_id WHERE s.climate_zone = 'Mediterranean'` |
-| **Pattern 3: Anti-Join (`IS NULL` in `WHERE`)** | `LEFT JOIN right r ON l.id = r.id WHERE r.id IS NULL` | ✅ **Only** unmatched Left rows! | You specifically want to find **orphans, silent stations, or missing timestamps** where no Right row matched. | `FROM stations s LEFT JOIN observations o ON s.station_id = o.station_id WHERE o.obs_id IS NULL` |
-| **Pattern 4: Right-Table Filter in `WHERE`** *(Anti-Pattern!)* | `LEFT JOIN right r ON l.id = r.id WHERE r.col = 'X'` | ❌ **No!** (Silently downgrades to `INNER JOIN`) | **Never use with `LEFT JOIN`!** If you actually want to drop unmatched Left rows, write `INNER JOIN` explicitly so your intent is clear. | *(Use `INNER JOIN` instead)* |
+| **Pattern 1: Right-Table Filter in `ON`** | `LEFT JOIN right r ON l.id = r.id AND r.col = 'X'` | **Yes** (unmatched Left rows kept with `NULL`s) | You want **100% of Left rows** (all stations or all clock hours) and only want to attach Right rows that meet a criterion. | `LEFT JOIN observations o ON s.station_id = o.station_id AND o.qc_flag = 'VALID'` |
+| **Pattern 2: Left-Table Filter in `WHERE`** | `LEFT JOIN right r ON l.id = r.id WHERE l.col = 'Y'` | **Yes** (for matching Left rows) | You want to restrict **which Left rows** enter the report (e.g., only `'Mediterranean'` stations), while still keeping silent stations in that zone. | `FROM stations s LEFT JOIN observations o ON s.station_id = o.station_id WHERE s.climate_zone = 'Mediterranean'` |
+| **Pattern 3: Anti-Join (`IS NULL` in `WHERE`)** | `LEFT JOIN right r ON l.id = r.id WHERE r.id IS NULL` | **Only** unmatched Left rows! | You specifically want to find **orphans, silent stations, or missing timestamps** where no Right row matched. | `FROM stations s LEFT JOIN observations o ON s.station_id = o.station_id WHERE o.obs_id IS NULL` |
+| **Pattern 4: Right-Table Filter in `WHERE`** *(Anti-Pattern!)* | `LEFT JOIN right r ON l.id = r.id WHERE r.col = 'X'` | **No!** (Silently downgrades to `INNER JOIN`) | **Never use with `LEFT JOIN`!** If you actually want to drop unmatched Left rows, write `INNER JOIN` explicitly so your intent is clear. | *(Use `INNER JOIN` instead)* |
 
 ---
 
@@ -1326,8 +1326,8 @@ A classic SQL "black box" is wondering why moving a condition like `o.qc_flag = 
 In synoptic meteorology, barometric tendency ($\Delta P \le -4\text{ hPa}$ over 3 steps/hours) triggers automated squall line and storm warnings:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT 
     station_id,
@@ -1351,8 +1351,8 @@ LIMIT 15;
 Avoid correlated subqueries (`SELECT ... WHERE recorded_at = (SELECT MAX...)`) which force nested loop scans:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 WITH ranked_observations AS (
     SELECT 
@@ -1377,8 +1377,8 @@ WHERE recency_rank = 1;
 Smooth out turbulent wind gusts into a 5-step simple moving average:
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT 
     station_id,
@@ -1409,7 +1409,7 @@ When engineers write `OVER (PARTITION BY station_id ORDER BY obs_time)`, what ro
 | Dimension | `ROWS BETWEEN N PRECEDING AND CURRENT ROW` | `RANGE BETWEEN ... PRECEDING AND CURRENT ROW` |
 | :--- | :--- | :--- |
 | **What It Counts** | **Physical row offsets** before/after the current row (`N` rows back, regardless of timestamp gaps). | **Logical value distance** on the `ORDER BY` column (e.g., `INTERVAL '23 hours' PRECEDING` in PostgreSQL/DuckDB). |
-| **Behavior on Missing Sensor Pings (Gaps)** | ⚠️ **Reaches too far back in time!** If 2 hourly pings are missing, `ROWS BETWEEN 23 PRECEDING` spans **26 clock hours**. | ✅ **Strictly time-accurate!** Only includes rows whose timestamp falls within `[obs_time - 23h, obs_time]`. |
+| **Behavior on Missing Sensor Pings (Gaps)** | **Reaches too far back in time!** If 2 hourly pings are missing, `ROWS BETWEEN 23 PRECEDING` spans **26 clock hours**. | **Strictly time-accurate!** Only includes rows whose timestamp falls within `[obs_time - 23h, obs_time]`. |
 | **Behavior on Duplicate Timestamps (Peers)** | Processes each duplicate row one by one in arbitrary/tie-breaker order. | Groups all rows with the exact same `ORDER BY` value ("peers") together at the frame boundary. |
 
 3. **The 4-Pattern Window Frame Decision Matrix**
@@ -1427,15 +1427,15 @@ When engineers write `OVER (PARTITION BY station_id ORDER BY obs_time)`, what ro
 
 ### Part A: NWP Forecast Verification Capstone (`weather_ops.db`)
 
-> **📂 Active Database File for Section 9 Part A:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`)  
-> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_ops.db`** at the `sqlite>` prompt (or select `weather_ops.db` in DBeaver) before running Part A!
+> ** Active Database File for Section 9 Part A:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`)  
+> - ** SWITCH DATABASE NOW:** Type **`.open weather_ops.db`** at the `sqlite>` prompt (or select `weather_ops.db` in DBeaver) before running Part A!
 
 This 3-part operational suite on `weather_ops.db` (1) identifies silent stations with zero recorded observations using an anti-join (`LEFT JOIN ... WHERE o.obs_id IS NULL`), (2) performs point-by-point forecast verification joining `forecasts`, `observations`, and `stations` on both `station_id` and `valid_time = obs_time`, and (3) builds an **NWP Model Verification Leaderboard** ranking `AROME`, `ECMWF-HRES`, and `GFS` by **Mean Absolute Error (MAE)** and **Mean Bias**:
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts)
+-- In sqlite3 CLI, switch first with:   .open weather_ops.db
 -- ============================================================================
 
 -- 1. Detect Silent Stations (0 observations logged) using LEFT JOIN
@@ -1501,8 +1501,8 @@ ORDER BY temp_mae_c ASC;
 
 ### Part B: High-Frequency Telemetry Production Diagnostics (`weather_telemetry.db`)
 
-> **📂 Active Database File for Section 9 Part B & Section 10.2:** **`day1/weather_telemetry.db`** (`raw_telemetry` — 250,000 rows)  
-> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running Part B!
+> ** Active Database File for Section 9 Part B & Section 10.2:** **`day1/weather_telemetry.db`** (`raw_telemetry` — 250,000 rows)  
+> - ** SWITCH DATABASE NOW:** Type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running Part B!
 
 These three diagnostic queries analyze the 250,000-row high-frequency AWS dataset (`weather_telemetry.db`):
 
@@ -1511,8 +1511,8 @@ These three diagnostic queries analyze the 250,000-row high-frequency AWS datase
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT 
     station_id,
@@ -1533,8 +1533,8 @@ ORDER BY failure_rate_pct DESC;
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 WITH stream_analysis AS (
     SELECT 
@@ -1572,8 +1572,8 @@ ORDER BY pressure_drop_hpa ASC;
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 WITH filtered_stream AS (
     SELECT 
@@ -1625,8 +1625,8 @@ Executing a full-table aggregation on **`weather_telemetry.db`** with `.timer on
 
 ```sql
 -- ============================================================================
--- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
--- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- In sqlite3 CLI, switch first with:   .open weather_telemetry.db
 -- ============================================================================
 SELECT station_id, ROUND(AVG(temperature), 2) AS mean_temp
 FROM raw_telemetry 
@@ -1642,11 +1642,11 @@ GROUP BY station_id;
 
 > [!TIP]
 > **Next Step — Interactive Simulator & Installing PostgreSQL 16 (Day 2)**
-> - 🧪 **Test in the Interactive Simulator:** [Switch to Portal Tab 03: Sentinel (`-9999.0`) & 3VL Lab](../bootcamp_portal.html#tab-sentinel)
-> - 📖 **Review the SQL Seed Walkthrough:** [weather_ops_seed_sql_course_walkthrough.md](./weather_ops_seed_sql_course_walkthrough.md)
-> - 💿 **Install Day 2 Engine From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 2A: Native PostgreSQL 16 & Forensic Extensions)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install PostgreSQL 16 before starting Day 2!
+> - **Test in the Interactive Simulator:** [Switch to Portal Tab 03: Sentinel (`-9999.0`) & 3VL Lab](../bootcamp_portal.html#tab-sentinel)
+> - **Review the SQL Seed Walkthrough:** [weather_ops_seed_sql_course_walkthrough.md](./weather_ops_seed_sql_course_walkthrough.md)
+> - **Install Day 2 Engine From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 2A: Native PostgreSQL 16 & Forensic Extensions)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install PostgreSQL 16 before starting Day 2!
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [📚 Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 

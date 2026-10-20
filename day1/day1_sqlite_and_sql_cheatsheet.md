@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [📘 Day 1 Coursebook](day1_master_coursebook.md) | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](day1_master_coursebook.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 
 # Day 1 Authoritative Reference Card & Cheatsheet: SQLite CLI Directives, Core SQL & Time-Series Telemetry Wrangling
 
@@ -9,13 +9,13 @@
 - `generate_weather_db.py` / `weather_telemetry.db` — 250,000-Row High-Frequency AWS Telemetry Stream (`stations`, `raw_telemetry`)
 
 > [!IMPORTANT]
-> **🚨 STOP & READ FIRST — Which SQLite `.db` File Do I Open? (Fixing `"no such table: raw_telemetry"` / `"no such table: observations"`)**  
+> ** STOP & READ FIRST — Which SQLite `.db` File Do I Open? (Fixing `"no such table: raw_telemetry"` / `"no such table: observations"`)**  
 > Day 1 uses **TWO separate SQLite database files** in the `day1/` directory. If you run a `FROM raw_telemetry` query while connected to `weather_ops.db` (or run `FROM observations` while connected to `weather_telemetry.db`), SQLite throws `Parse error: no such table: ...`.
 >
 > | Database File (`cd day1` first!) | How to Open / Switch in `sqlite3` CLI | Exact Tables Inside This File | Key Columns | Cheatsheet Sections Using This File |
 > | :--- | :--- | :--- | :--- | :--- |
-> | **📂 File 1: `weather_ops.db`**<br>*(69 rows — WMO Synoptic & NWP)* | Shell: `sqlite3 weather_ops.db`<br>Inside `sqlite>`: **`.open weather_ops.db`** | • `stations` *(7 WMO IDs: `60390`..`60680`)*<br>• **`observations`** *(36 hourly rows)*<br>• **`forecasts`** *(22 NWP rows)*<br>• **`weather_alerts`** *(4 CAP alerts)* | `obs_time`, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm` (`-9999.0`), `qc_flag` | • **Part I §5.6** (Profile 1)<br>• **Part II §4B** (`observations` cleaning)<br>• **Part III §1 & §5** (`CASE WHEN`, `GROUP BY`, All 7 `JOIN`s) |
-> | **📂 File 2: `weather_telemetry.db`**<br>*(250,050 rows — 50 AWS Stream)* | Shell: `sqlite3 weather_telemetry.db`<br>Inside `sqlite>`: **`.open weather_telemetry.db`** | • `stations` *(50 AWS IDs: `'AWS-001'`..`'AWS-050'``)*<br>• **`raw_telemetry`** *(250,000 1-min rows)* | `recorded_at`, `temperature` (`-999.0`), `pressure` (`-999.0`), `wind_speed`, `wind_direction`, `rain_accum_1m` | • **Part I §4.4** (`sqlite_schema`)<br>• **Part II §1 & §4A** (`raw_telemetry`)<br>• **Part IV §1–§4** (CTEs, `WITH RECURSIVE`, Window `OVER`) |
+> | ** File 1: `weather_ops.db`**<br>*(69 rows — WMO Synoptic & NWP)* | Shell: `sqlite3 weather_ops.db`<br>Inside `sqlite>`: **`.open weather_ops.db`** | • `stations` *(7 WMO IDs: `60390`..`60680`)*<br>• **`observations`** *(36 hourly rows)*<br>• **`forecasts`** *(22 NWP rows)*<br>• **`weather_alerts`** *(4 CAP alerts)* | `obs_time`, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm` (`-9999.0`), `qc_flag` | • **Part I §5.6** (Profile 1)<br>• **Part II §4B** (`observations` cleaning)<br>• **Part III §1 & §5** (`CASE WHEN`, `GROUP BY`, All 7 `JOIN`s) |
+> | ** File 2: `weather_telemetry.db`**<br>*(250,050 rows — 50 AWS Stream)* | Shell: `sqlite3 weather_telemetry.db`<br>Inside `sqlite>`: **`.open weather_telemetry.db`** | • `stations` *(50 AWS IDs: `'AWS-001'`..`'AWS-050'``)*<br>• **`raw_telemetry`** *(250,000 1-min rows)* | `recorded_at`, `temperature` (`-999.0`), `pressure` (`-999.0`), `wind_speed`, `wind_direction`, `rain_accum_1m` | • **Part I §4.4** (`sqlite_schema`)<br>• **Part II §1 & §4A** (`raw_telemetry`)<br>• **Part IV §1–§4** (CTEs, `WITH RECURSIVE`, Window `OVER`) |
 >
 > **Instant Check & Switch Commands (Inside `sqlite>`):**  
 > Run **`.databases`** and **`.tables`** to see which file you are currently inside, and type **`.open weather_ops.db`** or **`.open weather_telemetry.db`** to switch files in 1 second without exiting `sqlite3`!
@@ -250,10 +250,10 @@ Every execution of `PRAGMA wal_checkpoint(<MODE>);` returns a single diagnostic 
 
 | Checkpoint Mode | SQL Command | Waits for Active Writers/Readers? | Rewinds WAL Write Pointer to Frame 1? | Truncates `.db-wal` File to `0` Bytes on Disk? | When to Use |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **1. `PASSIVE`** *(Default)* | `PRAGMA wal_checkpoint(PASSIVE);` | ❌ **Never blocks** (stops at first active reader snapshot) | Only if `checkpointed == log` and no readers remain | ❌ No (keeps allocated file size unless `journal_size_limit` set) | Used automatically by `wal_autocheckpoint = 1000` and non-intrusive background cron jobs. |
-| **2. `FULL`** | `PRAGMA wal_checkpoint(FULL);` | ⏳ **Waits** (up to `busy_timeout`) for current writers & existing readers to finish | Only if no new reader started during the flush | ❌ No | Scheduled maintenance window when you want all committed WAL frames flushed to `.db`. |
-| **3. `RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | ⏳ **Waits** for all readers to finish **after** flushing so next writer **must** start at byte 0 | ✅ **Guaranteed** (blocks new writers until WAL rewinds to frame 1) | ❌ No (reuses existing file allocation for speed) | High-throughput ingestion daemons that want to bound `.db-wal` growth without filesystem `ftruncate()` metadata stalls. |
-| **4. `TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | ⏳ **Waits** for all writers & readers, flushes all frames, and rewinds | ✅ **Guaranteed** | ✅ **Yes (`0` bytes)** | Pre-backup / pre-archival hook (`compact_hot_to_cold.py`) to fold everything into a clean single `.db` file. |
+| **1. `PASSIVE`** *(Default)* | `PRAGMA wal_checkpoint(PASSIVE);` | **Never blocks** (stops at first active reader snapshot) | Only if `checkpointed == log` and no readers remain | No (keeps allocated file size unless `journal_size_limit` set) | Used automatically by `wal_autocheckpoint = 1000` and non-intrusive background cron jobs. |
+| **2. `FULL`** | `PRAGMA wal_checkpoint(FULL);` | **Waits** (up to `busy_timeout`) for current writers & existing readers to finish | Only if no new reader started during the flush | No | Scheduled maintenance window when you want all committed WAL frames flushed to `.db`. |
+| **3. `RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | **Waits** for all readers to finish **after** flushing so next writer **must** start at byte 0 | **Guaranteed** (blocks new writers until WAL rewinds to frame 1) | No (reuses existing file allocation for speed) | High-throughput ingestion daemons that want to bound `.db-wal` growth without filesystem `ftruncate()` metadata stalls. |
+| **4. `TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | **Waits** for all writers & readers, flushes all frames, and rewinds | **Guaranteed** | **Yes (`0` bytes)** | Pre-backup / pre-archival hook (`compact_hot_to_cold.py`) to fold everything into a clean single `.db` file. |
 
 ##### 5.3b. Deep-Dive: The `journal_mode` $\times$ `synchronous` Durability & `fsync()` Matrix
 
@@ -261,11 +261,11 @@ A common misconception is that `PRAGMA synchronous = NORMAL;` is "unsafe." In re
 
 | Configuration Pair | OS `fsync()` Calls per `COMMIT` | Process Crash (`kill -9`) | Sudden Power Loss / OS Kernel Panic | Relative Write Speed | Verdict for Meteorological Engineering |
 | :--- | :---: | :--- | :--- | :---: | :--- |
-| `journal_mode = DELETE` + `synchronous = FULL` *(SQLite Default)* | **2 `fsync`s** per commit (journal + `.db`) | ✅ Safe | ✅ Safe (Zero data loss, zero corruption) | $1\times$ (Slowest; blocks readers) | Legacy default; safe but suffers `database is locked` under concurrent load. |
-| `journal_mode = DELETE` + `synchronous = NORMAL` | 1–2 `fsync`s (skips barrier before deleting journal) | ✅ Safe | ⚠️ **Small Corruption Risk** if power dies mid-commit | $\approx 2\times$ | Avoid in `DELETE` mode; switch to `WAL` instead. |
-| **`journal_mode = WAL` + `synchronous = NORMAL`** *(Recommended Production)* | **0 `fsync`s on commit!** (`fsync` only during WAL checkpoint) | ✅ Safe (OS flushes buffers) | ✅ **100% Corruption-Safe!** *(Last ~1–2s of un-fsynced commits may roll back cleanly, but `.db` never corrupts)* | **$10\text{--}25\times$ faster** | **Gold Standard for Edge AWS Loggers & Telemetry Daemons.** Preserves SSD/SD-card lifespan and eliminates commit stalls. |
-| **`journal_mode = WAL` + `synchronous = FULL`** | **1 `fsync`** per commit (on `.db-wal` append) | ✅ Safe | ✅ **100% Safe + Zero Lost Commits** | $\approx 3\text{--}5\times$ faster than `DELETE+FULL` | Use for critical operational alert tables (`weather_alerts`) where even 1 second of power-cut rollback is unacceptable. |
-| `journal_mode = OFF` + `synchronous = OFF` | **0 `fsync`s** | ❌ **DB Corrupts** | ❌ **DB Corrupts** | **$50\times$ faster** | **Only** for disposable scratch generators ([`generate_weather_db.py`](./generate_weather_db.py)) where the file is rebuilt from scratch on failure. |
+| `journal_mode = DELETE` + `synchronous = FULL` *(SQLite Default)* | **2 `fsync`s** per commit (journal + `.db`) | Safe | Safe (Zero data loss, zero corruption) | $1\times$ (Slowest; blocks readers) | Legacy default; safe but suffers `database is locked` under concurrent load. |
+| `journal_mode = DELETE` + `synchronous = NORMAL` | 1–2 `fsync`s (skips barrier before deleting journal) | Safe | **Small Corruption Risk** if power dies mid-commit | $\approx 2\times$ | Avoid in `DELETE` mode; switch to `WAL` instead. |
+| **`journal_mode = WAL` + `synchronous = NORMAL`** *(Recommended Production)* | **0 `fsync`s on commit!** (`fsync` only during WAL checkpoint) | Safe (OS flushes buffers) | **100% Corruption-Safe!** *(Last ~1–2s of un-fsynced commits may roll back cleanly, but `.db` never corrupts)* | **$10\text{--}25\times$ faster** | **Gold Standard for Edge AWS Loggers & Telemetry Daemons.** Preserves SSD/SD-card lifespan and eliminates commit stalls. |
+| **`journal_mode = WAL` + `synchronous = FULL`** | **1 `fsync`** per commit (on `.db-wal` append) | Safe | **100% Safe + Zero Lost Commits** | $\approx 3\text{--}5\times$ faster than `DELETE+FULL` | Use for critical operational alert tables (`weather_alerts`) where even 1 second of power-cut rollback is unacceptable. |
+| `journal_mode = OFF` + `synchronous = OFF` | **0 `fsync`s** | **DB Corrupts** | **DB Corrupts** | **$50\times$ faster** | **Only** for disposable scratch generators ([`generate_weather_db.py`](./generate_weather_db.py)) where the file is rebuilt from scratch on failure. |
 
 ##### 5.3c. Two Production WAL Pitfalls Every Engineer Must Know
 
@@ -373,8 +373,8 @@ SQL is not executed top-to-bottom. The query planner evaluates statements in eig
 
 > **The Alias Trap:** You **cannot** use a `SELECT` column alias in `WHERE` or `GROUP BY` because Step 2 and Step 3 execute **before** Step 5 allocates the alias.
 > ```sql
-> -- 📂 TARGET FILE: day1/weather_telemetry.db
-> -- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+> -- TARGET FILE: day1/weather_telemetry.db
+> -- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 > 
 > -- FAILS (Step 2 doesn't know temp_f):
 > SELECT station_id, (temperature * 1.8 + 32.0) AS temp_f
@@ -392,8 +392,8 @@ SQL is not executed top-to-bottom. The query planner evaluates statements in eig
 ### 2. DDL & Physical Meteorology Constraints (`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK`)
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db (DDL Reference — already created by weather_ops_seed.sql)
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db (DDL Reference — already created by weather_ops_seed.sql)
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 -- CRITICAL: SQLite disables Foreign Keys by default on every new connection!
 -- Always run this first:
 PRAGMA foreign_keys = ON;
@@ -415,10 +415,10 @@ CREATE TABLE IF NOT EXISTS stations (
 
 | Pattern | SQL Syntax | Allows `NULL`? | Enforces Range / Enum? | When to Use | Example in `weather_ops.db` |
 | :--- | :--- | :---: | :---: | :--- | :--- |
-| **1. `NOT NULL` only** | `col TYPE NOT NULL` | ❌ No | ❌ No | Mandatory timestamp, ID, or unbounded metric where `NULL` is forbidden. | `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL` |
-| **2. `NOT NULL CHECK (...)`** | `col TYPE NOT NULL CHECK (...)` | ❌ No | ✅ Yes | Mandatory attribute that **must exist** AND **must obey physical bounds or an enum**. (`CHECK` alone is NOT enough to block `NULL`!) | `latitude`, `elevation_m`, `pred_wind_kt`, `qc_flag` |
-| **3. Nullable + `CHECK`** | `col TYPE CHECK (col IS NULL OR (...))` | ✅ Yes | ✅ Yes (if not `NULL`) | Field sensor reading that can be `NULL` when offline, **but if reported**, must obey physics. (`IS NULL OR` makes nullability explicit and safe for `WHERE` clauses). | `humidity_pct` (`0–100%`), `wind_speed_kt` (`>= 0.0`) |
-| **4. Raw Nullable (No `CHECK`)** | `col TYPE` | ✅ Yes | ❌ No | Raw/Bronze staging column that must ingest in-band hardware sentinels (`-9999.0`) or raw spikes (`68.5°C`) for downstream `NULLIF` / QC auditing. | `precip_1h_mm` (Day 1 raw `-9999.0`), `temp_c` |
+| **1. `NOT NULL` only** | `col TYPE NOT NULL` | No | No | Mandatory timestamp, ID, or unbounded metric where `NULL` is forbidden. | `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL` |
+| **2. `NOT NULL CHECK (...)`** | `col TYPE NOT NULL CHECK (...)` | No | Yes | Mandatory attribute that **must exist** AND **must obey physical bounds or an enum**. (`CHECK` alone is NOT enough to block `NULL`!) | `latitude`, `elevation_m`, `pred_wind_kt`, `qc_flag` |
+| **3. Nullable + `CHECK`** | `col TYPE CHECK (col IS NULL OR (...))` | Yes | Yes (if not `NULL`) | Field sensor reading that can be `NULL` when offline, **but if reported**, must obey physics. (`IS NULL OR` makes nullability explicit and safe for `WHERE` clauses). | `humidity_pct` (`0–100%`), `wind_speed_kt` (`>= 0.0`) |
+| **4. Raw Nullable (No `CHECK`)** | `col TYPE` | Yes | No | Raw/Bronze staging column that must ingest in-band hardware sentinels (`-9999.0`) or raw spikes (`68.5°C`) for downstream `NULLIF` / QC auditing. | `precip_1h_mm` (Day 1 raw `-9999.0`), `temp_c` |
 
 > **The Empty-String Trap (`''` $\neq$ `NULL`):** `station_name TEXT NOT NULL` blocks `NULL` but allows `''`. To block both `NULL` and blank strings: `station_name TEXT NOT NULL CHECK (LENGTH(TRIM(station_name)) > 0)`.
 
@@ -444,9 +444,9 @@ SQL implements Three-Valued Logic: `TRUE`, `FALSE`, and `UNKNOWN` (represented b
 
 | 3VL Evaluation Result | `WHERE` / `HAVING` / `JOIN ON` Gate | `CHECK (...)` Constraint Gate | Why It Matters |
 | :--- | :--- | :--- | :--- |
-| **`TRUE`** | ✅ **Row Kept** | ✅ **Insert Allowed** | Valid data passes both filters and constraints |
-| **`FALSE`** | ❌ **Row Discarded** | ❌ **Insert Rejected** | Violating data is blocked by both |
-| **`UNKNOWN` (`NULL`)** | ❌ **Row Discarded** | ✅ **Insert ALLOWED!** | `CHECK (col >= 0)` **allows `NULL`!** Add `NOT NULL` if `NULL` must be rejected |
+| **`TRUE`** | **Row Kept** | **Insert Allowed** | Valid data passes both filters and constraints |
+| **`FALSE`** | **Row Discarded** | **Insert Rejected** | Violating data is blocked by both |
+| **`UNKNOWN` (`NULL`)** | **Row Discarded** | **Insert ALLOWED!** | `CHECK (col >= 0)` **allows `NULL`!** Add `NOT NULL` if `NULL` must be rejected |
 
 ---
 
@@ -482,8 +482,8 @@ In SQL, **`NULL` means "missing/unknown"** and is **ignored** by `AVG()`, `MIN()
 
 **4A. High-Frequency AWS Stream Sanitization (`day1/weather_telemetry.db` — table `raw_telemetry`):**
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 
 -- 1. Exact sentinel replacement in-flight with NULLIF
 SELECT
@@ -507,8 +507,8 @@ FROM raw_telemetry;
 
 **4B. Synoptic Observation Sanitization (`day1/weather_ops.db` — table `observations`):**
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. In-flight sentinel neutralization on synoptic precipitation (-9999.0 -> NULL):
 SELECT
@@ -526,7 +526,7 @@ WHERE precip_1h_mm = -9999.0;
 ## PART III: Filtering, Classification, Temporal Bucketing & `JOIN` Verification
 
 > [!IMPORTANT]
-> **📂 Database Switch — All SQL Queries in Part III Run on `day1/weather_ops.db`!**
+> ** Database Switch — All SQL Queries in Part III Run on `day1/weather_ops.db`!**
 > Before running any query in Part III (`observations`, `stations`, `forecasts`, `weather_alerts`), switch your `sqlite3` session:
 > ```sql
 > .open weather_ops.db
@@ -535,8 +535,8 @@ WHERE precip_1h_mm = -9999.0;
 ### 1. Operational Classification (`CASE WHEN`) & Climatological Rollups (`GROUP BY` / `HAVING`)
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. Operational Wind Classification (Beaufort Categories via CASE WHEN)
 SELECT
@@ -608,15 +608,15 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 
 | `JOIN` Type | SQLite `< 3.39` | SQLite `3.39+` | MySQL `8.0 / 8.4` | PostgreSQL 16 | DuckDB | Portable Emulation / Engine Note |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **`INNER JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | Returns only matching rows ($A \cap B$). |
-| **`LEFT [OUTER] JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | All left rows + matching right rows ($A \cup (A \cap B)$). |
-| **`LEFT ANTI-JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | `A LEFT JOIN B ON ... WHERE B.id IS NULL` ($A \setminus B$). |
-| **`RIGHT [OUTER] JOIN`** | ❌ | ✅ | ✅ | ✅ | ✅ | **Portable `< 3.39` Rewrite:** Flip table order to `B LEFT JOIN A`. |
-| **`FULL [OUTER] JOIN`** | ❌ | ✅ | ❌ | ✅ | ✅ | **Portable `< 3.39` & MySQL Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
-| **`CROSS JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | Cartesian product ($M \times N$ rows; no `ON` clause). |
-| **`SELF JOIN`** | ✅ | ✅ | ✅ | ✅ | ✅ | `FROM stations s1 JOIN stations s2 ON s1.climate_zone = s2.climate_zone AND s1.station_id < s2.station_id`. |
-| **`LATERAL` Join** | ❌ | ❌ | ✅ *(8.0.14+)* | ✅ | ✅ | Correlated subquery per left row. In SQLite, use `ROW_NUMBER() OVER (PARTITION BY ...)` in a CTE. |
-| **`ASOF JOIN`** | ❌ | ❌ | ❌ *(use `LATERAL`)* | ❌ *(use `LATERAL`)* | ✅ | Time-series nearest-timestamp match (`ON a.id = b.id AND a.ts >= b.ts`). |
+| **`INNER JOIN`** | Yes | Yes | Yes | Yes | Yes | Returns only matching rows ($A \cap B$). |
+| **`LEFT [OUTER] JOIN`** | Yes | Yes | Yes | Yes | Yes | All left rows + matching right rows ($A \cup (A \cap B)$). |
+| **`LEFT ANTI-JOIN`** | Yes | Yes | Yes | Yes | Yes | `A LEFT JOIN B ON ... WHERE B.id IS NULL` ($A \setminus B$). |
+| **`RIGHT [OUTER] JOIN`** | No | Yes | Yes | Yes | Yes | **Portable `< 3.39` Rewrite:** Flip table order to `B LEFT JOIN A`. |
+| **`FULL [OUTER] JOIN`** | No | Yes | No | Yes | Yes | **Portable `< 3.39` & MySQL Rewrite:** `A LEFT JOIN B UNION ALL B LEFT JOIN A WHERE A.id IS NULL`. |
+| **`CROSS JOIN`** | Yes | Yes | Yes | Yes | Yes | Cartesian product ($M \times N$ rows; no `ON` clause). |
+| **`SELF JOIN`** | Yes | Yes | Yes | Yes | Yes | `FROM stations s1 JOIN stations s2 ON s1.climate_zone = s2.climate_zone AND s1.station_id < s2.station_id`. |
+| **`LATERAL` Join** | No | No | Yes *(8.0.14+)* | Yes | Yes | Correlated subquery per left row. In SQLite, use `ROW_NUMBER() OVER (PARTITION BY ...)` in a CTE. |
+| **`ASOF JOIN`** | No | No | No *(use `LATERAL`)* | No *(use `LATERAL`)* | Yes | Time-series nearest-timestamp match (`ON a.id = b.id AND a.ts >= b.ts`). |
 | **Join Algorithms** | Nested Loop only | Nested Loop only | Nested Loop & Hash Join *(8.0.18+; no Merge Join)* | Nested Loop, Parallel Hash, Merge Join | Vectorized Hash & Merge Join | SQLite has no `Hash`/`Merge Join`; MySQL lacks `Sort-Merge Join`. |
 
 ---
@@ -624,8 +624,8 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 ### 5. All 7 Relational `JOIN` Recipes on `weather_ops.db`
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. LEFT ANTI-JOIN (LEFT JOIN + IS NULL): Find silent/offline stations with 0 observations!
 SELECT s.station_id, s.station_name, s.climate_zone, s.is_active
@@ -697,7 +697,7 @@ INNER JOIN stations s2
 ## PART IV: Common Table Expressions (CTEs), Recursive Grids & Window Functions
 
 > [!IMPORTANT]
-> **📂 Database Switch — All SQL Queries in Part IV Run on `day1/weather_telemetry.db`!**
+> ** Database Switch — All SQL Queries in Part IV Run on `day1/weather_telemetry.db`!**
 > Part IV queries the 250,000-row `raw_telemetry` table. Before running any query below, switch your `sqlite3` session:
 > ```sql
 > .open weather_telemetry.db
@@ -708,8 +708,8 @@ INNER JOIN stations s2
 Use CTEs (`WITH` clauses) to organize transformations as a linear Directed Acyclic Graph (DAG) instead of deeply nested subqueries:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH stage1_cleansed AS (
     -- Strip impossible hardware voltages and wire sentinels
     SELECT 
@@ -744,8 +744,8 @@ ORDER BY peak_gust DESC;
 A simple `GROUP BY` cannot report on hours where a station sent zero packets. Generate a continuous reference grid to spot communication blackouts:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH RECURSIVE timeline(slot) AS (
     SELECT datetime('2026-10-01 00:00:00')
     UNION ALL
@@ -816,8 +816,8 @@ ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING
 #### Recipe 1: 3-Hour Barometric Tendency ($\Delta P$)
 Detect approaching squall lines or frontal passages:
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     station_id,
     recorded_at,
@@ -837,8 +837,8 @@ WHERE pressure > -900.0;
 #### Recipe 2: Latest State Deduplication (`ROW_NUMBER()`)
 Retrieve the single latest observation per station without correlated subqueries:
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH indexed_stream AS (
     SELECT 
         station_id,
@@ -861,8 +861,8 @@ WHERE recency_rank = 1;
 #### Recipe 3: Rolling 5-Point Wind Gust Smoother
 Filter out single-ping turbulent noise:
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     station_id,
     recorded_at,
@@ -884,8 +884,8 @@ WHERE wind_speed >= 0.0;
 #### Recipe 4: Thermal Spike / Inversion Detector
 Flag measurements deviating by $>6.0^\circ\text{C}$ from a centered moving window:
 ```sql
--- 📂 TARGET FILE: day1/weather_telemetry.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+-- TARGET FILE: day1/weather_telemetry.db
+-- In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH baseline AS (
     SELECT 
         station_id,
@@ -912,5 +912,5 @@ ORDER BY anomaly_magnitude DESC;
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [📘 Day 1 Coursebook](day1_master_coursebook.md) | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](day1_master_coursebook.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 

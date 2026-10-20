@@ -1,6 +1,6 @@
 # Day 4 Course Walkthrough: `day4_weather_ops_mongo_advanced.js` — MongoDB Aggregations, Geospatial (`2dsphere`), ESR Indexing & Upper-Air Analytics
 
-[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⚙️ Original Script](./day4_weather_ops_mongo_advanced.js) | [🌱 Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [📊 50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
+[Home](../README.md) | [Portal](../bootcamp_portal.html) | [Day 4 Coursebook](./day4_master_coursebook.md) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Original Script](./day4_weather_ops_mongo_advanced.js) | [Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
 
 ---
 
@@ -349,4 +349,4 @@ Executing `mongosh weather_nosql day4_weather_ops_mongo_advanced.js` produces th
 
 ---
 
-[🏠 Home](../README.md) | [🌐 Portal](../bootcamp_portal.html) | [📘 Day 4 Coursebook](./day4_master_coursebook.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⚙️ Original Script](./day4_weather_ops_mongo_advanced.js) | [🌱 Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [📊 50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
+[Home](../README.md) | [Portal](../bootcamp_portal.html) | [Day 4 Coursebook](./day4_master_coursebook.md) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [Original Script](./day4_weather_ops_mongo_advanced.js) | [Seed Script Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md) | [50K Benchmark Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)

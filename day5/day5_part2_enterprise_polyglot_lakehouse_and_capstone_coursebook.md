@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [➡️ Final Assessment & Troubleshooting](bootcamp_capstone_troubleshooting_and_quiz.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Final Assessment & Troubleshooting](bootcamp_capstone_troubleshooting_and_quiz.md) | [Reference Cards](../reference_cards/README.md)
 
 # Weather Forecast Engineering Database Bootcamp
 
@@ -948,4 +948,4 @@ Over the past five days, we deconstructed and rebuilt the complete data architec
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [➡️ Final Assessment & Troubleshooting](bootcamp_capstone_troubleshooting_and_quiz.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Final Assessment & Troubleshooting](bootcamp_capstone_troubleshooting_and_quiz.md) | [Reference Cards](../reference_cards/README.md)

@@ -7,10 +7,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** ⬅️ *First Card* | **Card 01 of 14** | [Next Card ➡️](./02_duckdb_vectorized_olap_vs_sqlite.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** ⬅ *First Card* | **Card 01 of 14** | [Next Card](./02_duckdb_vectorized_olap_vs_sqlite.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Systems & Meteorological Engineers](#executive-summary-for-systems--meteorological-engineers)
 - [1. Why Weather Engineers Outgrow CSV Files & Row vs. Column Orientation](#1-why-weather-engineers-outgrow-csv-files--row-vs-column-orientation)
@@ -92,11 +92,11 @@ Suppose we have 3 synoptic observations:
 ```mermaid
 flowchart TB
     subgraph RowStore["1. Row-Oriented Layout (CSV, SQLite, PostgreSQL Heap)"]
-        R["Disk Layout: Row by Row\n[60390, 12:00Z, 27.8, 0.0] | [60490, 12:00Z, 29.5, 0.0] | [60419, 12:00Z, 25.0, 8.5]\n✅ Fast to insert 1 complete station reading\n❌ Slow to compute AVG(temp_c) across 100M rows (reads unneeded columns!)"]
+        R["Disk Layout: Row by Row\n[60390, 12:00Z, 27.8, 0.0] | [60490, 12:00Z, 29.5, 0.0] | [60419, 12:00Z, 25.0, 8.5]\n Fast to insert 1 complete station reading\n Slow to compute AVG(temp_c) across 100M rows (reads unneeded columns!)"]
     end
 
     subgraph ColStore["2. Column-Oriented Layout (Apache Parquet, Apache Arrow, DuckDB)"]
-        C["Disk Layout: Column by Column\nstation_id: [60390, 60490, 60419]\nobs_time:   [12:00Z, 12:00Z, 12:00Z]\ntemp_c:     [27.8, 29.5, 25.0]\nprecip_mm:  [0.0, 0.0, 8.5]\n✅ Reads ONLY the 'temp_c' bytes from disk (Projection Pushdown)\n✅ Identical data types next to each other compress 5x-15x better!"]
+        C["Disk Layout: Column by Column\nstation_id: [60390, 60490, 60419]\nobs_time:   [12:00Z, 12:00Z, 12:00Z]\ntemp_c:     [27.8, 29.5, 25.0]\nprecip_mm:  [0.0, 0.0, 8.5]\n Reads ONLY the 'temp_c' bytes from disk (Projection Pushdown)\n Identical data types next to each other compress 5x-15x better!"]
     end
 ```
 
@@ -826,7 +826,7 @@ DROP TABLE synoptic.obs_y2026m06;
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** ⬅️ *First Card* | **Card 01 of 14** | [Next Card ➡️](./02_duckdb_vectorized_olap_vs_sqlite.md) | [⬆️ Back to Top](#apache-parquet-columnar-storage-architecture--postgresql-to-parquet-archival-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** ⬅ *First Card* | **Card 01 of 14** | [Next Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | [⬆ Back to Top](#apache-parquet-columnar-storage-architecture--postgresql-to-parquet-archival-reference-card)

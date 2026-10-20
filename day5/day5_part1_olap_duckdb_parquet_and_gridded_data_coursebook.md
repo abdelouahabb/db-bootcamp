@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 4: MongoDB & NoSQL](../day4/day4_master_coursebook.md) | [➡️ Day 5 (Part 2): Enterprise Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 4: MongoDB & NoSQL](../day4/day4_master_coursebook.md) | [Day 5 (Part 2): Enterprise Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # Weather Forecast Engineering Database Bootcamp
 
@@ -287,7 +287,7 @@ $$\text{Workload Transformation} = \text{Loop over Operators}(\text{Row}) \impli
 
 ```mermaid
 flowchart LR
-    subgraph Volcano["❌ Row-Oriented Volcano Execution (PostgreSQL / SQLite)"]
+    subgraph Volcano["Row-Oriented Volcano Execution (PostgreSQL / SQLite)"]
         direction LR
         V_DISK[("8 KB Heap Pages\n(23B MVCC Headers +\nAll 12 Columns Mixed)")]
         V_SCAN["SeqScan::NextTuple()\n(100M Virtual Calls!)"]
@@ -296,7 +296,7 @@ flowchart LR
         V_DISK --> V_SCAN --> V_FILT --> V_AGG
     end
 
-    subgraph Vectorized["✅ DuckDB Vectorized SIMD + Columnar Parquet Pruning"]
+    subgraph Vectorized["DuckDB Vectorized SIMD + Columnar Parquet Pruning"]
         direction LR
         P_HIVE[("Hive Directory Pruning\nyear=2026/month=10/\n(Skips 90% of Folders)")]
         P_ZONE[("Parquet Footer Zone Maps\nRow Group Min/Max Check\n& Column Projection")]
@@ -366,8 +366,8 @@ In Days 2–3, we learned that querying an unindexed relational table forces a s
 
 | Parquet Export Method | Row Group 0 `obs_time` `[min, max]` | Row Group 9 `obs_time` `[min, max]` | Query: `WHERE obs_time BETWEEN '2026-10-15' AND '2026-10-16'` |
 | :--- | :--- | :--- | :--- |
-| **1. Unsorted Export** (`SELECT * FROM observations`) | `['2026-01-01', '2026-12-31']` *(All dates mixed!)* | `['2026-01-01', '2026-12-31']` *(All dates mixed!)* | ❌ **0% Row Groups Skipped!** Every single Row Group overlaps `Oct 15`, forcing DuckDB to decompress 100% of the file! |
-| **2. Sorted Export** (`ORDER BY obs_time, station_id`) | `['2026-01-01', '2026-02-05']` *(Strictly bounded!)* | `['2026-10-10', '2026-11-14']` *(Strictly bounded!)* | ✅ **90%+ Row Groups Skipped via Footer Metadata!** Only Row Group 9 is read and decompressed! |
+| **1. Unsorted Export** (`SELECT * FROM observations`) | `['2026-01-01', '2026-12-31']` *(All dates mixed!)* | `['2026-01-01', '2026-12-31']` *(All dates mixed!)* | **0% Row Groups Skipped!** Every single Row Group overlaps `Oct 15`, forcing DuckDB to decompress 100% of the file! |
+| **2. Sorted Export** (`ORDER BY obs_time, station_id`) | `['2026-01-01', '2026-02-05']` *(Strictly bounded!)* | `['2026-10-10', '2026-11-14']` *(Strictly bounded!)* | **90%+ Row Groups Skipped via Footer Metadata!** Only Row Group 9 is read and decompressed! |
 
 ---
 
@@ -637,9 +637,9 @@ When satellite imagery (`MSG SEVIRI` Cloud-Optimized GeoTIFFs) or reanalysis arc
 
 | Raster Reading Method | What Happens to Valid Pixel (`14542`) | What Happens to `_FillValue` (`65535` Outer Space Pixel) | Resulting Impact on Climatology Mean |
 | :--- | :--- | :--- | :--- |
-| **1. Raw Unscaled Read** (`rasterio.read(1)` without unpacking) | Read as `14542` (`14,542 K`!) | Read as `65535` (`65,535 K`!) | ❌ **Completely unusable** (raw digital numbers instead of Kelvin). |
-| **2. Unpack First, Mask Later** *(Bug!)* | `14542 * 0.01 + 150 = 295.42 K` | Unpacked to **`805.35 K` (`532°C`!)** and no longer equals `65535`! | ❌ **Silent Sentinel Contamination!** Outer-space pixels turn into `805.35 K` lava and corrupt regional averages! |
-| **3. Mask `_FillValue == 65535` to `NaN` FIRST, Then Unpack** *(Correct; `xarray mask_and_scale=True`)* | `295.42 K` | Converted to **`np.nan`** (`NaN * 0.01 + 150 = NaN`, ignored by `np.nanmean()`) | ✅ **100% Physically Accurate!** |
+| **1. Raw Unscaled Read** (`rasterio.read(1)` without unpacking) | Read as `14542` (`14,542 K`!) | Read as `65535` (`65,535 K`!) | **Completely unusable** (raw digital numbers instead of Kelvin). |
+| **2. Unpack First, Mask Later** *(Bug!)* | `14542 * 0.01 + 150 = 295.42 K` | Unpacked to **`805.35 K` (`532°C`!)** and no longer equals `65535`! | **Silent Sentinel Contamination!** Outer-space pixels turn into `805.35 K` lava and corrupt regional averages! |
+| **3. Mask `_FillValue == 65535` to `NaN` FIRST, Then Unpack** *(Correct; `xarray mask_and_scale=True`)* | `295.42 K` | Converted to **`np.nan`** (`NaN * 0.01 + 150 = NaN`, ignored by `np.nanmean()`) | **100% Physically Accurate!** |
 
 ---
 
@@ -985,4 +985,4 @@ TELL_ATLAS_RIDGES                   710                9.98               5.84  
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 4: MongoDB & NoSQL](../day4/day4_master_coursebook.md) | [➡️ Day 5 (Part 2): Enterprise Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 4: MongoDB & NoSQL](../day4/day4_master_coursebook.md) | [Day 5 (Part 2): Enterprise Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [Reference Cards](../reference_cards/README.md)

@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](./day2_master_coursebook.md) | [🐘 PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | **Pageinspect & Storage Walkthrough** | [🔒 Two-Terminal ACID Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](./day2_master_coursebook.md) | [PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | **Pageinspect & Storage Walkthrough** | [Two-Terminal ACID Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md) | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Complete Architectural & Line-by-Line Course Walkthrough: `day2_pageinspect_and_storage_lab.sql`
 
@@ -7,7 +7,7 @@
 **Companion Coursebook:** [`day2_master_coursebook.md`](./day2_master_coursebook.md)
 
 > [!IMPORTANT]
-> **📂 Which Database, Script & Tables Does This Walkthrough Cover?**
+> ** Which Database, Script & Tables Does This Walkthrough Cover?**
 > - **How to Execute This Script:**
 >   ```bash
 >   cd day2
@@ -724,4 +724,4 @@ The target query retrieves a 3-hour window (`10,800 seconds` / `2 seconds` = $5,
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](./day2_master_coursebook.md) | [🐘 PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | **Pageinspect & Storage Walkthrough** | [🔒 Two-Terminal ACID Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](./day2_master_coursebook.md) | [PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | **Pageinspect & Storage Walkthrough** | [Two-Terminal ACID Walkthrough](./day2_two_terminal_acid_lab_course_walkthrough.md) | [Day 3 Coursebook](../day3/day3_master_coursebook.md)

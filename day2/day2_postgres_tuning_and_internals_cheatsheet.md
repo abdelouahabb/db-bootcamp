@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](day2_master_coursebook.md) | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Day 2 Master Cheatsheet: PostgreSQL Installation, Storage Internals, WAL, Vacuum, Locking & `EXPLAIN` Forensics
 
@@ -7,7 +7,7 @@
 ---
 
 > [!CAUTION]
-> ### 🚨 STOP & READ FIRST — Day 2 PostgreSQL Database (`weather_ops`), Scripts, Schemas & Tables Map
+> ### STOP & READ FIRST — Day 2 PostgreSQL Database (`weather_ops`), Scripts, Schemas & Tables Map
 >
 > All Day 2 PostgreSQL commands run inside the **`weather_ops`** database (`psql -d weather_ops`). Day 2 uses **3 `.sql` scripts** in `day2/` across **4 schemas (`synoptic`, `nwp`, `alerts`, `public`)**:
 >
@@ -17,7 +17,7 @@
 > | **2. [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)** | `cd day2 && psql -d weather_ops -f day2_pageinspect_and_storage_lab.sql` | • **`public.telemetry_unaligned`** & **`public.telemetry_aligned`** (`80B` vs. `64B` Tuple Tetris)<br/>• **`public.layout_padded`** & **`public.layout_packed`** (`48B` vs. `40B` `pageinspect`)<br/>• **`public.mvcc_demo`** (`t_xmin`, `t_xmax`, `t_ctid` chain)<br/>• **`public.bloat_lab`** (`100k` rows — `pgstattuple` `VACUUM` vs. `VACUUM FULL`)<br/>• **`public.plan_lab`** (`1,000,000` rows — Row-Store Scan Penalty & `Index Only Scan`) |
 > | **3. [`day2/day2_two_terminal_acid_lab.sql`](./day2_two_terminal_acid_lab.sql)** | Open **Terminal A** & **Terminal B** side-by-side (`psql -d weather_ops`) and paste steps interactively | • **`public.station_calibration`** (`3` rows: `'AWS-001'`, `'AWS-002'`, `'AWS-003'`) |
 >
-> *💡 **Schema `search_path` Tip:** If `SELECT * FROM observations;` gives `ERROR: relation "observations" does not exist`, either qualify the schema (**`synoptic.observations`**) or run `ALTER DATABASE weather_ops SET search_path TO synoptic, nwp, alerts, public;` and reconnect (`\c weather_ops`).*
+> * **Schema `search_path` Tip:** If `SELECT * FROM observations;` gives `ERROR: relation "observations" does not exist`, either qualify the schema (**`synoptic.observations`**) or run `ALTER DATABASE weather_ops SET search_path TO synoptic, nwp, alerts, public;` and reconnect (`\c weather_ops`).*
 
 ---
 
@@ -250,10 +250,10 @@ shared_preload_libraries = 'pg_stat_statements'
 
 | Identifier Strategy | SQL Declaration | Disk Size | B-Tree Locality | WAL FPW Cost | When to Use |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **1. `BIGINT IDENTITY`** | `BIGINT GENERATED ALWAYS AS IDENTITY` | **`8B`** (`typalign='d'`) | ✅ **Rightmost Append** | ⚡ **Minimal** | Default for centralized DB-generated surrogate keys (`obs_id`). |
-| **2. `UUIDv7` (RFC 9562)** | `UUID DEFAULT uuid_generate_v7()` *(PG 18+: `uuidv7()`)* | **`16B`** (`typalign='c'`) | ✅ **Rightmost Append** | ⚡ **Minimal** | Distributed/offline edge stations, microservices, multi-region ingest. |
-| **3. `UUIDv4` (Random)** | `UUID DEFAULT gen_random_uuid()` | **`16B`** (`typalign='c'`) | ❌ **Random Scatter!** | 🔥 **$500\times$ Bloat** | **Avoid for large indexed PKs!** Use only for unindexed tokens or tiny tables. |
-| **4. Text UUID *(Anti-Pattern)*** | `VARCHAR(36)` / `TEXT` | **`37B`** (`1B varlena + 36B`) | ❌ Wastes `21B`/row | 🔥 High | **Never!** Always use PostgreSQL's native `16-byte` binary `UUID` type. |
+| **1. `BIGINT IDENTITY`** | `BIGINT GENERATED ALWAYS AS IDENTITY` | **`8B`** (`typalign='d'`) | **Rightmost Append** | **Minimal** | Default for centralized DB-generated surrogate keys (`obs_id`). |
+| **2. `UUIDv7` (RFC 9562)** | `UUID DEFAULT uuid_generate_v7()` *(PG 18+: `uuidv7()`)* | **`16B`** (`typalign='c'`) | **Rightmost Append** | **Minimal** | Distributed/offline edge stations, microservices, multi-region ingest. |
+| **3. `UUIDv4` (Random)** | `UUID DEFAULT gen_random_uuid()` | **`16B`** (`typalign='c'`) | **Random Scatter!** | **$500\times$ Bloat** | **Avoid for large indexed PKs!** Use only for unindexed tokens or tiny tables. |
+| **4. Text UUID *(Anti-Pattern)*** | `VARCHAR(36)` / `TEXT` | **`37B`** (`1B varlena + 36B`) | Wastes `21B`/row | High | **Never!** Always use PostgreSQL's native `16-byte` binary `UUID` type. |
 
 ---
 
@@ -321,8 +321,8 @@ EXPLAIN (ANALYZE, BUFFERS, SETTINGS, TIMING) <SQL_QUERY>;
 ### 8.2 Production Diagnostic Queries (Copy & Paste Ready)
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
--- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
 
 -- 1. Check Database Buffer Cache Hit Ratio (Target: > 99.0%)
 SELECT
@@ -419,6 +419,6 @@ WHERE NOT blocked_locks.granted;
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](day2_master_coursebook.md) | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](day2_master_coursebook.md) | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 

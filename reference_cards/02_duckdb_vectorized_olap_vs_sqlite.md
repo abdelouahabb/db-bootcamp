@@ -7,10 +7,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card ➡️](./03_hive_partitioning_and_lakehouse_compaction.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card](./03_hive_partitioning_and_lakehouse_compaction.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Systems & Meteorological Engineers](#executive-summary-for-systems--meteorological-engineers)
 - [1. Head-to-Head Comparison Matrices](#1-head-to-head-comparison-matrices)
@@ -454,7 +454,7 @@ GROUP BY region;
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card ➡️](./03_hive_partitioning_and_lakehouse_compaction.md) | [⬆️ Back to Top](#duckdb-vectorized-olap-architecture-vs-sqlite-row-oltp-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card](./03_hive_partitioning_and_lakehouse_compaction.md) | [⬆ Back to Top](#duckdb-vectorized-olap-architecture-vs-sqlite-row-oltp-reference-card)

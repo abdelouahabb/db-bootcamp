@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📘 Day 5 (Part 2): Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Day 5 (Part 2): Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # 5-Day Bootcamp Final Assessment Quiz & 15 Real-World Weather Database Troubleshooting Scenarios
 
@@ -131,79 +131,79 @@ Each operational scenario below details the observed production symptom, the und
 
 1. **In SQLite, which command must you run on every new connection to enforce Foreign Key constraints?**
    - A) `SET foreign_keys = TRUE;`
-   - B) `PRAGMA foreign_keys = ON;` ✅
+   - B) `PRAGMA foreign_keys = ON;`
    - C) `ALTER DATABASE ENABLE FOREIGN KEYS;`
 
 2. **Which file format stores data column-by-column with Row Group `min`/`max` statistics in its footer?**
    - A) CSV
-   - B) Apache Parquet ✅
+   - B) Apache Parquet
    - C) JSON Lines
 
 3. **Why is DuckDB 20–50x faster than SQLite or PostgreSQL when calculating `AVG(temp_c)` over 50 million synoptic rows?**
-   - A) DuckDB uses columnar storage and multi-core vectorized SIMD execution (processing 2,048-value vectors in AVX registers), reading only the `temp_c` column ✅
+   - A) DuckDB uses columnar storage and multi-core vectorized SIMD execution (processing 2,048-value vectors in AVX registers), reading only the `temp_c` column
    - B) DuckDB skips ACID transactions
    - C) SQLite cannot store floating-point numbers
 
 4. **In PostgreSQL physical storage, what does `ctid = (4, 12)` represent?**
    - A) CPU Core 4, Thread 12
-   - B) Physical 8KB Heap Page 4, Tuple Slot 12 ✅
+   - B) Physical 8KB Heap Page 4, Tuple Slot 12
    - C) Schema 4, Table 12
 
 5. **In PostgreSQL, which hidden tuple header field holds the Transaction ID that deleted or updated a row?**
    - A) `xmin`
-   - B) `xmax` ✅
+   - B) `xmax`
    - C) `cmin`
 
 6. **How many bytes is the fixed PostgreSQL MVCC tuple header (`HeapTupleHeaderData`) before alignment padding and column data?**
    - A) 8 bytes
-   - B) 23 bytes (padded to 24 bytes) ✅
+   - B) 23 bytes (padded to 24 bytes)
    - C) 64 bytes
 
 7. **Which PostgreSQL index type is 99% smaller than a B-Tree index for chronological append-only `obs_time` columns?**
    - A) `GIN`
-   - B) `BRIN` (Block Range Index) ✅
+   - B) `BRIN` (Block Range Index)
    - C) `Hash`
 
 8. **Which PostgreSQL Window Function computes the 3-hour barometric pressure tendency ($P_t - P_{t-3\text{h}}$) without a self-join?**
    - A) `RANK() OVER (...)`
-   - B) `pressure_hpa - LAG(pressure_hpa, 3) OVER (PARTITION BY station_id ORDER BY obs_time)` ✅
+   - B) `pressure_hpa - LAG(pressure_hpa, 3) OVER (PARTITION BY station_id ORDER BY obs_time)`
    - C) `GROUP BY CUBE(pressure_hpa)`
 
 9. **Why can't MySQL's 4-byte `TIMESTAMP` data type store historical 1955 WMO synoptic observations?**
-   - A) MySQL `TIMESTAMP` only supports dates from `1970-01-01` to `2038-01-19` (32-bit Unix epoch limit) ✅
+   - A) MySQL `TIMESTAMP` only supports dates from `1970-01-01` to `2038-01-19` (32-bit Unix epoch limit)
    - B) MySQL does not support hours and minutes
    - C) MySQL stores timestamps as plain strings
 
 10. **In MongoDB, which update operator updates `max_observed_gust_kt` ONLY if the new wind gust is higher than the current stored value?**
     - A) `$inc`
-    - B) `$max` ✅
+    - B) `$max`
     - C) `$push`
 
 11. **In MongoDB Aggregation Pipelines, which stage flattens an array of upper-air radiosonde `vertical_levels` into individual documents per pressure level?**
-    - A) `$unwind` ✅
+    - A) `$unwind`
     - B) `$lookup`
     - C) `$bucket`
 
 12. **What is the correct key order according to MongoDB's ESR Compound Indexing Rule?**
     - A) Range $\rightarrow$ Sort $\rightarrow$ Equality
-    - B) Equality $\rightarrow$ Sort $\rightarrow$ Range ✅
+    - B) Equality $\rightarrow$ Sort $\rightarrow$ Range
     - C) Sort $\rightarrow$ Equality $\rightarrow$ Range
 
 13. **Which 4D meteorological gridded format breaks multidimensional arrays into independent chunk objects ideal for parallel reads/writes on S3 / Ceph RGW object storage?**
     - A) WMO `BUFR`
     - B) ASCII `SYNOP`
-    - C) Cloud-Native `Zarr` ✅
+    - C) Cloud-Native `Zarr`
 
 14. **When streaming 50 million rows from PostgreSQL to Apache Parquet in Python, how do you prevent an `OutOfMemory` crash on the application server?**
     - A) Use `pandas.read_sql("SELECT * FROM observations")`
-    - B) Use a PostgreSQL named **server-side cursor** (`itersize = 50000`) piped into `pyarrow.parquet.ParquetWriter.write_batch()` ✅
+    - B) Use a PostgreSQL named **server-side cursor** (`itersize = 50000`) piped into `pyarrow.parquet.ParquetWriter.write_batch()`
     - C) Convert all floats to strings first
 
 15. **In the Day 5 Polyglot Streaming Architecture, why do we route `METAR_STANDARD` packets to PostgreSQL and `ULTRASONIC_3D` turbulence vectors to MongoDB?**
-    - A) `METAR_STANDARD` has a strict relational schema joined with PostGIS stations, while `ULTRASONIC_3D` emits high-frequency polymorphic vector payloads suited for MongoDB native time-series bucketing ✅
+    - A) `METAR_STANDARD` has a strict relational schema joined with PostGIS stations, while `ULTRASONIC_3D` emits high-frequency polymorphic vector payloads suited for MongoDB native time-series bucketing
     - B) PostgreSQL cannot store floating-point numbers
     - C) MongoDB does not support timestamps
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📘 Day 5 (Part 2): Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 5 (Part 1): Analytical OLAP & DuckDB](day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Day 5 (Part 2): Polyglot Lakehouse & Capstone](day5_part2_enterprise_polyglot_lakehouse_and_capstone_coursebook.md) | [Reference Cards](../reference_cards/README.md)

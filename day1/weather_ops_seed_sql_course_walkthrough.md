@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [📘 Day 1 Coursebook](./day1_master_coursebook.md) | **Seed SQL Walkthrough** | [⚡ SQLite CLI & SQL Cheatsheet](./day1_sqlite_and_sql_cheatsheet.md) | [🛡️ Hardware Sentinels & QC Guide](./day1_hardware_sentinels_and_qc_guide.md) | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](./day1_master_coursebook.md) | **Seed SQL Walkthrough** | [SQLite CLI & SQL Cheatsheet](./day1_sqlite_and_sql_cheatsheet.md) | [Hardware Sentinels & QC Guide](./day1_hardware_sentinels_and_qc_guide.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 
 # Complete Architectural & Line-by-Line Course Walkthrough: `weather_ops_seed.sql`
 
@@ -7,7 +7,7 @@
 **Companion Coursebook:** [`day1_master_coursebook.md`](./day1_master_coursebook.md)
 
 > [!IMPORTANT]
-> **📂 Which SQLite `.db` File Does This Document Use?**
+> ** Which SQLite `.db` File Does This Document Use?**
 > - **100% of the DDL, `INSERT`s, and verification queries in this walkthrough run on `day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`).
 > - Inside your `sqlite3` terminal (from the `day1/` directory), make sure you have `weather_ops.db` open:
 >   ```sql
@@ -478,8 +478,8 @@ SELECT 'weather_alerts', COUNT(*) FROM weather_alerts;
 
 Or if you are already inside the `sqlite3` interactive shell (`sqlite>`):
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 PRAGMA foreign_keys = ON;
 SELECT 'stations' AS table_name, COUNT(*) AS row_count FROM stations
 UNION ALL
@@ -506,8 +506,8 @@ SELECT 'weather_alerts', COUNT(*) FROM weather_alerts;
 ### 3.3 Auditing All 4 Planted Anomalies with a Single Diagnostic Query
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 SELECT
     s.station_id,
     s.station_name,
@@ -557,8 +557,8 @@ By contrast, in later days of the bootcamp we intentionally **denormalize** when
 Historically, **SQLite `< 3.39.0` (prior to July 2022)** supported only `INNER JOIN`, `LEFT JOIN`, and `CROSS JOIN`, raising `Parse error: RIGHT and FULL OUTER JOINs are not currently supported` on `RIGHT` or `FULL OUTER JOIN`. While **SQLite `3.39.0+`** (Ubuntu 24.04 ships `3.45.x`), **PostgreSQL 16**, and **DuckDB** support `RIGHT` and `FULL OUTER JOIN` natively, embedded field dataloggers often run older SQLite builds—and **MySQL `8.0` / `8.4` still does not support native `FULL OUTER JOIN`** (see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**). That makes the portable `< 3.39` / MySQL rewrites below essential in production:
 
 ```sql
--- 📂 TARGET FILE: day1/weather_ops.db
--- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+-- TARGET FILE: day1/weather_ops.db
+-- In sqlite3 CLI, switch first with: .open weather_ops.db
 
 -- 1. INNER JOIN: Only stations that have active weather alerts (4 rows)
 SELECT s.station_id, s.station_name, a.phenomenon, a.severity
@@ -669,4 +669,4 @@ Mediterranean  Bejaia - Soummam        Oran - Es Senia        84.0
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [📘 Day 1 Coursebook](./day1_master_coursebook.md) | **Seed SQL Walkthrough** | [⚡ SQLite CLI & SQL Cheatsheet](./day1_sqlite_and_sql_cheatsheet.md) | [🛡️ Hardware Sentinels & QC Guide](./day1_hardware_sentinels_and_qc_guide.md) | [⏭️ Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](./day1_master_coursebook.md) | **Seed SQL Walkthrough** | [SQLite CLI & SQL Cheatsheet](./day1_sqlite_and_sql_cheatsheet.md) | [Hardware Sentinels & QC Guide](./day1_hardware_sentinels_and_qc_guide.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md)

@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # Weather Forecast Engineering Database Bootcamp
 # Day 4 Master Coursebook: MongoDB & Polymorphic Telemetry Engineering (Soup-to-Nuts Edition)
@@ -9,16 +9,16 @@
 **Execution Environment:** MongoDB 7.0+ (`mongod` & `mongosh` CLI + MongoDB Compass / VS Code MongoDB Extension)  
 **Companion Files in `day4/` & `reference_cards/`:**
 - [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`find`, `findOne`, `$gt`/`$in`, `$exists`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)** on `weather_nosql` (`stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`)
-- [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) ([📖 Course Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md)) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
-- [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) ([📖 Course Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
-- [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) ([📖 Course Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics
+- [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) ([Course Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md)) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
+- [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) ([Course Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
+- [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) ([Course Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics
 - [day4_mongodb_complete_cheatsheet.md](./day4_mongodb_complete_cheatsheet.md) — Complete CLI, SQL-to-MQL Translator, Aggregation Pipeline, `2dsphere`, and `ESR` Cheatsheet
 - [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md) — Deep-dive reference card on BSON binary encoding, WiredTiger internals, 3-node Replica Set failover, Tunable CAP/PACELC, GridFS, and Sharded Clusters
 
 ---
 
 > [!CAUTION]
-> ### 🚨 STOP & READ FIRST — Day 4 MongoDB Databases (`weather_nosql` vs. `weather_telemetry_db`), JS Scripts & Collections Master Map
+> ### STOP & READ FIRST — Day 4 MongoDB Databases (`weather_nosql` vs. `weather_telemetry_db`), JS Scripts & Collections Master Map
 >
 > Day 4 uses **three `.js` seed/benchmark scripts** inside `day4/` across **two MongoDB databases (`weather_nosql` and `weather_telemetry_db`)**. Before running any `mongosh` query, check the table below so you always know which database and collection you are querying:
 >
@@ -28,7 +28,7 @@
 > | **2. [`day4/day4_weather_ops_mongo_advanced.js`](./day4_weather_ops_mongo_advanced.js)**<br/>*(Geospatial `2dsphere` & `ESR` Seed)* | ```bash\ncd day4\nmongosh weather_nosql day4_weather_ops_mongo_advanced.js\n``` | Database: **`weather_nosql`** *(Switch: `use weather_nosql;`)*<br/>• **`db.storm_polygons`** (`2` GeoJSON `Polygon` radar cells)<br/>• **`db.upper_air_climatology`** (Materialized via `$merge`)<br/>• Creates `2dsphere` & `idx_sonde_esr` indexes | • `storm_polygons`: `_id`, `storm_name`, `max_reflectivity_dbz`, `vil_kg_m2`, `footprint` (`Polygon` GeoJSON)<br/>• **Used in:** Lab 3 (`§3.2` — `$merge`) & Lab 5 (`§4.3` — `$geoNear`, `$geoWithin`, `$geoIntersects`, `ESR` `.explain("executionStats")`) |
 > | **3. [`day4/day4_mongo_50k_polymorphic_benchmark.js`](./day4_mongo_50k_polymorphic_benchmark.js)**<br/>*(50k Polymorphic & Bucket Benchmark)* | ```bash\ncd day4\nmongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js\n``` | Database: **`weather_telemetry_db`** *(Switch: `use weather_telemetry_db;`)*<br/>• **`db.sensor_payloads`** (`50,000` polymorphic sensor docs across 4 instrument types)<br/>• **`db.weather_stream`** (`50,000` docs in Native Time-Series collection)<br/>• **`db.hourly_sensor_buckets`** (Hourly Manual Bucket Pattern docs) | • `sensor_payloads`: `metadata.station_id`, `metadata.sensor_type` (`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`), `metadata.region`, `timestamp`, `hardware_faults`, `visibility_meters`, `turbulent_kinetic_energy`, `water_film_height_mm`, `grip_factor`<br/>• **Used in:** Lab 4 (`§3.3` — 50k `$unwind` fault diagnostics & compression audit) |
 >
-> #### 💡 Three Instant `mongosh` Commands to Check Where You Are
+> #### Three Instant `mongosh` Commands to Check Where You Are
 > ```javascript
 > db.getName()       // Shows active database ("weather_nosql" or "weather_telemetry_db")
 > show collections   // Lists all collections in the active database
@@ -202,20 +202,20 @@ On Day 1, we saw how SQL separates **Presence (`NOT NULL`)** from **Domain Valid
 
 | `$jsonSchema` Pattern | Key in `required: [...]`? | `bsonType` in `properties` | Allows Missing Key? | Allows Explicit `null`? | SQL Equivalent (Day 1) |
 | :--- | :---: | :--- | :---: | :---: | :--- |
-| **1. Mandatory + Typed (`db.stations`)** | ✅ **Yes** | `bsonType: "string"` (or `"int"`, `"object"`) | ❌ No | ❌ No | `NOT NULL CHECK (...)` |
-| **2. Mandatory Key, Nullable Value** | ✅ **Yes** | `bsonType: ["double", "null"]` | ❌ No | ✅ Yes | Column exists in table, nullable `CHECK` |
-| **3. Optional Polymorphic Field** | ❌ **No** | `bsonType: "object"` (e.g., `buoy_specs`) | ✅ Yes (Omitted on land stations) | ❌ No (If key is sent, must be `"object"`) | Nullable + `CHECK` |
-| **4. Unconstrained Polymorphic Payload** | ❌ **No** | *(Not listed in `properties`)* | ✅ Yes | ✅ Yes | Raw unconstrained landing column |
+| **1. Mandatory + Typed (`db.stations`)** | **Yes** | `bsonType: "string"` (or `"int"`, `"object"`) | No | No | `NOT NULL CHECK (...)` |
+| **2. Mandatory Key, Nullable Value** | **Yes** | `bsonType: ["double", "null"]` | No | Yes | Column exists in table, nullable `CHECK` |
+| **3. Optional Polymorphic Field** | **No** | `bsonType: "object"` (e.g., `buoy_specs`) | Yes (Omitted on land stations) | No (If key is sent, must be `"object"`) | Nullable + `CHECK` |
+| **4. Unconstrained Polymorphic Payload** | **No** | *(Not listed in `properties`)* | Yes | Yes | Raw unconstrained landing column |
 
 2. **The `{ temp_c: null }` Query Trap in MongoDB (`null` vs. Missing Key):**
    Suppose Document A has `{ _id: 1, temp_c: null }` (thermometer offline) and Document B has `{ _id: 2 }` (`temp_c` key completely omitted). What does `db.obs.find({ temp_c: null })` return?
 
 | MongoDB Query Filter | Matches `{ temp_c: 22.5 }`? | Matches `{ temp_c: null }` *(Explicit Null)*? | Matches `{ }` *(Key Missing)*? | Engineering Explanation |
 | :--- | :---: | :---: | :---: | :--- |
-| **`{ temp_c: null }`** | ❌ No | ✅ **Yes** | ⚠️ **YES! (Matches both!)** | In MQL, `{ field: null }` matches both explicit `null` **and** documents where `field` does not exist! |
-| **`{ temp_c: { $type: 10 } }`** *(or `"null"`)* | ❌ No | ✅ **Yes (Explicit `null` only)** | ❌ **No** | Checks BSON type byte `0x0A` (`null`)—only matches documents that actually contain the key with value `null`. |
-| **`{ temp_c: { $exists: false } }`** | ❌ No | ❌ **No** | ✅ **Yes (Missing key only)** | Matches only documents where the `temp_c` key is completely absent from the BSON object. |
-| **`{ temp_c: { $ne: null } }`** *(or `$gt: -900`)* | ✅ **Yes** | ❌ No | ❌ No | Safely returns only documents where `temp_c` is present and non-null. |
+| **`{ temp_c: null }`** | No | **Yes** | **YES! (Matches both!)** | In MQL, `{ field: null }` matches both explicit `null` **and** documents where `field` does not exist! |
+| **`{ temp_c: { $type: 10 } }`** *(or `"null"`)* | No | **Yes (Explicit `null` only)** | **No** | Checks BSON type byte `0x0A` (`null`)—only matches documents that actually contain the key with value `null`. |
+| **`{ temp_c: { $exists: false } }`** | No | **No** | **Yes (Missing key only)** | Matches only documents where the `temp_c` key is completely absent from the BSON object. |
+| **`{ temp_c: { $ne: null } }`** *(or `$gt: -900`)* | **Yes** | No | No | Safely returns only documents where `temp_c` is present and non-null. |
 
 ---
 
@@ -596,8 +596,8 @@ When engineers run `{ $unwind: "$hardware_faults" }` (or `{ $unwind: "$station_d
 
 | `$unwind` Syntax | Input: `{ _id: 1, faults: ["E1", "E2"] }` | Input: `{ _id: 2, faults: [] }` *(Empty Array)* | Input: `{ _id: 3 }` *(Missing / `null`)* | SQL `JOIN` Equivalent & When to Use |
 | :--- | :--- | :---: | :---: | :--- |
-| **`{ $unwind: "$faults" }`** *(Default)* | Emits **2** docs (`"E1"`, `"E2"`) | ❌ **DROPPED (`0` docs!)** | ❌ **DROPPED (`0` docs!)** | **`INNER JOIN`**: Use when you *only* want documents that have at least 1 array element (e.g., counting fault occurrences across faulty packets). |
-| **`{ $unwind: { path: "$faults", preserveNullAndEmptyArrays: true } }`** | Emits **2** docs (`"E1"`, `"E2"`) | ✅ **Kept (1 doc, `faults: null`)** | ✅ **Kept (1 doc, `faults: null`)** | **`LEFT JOIN`**: Use when every station must remain in the report even if it had `0` faults or `0` matching `$lookup` rows! |
+| **`{ $unwind: "$faults" }`** *(Default)* | Emits **2** docs (`"E1"`, `"E2"`) | **DROPPED (`0` docs!)** | **DROPPED (`0` docs!)** | **`INNER JOIN`**: Use when you *only* want documents that have at least 1 array element (e.g., counting fault occurrences across faulty packets). |
+| **`{ $unwind: { path: "$faults", preserveNullAndEmptyArrays: true } }`** | Emits **2** docs (`"E1"`, `"E2"`) | **Kept (1 doc, `faults: null`)** | **Kept (1 doc, `faults: null`)** | **`LEFT JOIN`**: Use when every station must remain in the report even if it had `0` faults or `0` matching `$lookup` rows! |
 
 ---
 
@@ -991,7 +991,7 @@ sequenceDiagram
 
     rect rgb(255, 240, 240)
     Note over N1,N3: 3. Primary Crash & <10s Raft Election Failover
-    Note over N1: ⚡ Power Failure on mongo-node1!
+    Note over N1: Power Failure on mongo-node1!
     N2--xN1: Heartbeat Timeout (2s intervals, 10s electionTimeoutMillis)
     N2->>N3: Request Vote (Term + 1, priority: 1)
     N3-->>N2: Grant Vote (Quorum 2/3 Majority Achieved)
@@ -1087,13 +1087,13 @@ When a telemetry collection exceeds 10–20 TB or outgrows the write IOPS of a s
 
 ```mermaid
 flowchart TB
-    subgraph BadSharding["❌ ANTIPATTERN: Shard Key = { obs_time: 1 }"]
+    subgraph BadSharding["ANTIPATTERN: Shard Key = { obs_time: 1 }"]
         W1["Live 12Z Station Writes\n(All have newest timestamp!)"] -->|0%| S1["Shard 1\n(June-July)"]
         W1 -->|0%| S2["Shard 2\n(Aug-Sept)"]
         W1 ==>|100% HOTSPOT!| S3["Shard 3\n(October - Current)"]
     end
 
-    subgraph GoodSharding["✅ BEST PRACTICE: Shard Key = { station_id: 1, obs_time: 1 }"]
+    subgraph GoodSharding["BEST PRACTICE: Shard Key = { station_id: 1, obs_time: 1 }"]
         W2["Live 12Z Station Writes\n(Stations 60390..60901)"] ==>|33%| G1["Shard 1\n(Stations 60000-60420)"]
         W2 ==>|33%| G2["Shard 2\n(Stations 60421-60599)"]
         W2 ==>|34%| G3["Shard 3\n(Stations 60600-60999)"]
@@ -1114,10 +1114,10 @@ When `mongos` receives a `find()` or `aggregate()` query:
 #### 3. The 4-Pattern MongoDB Shard Key Decision Matrix for Weather Databases
 | Pattern | Shard Key Declaration | Live Write Distribution | Station + Time Range Query (`station_id = X AND obs_time BETWEEN ...`) | Risk of Jumbo Chunks? | Engineering Verdict |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or default `_id` `ObjectId`)* | **❌ 100% on 1 Shard (`MaxKey` Hotspot!)** — Adding more shards gives **0% extra write throughput**. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
-| **2. Low-Cardinality Enum** *(Anti-Pattern)* | `{ station_type: 1 }` or `{ radar_site_id: 1 }` *(only 4–8 values)* | ❌ Uneven (capped at 4–8 chunks total). | Scatter-Gather unless `station_type` is in every query. | **❌ YES (Fatal Jumbo Chunks!)** | **NEVER USE alone.** Chunks with identical key values cannot be split past 64 MB. |
-| **3. Hashed Single Key** | `{ station_id: "hashed" }` *(or `{ obs_time: "hashed" }`)* | **✅ 100% Evenly Distributed** across all shards via MD5 hash. | `station_id: "hashed"` targets 1 shard for equality, **but `obs_time: "hashed"` forces Scatter-Gather on EVERY time-range query!** | Low | Use `{ sensor_uuid: "hashed" }` only for pure point-lookup workloads; **avoid hashing `obs_time`**. |
-| **4. Compound Prefix + Time** *(Production Gold Standard)* | **`{ "station_meta.station_id": 1, obs_time: 1 }`** | **✅ Evenly Distributed** across all shards simultaneously (500+ stations write to different chunks at 12:00Z). | **✅ Targeted Single-Shard Scan!** `station_id` pins the exact shard; `obs_time: 1` scans contiguous chronological pages on that shard! | **Zero** (`obs_time` splits any large station) | **MANDATORY for meteorological time-series, radiosondes & radar scans.** |
+| **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or default `_id` `ObjectId`)* | ** 100% on 1 Shard (`MaxKey` Hotspot!)** — Adding more shards gives **0% extra write throughput**. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
+| **2. Low-Cardinality Enum** *(Anti-Pattern)* | `{ station_type: 1 }` or `{ radar_site_id: 1 }` *(only 4–8 values)* | Uneven (capped at 4–8 chunks total). | Scatter-Gather unless `station_type` is in every query. | ** YES (Fatal Jumbo Chunks!)** | **NEVER USE alone.** Chunks with identical key values cannot be split past 64 MB. |
+| **3. Hashed Single Key** | `{ station_id: "hashed" }` *(or `{ obs_time: "hashed" }`)* | ** 100% Evenly Distributed** across all shards via MD5 hash. | `station_id: "hashed"` targets 1 shard for equality, **but `obs_time: "hashed"` forces Scatter-Gather on EVERY time-range query!** | Low | Use `{ sensor_uuid: "hashed" }` only for pure point-lookup workloads; **avoid hashing `obs_time`**. |
+| **4. Compound Prefix + Time** *(Production Gold Standard)* | **`{ "station_meta.station_id": 1, obs_time: 1 }`** | ** Evenly Distributed** across all shards simultaneously (500+ stations write to different chunks at 12:00Z). | ** Targeted Single-Shard Scan!** `station_id` pins the exact shard; `obs_time: 1` scans contiguous chronological pages on that shard! | **Zero** (`obs_time` splits any large station) | **MANDATORY for meteorological time-series, radiosondes & radar scans.** |
 
 *(For full multi-node Replica Set deployment configs, PyMongo Tag-Set routing code, and `sh.*` sharding commands, see [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md)).*
 
@@ -1198,9 +1198,9 @@ printjson(db.serverStatus().wiredTiger.concurrentTransactions);
 
 > [!TIP]
 > **Next Step — Review Day 4 Walkthroughs & Install DuckDB / Python `venv` / Docker (Day 5)**
-> - 📖 **Review the 3 Day 4 MongoDB Walkthroughs:** [day4_weather_ops_mongo](./day4_weather_ops_mongo_js_course_walkthrough.md) | [day4_weather_ops_mongo_advanced](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [day4_mongo_50k_polymorphic_benchmark](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
-> - 💿 **Install Day 5 OLAP & Lakehouse Stack From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 4: DuckDB CLI, Python 3.12 `venv`, Mosquitto & Docker)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install the Day 5 tools before starting the Lakehouse & Capstone labs!
+> - **Review the 3 Day 4 MongoDB Walkthroughs:** [day4_weather_ops_mongo](./day4_weather_ops_mongo_js_course_walkthrough.md) | [day4_weather_ops_mongo_advanced](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md) | [day4_mongo_50k_polymorphic_benchmark](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)
+> - **Install Day 5 OLAP & Lakehouse Stack From Scratch:** Return to **[VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md (Phase 4: DuckDB CLI, Python 3.12 `venv`, Mosquitto & Docker)](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)** to install the Day 5 tools before starting the Lakehouse & Capstone labs!
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⬅️ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [➡️ Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [📚 Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)

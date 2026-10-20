@@ -5,10 +5,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 14** | [Next Card ➡️](./13_database_observability_prometheus_grafana_and_alerts.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 14** | [Next Card](./13_database_observability_prometheus_grafana_and_alerts.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [0. DB Browser for SQLite (`DB4S`) Visual Workflows (Day 1)](#0-db-browser-for-sqlite-db4s-visual-workflows-day-1)
 - [1. Connecting DBeaver to All Bootcamp Databases](#1-connecting-dbeaver-to-all-bootcamp-databases)
@@ -121,7 +121,7 @@ Connect **MongoDB Compass** to `mongodb://localhost:27017` (or `mongodb://localh
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 14** | [Next Card ➡️](./13_database_observability_prometheus_grafana_and_alerts.md) | [⬆️ Back to Top](#dbeaver--mongodb-compass-gui-workflows-cheatsheet-for-weather-engineers)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./11_python_database_drivers_for_weather_engineers.md) | **Card 12 of 14** | [Next Card](./13_database_observability_prometheus_grafana_and_alerts.md) | [⬆ Back to Top](#dbeaver--mongodb-compass-gui-workflows-cheatsheet-for-weather-engineers)

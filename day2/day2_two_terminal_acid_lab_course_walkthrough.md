@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](./day2_master_coursebook.md) | [🐘 PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | [🔬 Pageinspect & Storage Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | **Two-Terminal ACID Walkthrough** | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](./day2_master_coursebook.md) | [PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | [Pageinspect & Storage Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | **Two-Terminal ACID Walkthrough** | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Complete Architectural & Line-by-Line Course Walkthrough: `day2_two_terminal_acid_lab.sql`
 
@@ -7,8 +7,8 @@
 **Companion Coursebook & Reference Card:** [`day2_master_coursebook.md`](./day2_master_coursebook.md) | [`09_acid_transactions_and_two_terminal_lock_debugging.md`](../reference_cards/09_acid_transactions_and_two_terminal_lock_debugging.md)
 
 > [!IMPORTANT]
-> **📂 How to Run This Script & Which Table It Uses (`public.station_calibration`)**
-> - **⚠️ Do NOT run `psql -d weather_ops -f day2_two_terminal_acid_lab.sql` as a single batch file!** Lock contention and deadlocks require **two separate database connections running concurrently**.
+> ** How to Run This Script & Which Table It Uses (`public.station_calibration`)**
+> - ** Do NOT run `psql -d weather_ops -f day2_two_terminal_acid_lab.sql` as a single batch file!** Lock contention and deadlocks require **two separate database connections running concurrently**.
 > - **Step 1:** Open **two terminal windows** side-by-side (`Terminal A` and `Terminal B`) and connect both to `weather_ops`:
 >   ```bash
 >   psql -d weather_ops
@@ -579,4 +579,4 @@ ORDER BY idle_duration DESC;
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 1 Coursebook](../day1/day1_master_coursebook.md) | [📘 Day 2 Coursebook](./day2_master_coursebook.md) | [🐘 PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | [🔬 Pageinspect & Storage Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | **Two-Terminal ACID Walkthrough** | [⏭️ Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | [Day 2 Coursebook](./day2_master_coursebook.md) | [PG Schema & Generator Walkthrough](./weather_ops_pg_sql_course_walkthrough.md) | [Pageinspect & Storage Walkthrough](./day2_pageinspect_and_storage_lab_course_walkthrough.md) | **Two-Terminal ACID Walkthrough** | [Day 3 Coursebook](../day3/day3_master_coursebook.md)

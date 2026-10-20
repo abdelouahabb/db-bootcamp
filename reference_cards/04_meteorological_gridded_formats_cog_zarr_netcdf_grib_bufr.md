@@ -7,10 +7,10 @@
 
 ---
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./03_hive_partitioning_and_lakehouse_compaction.md) | **Card 04 of 14** | [Next Card ➡️](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./03_hive_partitioning_and_lakehouse_compaction.md) | **Card 04 of 14** | [Next Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Meteorological Systems Engineers](#executive-summary-for-meteorological-systems-engineers)
 - [1. The Weather Data Ecosystem: Grids vs. Tables vs. Documents](#1-the-weather-data-ecosystem-grids-vs-tables-vs-documents)
@@ -1000,7 +1000,7 @@ print("\n[+] Verification Complete. COGs allow direct random seek access to sate
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./03_hive_partitioning_and_lakehouse_compaction.md) | **Card 04 of 14** | [Next Card ➡️](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | [⬆️ Back to Top](#meteorological-binary-storage-gridded-formats-cog-zarr-netcdf4-grib2-bufr--raster-lakehouse-architecture-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./03_hive_partitioning_and_lakehouse_compaction.md) | **Card 04 of 14** | [Next Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | [⬆ Back to Top](#meteorological-binary-storage-gridded-formats-cog-zarr-netcdf4-grib2-bufr--raster-lakehouse-architecture-reference-card)

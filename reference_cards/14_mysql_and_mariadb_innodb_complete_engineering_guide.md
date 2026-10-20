@@ -1,11 +1,11 @@
 # Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide — InnoDB Internals, Pluggable Engines, Next-Key Locking, Spatial SQL, GTID HA & Production Tuning
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
-> **Card Sequence:** [⬅️ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* ➡️
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html) | [Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
+> **Card Sequence:** [⬅ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card*
 
 ---
 
-## 📑 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 1. [Executive Overview: Where MySQL & MariaDB Shine in Production](#1-executive-overview-where-mysql--mariadb-shine-in-production)
 2. [MySQL Architecture & The Pluggable Storage Engine Ecosystem (`SHOW ENGINES`)](#2-mysql-architecture--the-pluggable-storage-engine-ecosystem-show-engines)
@@ -66,12 +66,12 @@ flowchart TD
 
 | Storage Engine | Physical Structure | Transactions & Locking | Crash Safety | Best Production Use Case |
 | :--- | :--- | :--- | :--- | :--- |
-| **`InnoDB`** *(Default in MySQL & MariaDB)* | **16 KB Clustered B+Tree** (`.ibd` tablespace files) | Full **ACID** (`READ UNCOMMITTED`, `READ COMMITTED`, `REPEATABLE READ` [default], `SERIALIZABLE`); **Row & Gap locks** | ✅ **Yes** (`Redo Log` + `Doublewrite Buffer` + `Undo Log`) | **99% of OLTP workloads:** station registries, live status tables, transactional telemetry, alerts. |
-| **`MyRocks` (`ROCKSDB`)** *(Percona Server & MariaDB)* | **LSM-Tree (Log-Structured Merge-Tree):** `MemTable` $\rightarrow$ immutable `SSTable` levels | Full **ACID** + Snapshot Isolation + Row locks | ✅ **Yes** (WAL + immutable SSTables) | **High-volume time-series & archival tables on NVMe SSDs:** Zero B+Tree page fragmentation, $2\times\text{–}3\times$ smaller disk footprint than InnoDB, and $50\%+$ less SSD wear! |
-| **`MEMORY` (`HEAP`)** | Fixed-length rows in **RAM** (Hash index by default, or `USING BTREE`) | Non-transactional; **Table-level locking** | ❌ **Volatile** (Structure persists on disk, data wiped on restart) | Ultra-fast ephemeral lookup caches, live active-socket routing tables, or temporary staging. |
-| **`MyISAM`** *(Legacy)* / **`Aria`** *(MariaDB)* | Unclustered Heap data file (`.MYD`/`.MAD`) + B-Tree index file (`.MYI`/`.MAI`) | `MyISAM`: Non-transactional, **Table-level locks** (`Aria` adds crash-safe page logging) | ❌ **`MyISAM` corrupts on power loss** (`REPAIR TABLE`); `Aria` is crash-safe | Legacy read-only reference catalogs. **Never use `MyISAM` for live write workloads.** |
-| **`ARCHIVE`** | `zlib`-compressed append-only stream (`.ARZ`) | Non-transactional; supports **only `INSERT` and `SELECT`** (no `UPDATE`/`DELETE`, no indexes except auto-increment) | ⚠️ Partial | Append-only audit logs where sequential full-scan is acceptable. |
-| **`CSV`** | Plain-text `.CSV` file inside the MySQL data directory | Non-transactional; table-level lock; all columns must be `NOT NULL` | ❌ No | Instant zero-script data exchange: drop a `.csv` file or query a table to produce a `.csv` directly. |
+| **`InnoDB`** *(Default in MySQL & MariaDB)* | **16 KB Clustered B+Tree** (`.ibd` tablespace files) | Full **ACID** (`READ UNCOMMITTED`, `READ COMMITTED`, `REPEATABLE READ` [default], `SERIALIZABLE`); **Row & Gap locks** | **Yes** (`Redo Log` + `Doublewrite Buffer` + `Undo Log`) | **99% of OLTP workloads:** station registries, live status tables, transactional telemetry, alerts. |
+| **`MyRocks` (`ROCKSDB`)** *(Percona Server & MariaDB)* | **LSM-Tree (Log-Structured Merge-Tree):** `MemTable` $\rightarrow$ immutable `SSTable` levels | Full **ACID** + Snapshot Isolation + Row locks | **Yes** (WAL + immutable SSTables) | **High-volume time-series & archival tables on NVMe SSDs:** Zero B+Tree page fragmentation, $2\times\text{–}3\times$ smaller disk footprint than InnoDB, and $50\%+$ less SSD wear! |
+| **`MEMORY` (`HEAP`)** | Fixed-length rows in **RAM** (Hash index by default, or `USING BTREE`) | Non-transactional; **Table-level locking** | **Volatile** (Structure persists on disk, data wiped on restart) | Ultra-fast ephemeral lookup caches, live active-socket routing tables, or temporary staging. |
+| **`MyISAM`** *(Legacy)* / **`Aria`** *(MariaDB)* | Unclustered Heap data file (`.MYD`/`.MAD`) + B-Tree index file (`.MYI`/`.MAI`) | `MyISAM`: Non-transactional, **Table-level locks** (`Aria` adds crash-safe page logging) | **`MyISAM` corrupts on power loss** (`REPAIR TABLE`); `Aria` is crash-safe | Legacy read-only reference catalogs. **Never use `MyISAM` for live write workloads.** |
+| **`ARCHIVE`** | `zlib`-compressed append-only stream (`.ARZ`) | Non-transactional; supports **only `INSERT` and `SELECT`** (no `UPDATE`/`DELETE`, no indexes except auto-increment) | Partial | Append-only audit logs where sequential full-scan is acceptable. |
+| **`CSV`** | Plain-text `.CSV` file inside the MySQL data directory | Non-transactional; table-level lock; all columns must be `NOT NULL` | No | Instant zero-script data exchange: drop a `.csv` file or query a table to produce a `.csv` directly. |
 
 ---
 
@@ -271,15 +271,15 @@ Connecting directly to our [Day 1 SQL `JOIN` Taxonomy](../day1/day1_master_cours
 
 | SQL `JOIN` Type / Algorithm | SQLite `< 3.39` | SQLite `3.39+` | **MySQL 8.0 / 8.4** | PostgreSQL 16 | DuckDB | MySQL Engineering Notes |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **`INNER JOIN`** (`JOIN`, `STRAIGHT_JOIN`) | ✅ | ✅ | **✅ Yes** | ✅ | ✅ | `STRAIGHT_JOIN` in MySQL forces the optimizer to join tables in the exact left-to-right order written in `FROM`. |
-| **`LEFT [OUTER] JOIN`** | ✅ | ✅ | **✅ Yes** | ✅ | ✅ | Standard left outer join. |
-| **`RIGHT [OUTER] JOIN`** | ❌ | ✅ | **✅ Yes** | ✅ | ✅ | Supported natively in all MySQL versions. |
-| **`FULL [OUTER] JOIN`** | ❌ | ✅ | **❌ NO!** | ✅ | ✅ | **Crucial MySQL Gotcha:** Even in MySQL 8.4, `FULL OUTER JOIN` is **not supported**! You **must** use the `LEFT JOIN ... UNION ALL ... RIGHT JOIN ... WHERE a.id IS NULL` rewrite! |
-| **`CROSS JOIN`** | ✅ | ✅ | **✅ Yes** | ✅ | ✅ | In MySQL, `JOIN`, `INNER JOIN`, and `CROSS JOIN` without an `ON` clause are syntactically interchangeable (always write `CROSS JOIN` explicitly for clarity). |
-| **`SELF JOIN`** | ✅ | ✅ | **✅ Yes** | ✅ | ✅ | Supported via table aliases (`FROM stations s1 JOIN stations s2`). |
-| **`LATERAL` Derived Tables** | ❌ | ❌ | **✅ Yes (8.0.14+)** | ✅ | ✅ | Added in **MySQL 8.0.14**! Enables top-$N$-per-group queries (`LEFT JOIN LATERAL (SELECT ... WHERE f.station_id = s.station_id ORDER BY ... LIMIT 3) AS top3`). |
-| **`Hash Join` Execution** | ❌ | ❌ | **✅ Yes (8.0.18+)** | ✅ | ✅ | Added in **MySQL 8.0.18**! Replaces slow Block Nested Loop (`BNL`) for unindexed equi-joins. Controlled by `join_buffer_size`. |
-| **`Sort-Merge Join` Execution** | ❌ | ❌ | **❌ No** | ✅ | ✅ | MySQL only has **Nested Loop** (+ Batched Key Access `BKA`) and **Hash Join**; it lacks `Merge Join`. |
+| **`INNER JOIN`** (`JOIN`, `STRAIGHT_JOIN`) | Yes | Yes | ** Yes** | Yes | Yes | `STRAIGHT_JOIN` in MySQL forces the optimizer to join tables in the exact left-to-right order written in `FROM`. |
+| **`LEFT [OUTER] JOIN`** | Yes | Yes | ** Yes** | Yes | Yes | Standard left outer join. |
+| **`RIGHT [OUTER] JOIN`** | No | Yes | ** Yes** | Yes | Yes | Supported natively in all MySQL versions. |
+| **`FULL [OUTER] JOIN`** | No | Yes | ** NO!** | Yes | Yes | **Crucial MySQL Gotcha:** Even in MySQL 8.4, `FULL OUTER JOIN` is **not supported**! You **must** use the `LEFT JOIN ... UNION ALL ... RIGHT JOIN ... WHERE a.id IS NULL` rewrite! |
+| **`CROSS JOIN`** | Yes | Yes | ** Yes** | Yes | Yes | In MySQL, `JOIN`, `INNER JOIN`, and `CROSS JOIN` without an `ON` clause are syntactically interchangeable (always write `CROSS JOIN` explicitly for clarity). |
+| **`SELF JOIN`** | Yes | Yes | ** Yes** | Yes | Yes | Supported via table aliases (`FROM stations s1 JOIN stations s2`). |
+| **`LATERAL` Derived Tables** | No | No | ** Yes (8.0.14+)** | Yes | Yes | Added in **MySQL 8.0.14**! Enables top-$N$-per-group queries (`LEFT JOIN LATERAL (SELECT ... WHERE f.station_id = s.station_id ORDER BY ... LIMIT 3) AS top3`). |
+| **`Hash Join` Execution** | No | No | ** Yes (8.0.18+)** | Yes | Yes | Added in **MySQL 8.0.18**! Replaces slow Block Nested Loop (`BNL`) for unindexed equi-joins. Controlled by `join_buffer_size`. |
+| **`Sort-Merge Join` Execution** | No | No | ** No** | Yes | Yes | MySQL only has **Nested Loop** (+ Batched Key Access `BKA`) and **Hash Join**; it lacks `Merge Join`. |
 
 ---
 
@@ -473,7 +473,7 @@ MySQL solves this by executing an **Internal XA Two-Phase Commit (`2PC`)** betwe
 │ • The MySQL Server assigns a GTID (e.g., UUID:14521), writes the transaction's    │
 │   row events + XID into mysql-bin.000042, and calls fsync() to NVMe disk          │
 │   if sync_binlog = 1.                                                             │
-│ ★ ARCHITECTURAL RULE: Once the XID hits the binlog on disk, the transaction is    │
+│ * ARCHITECTURAL RULE: Once the XID hits the binlog on disk, the transaction is    │
 │   officially COMMITTED! Even if power fails 1 microsecond later, upon reboot      │
 │   MySQL scans the binlog, sees XID 14521, and tells InnoDB to roll it forward!    │
 └─────────────────────────────────────────┬─────────────────────────────────────────┘
@@ -884,8 +884,8 @@ ALTER TABLE observations
 
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [⚖️ Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
-> **Card Sequence:** [⬅️ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* ➡️ | [⬆️ Back to Top](#reference-card-14-mysql-8084--mariadb-complete-engineering-guide--innodb-internals-pluggable-engines-next-key-locking-spatial-sql-gtid-ha--production-tuning)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html) | [Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
+> **Card Sequence:** [⬅ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* | [⬆ Back to Top](#reference-card-14-mysql-8084--mariadb-complete-engineering-guide--innodb-internals-pluggable-engines-next-key-locking-spatial-sql-gtid-ha--production-tuning)
 

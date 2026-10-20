@@ -1,10 +1,10 @@
-# 📚 Master Reference Cards Library & Symptom-Based Diagnostic Directory
+# Master Reference Cards Library & Symptom-Based Diagnostic Directory
 
-> **Navigation:** [🏠 Master Bootcamp README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [🛠️ Setup & Tooling Guide](../ATTENDEE_SETUP_GUIDE.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)
+> **Navigation:** [Master Bootcamp README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Setup & Tooling Guide](../ATTENDEE_SETUP_GUIDE.md) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)
 
 ---
 
-## 🧭 Overview: The 15-Volume Meteorological Systems Engineering Library
+## Overview: The 15-Volume Meteorological Systems Engineering Library
 
 Welcome to the **Master Reference Cards Library** for the **5-Day Weather Forecast Database Engineering Bootcamp**. These 15 self-contained technical reference volumes (**9,345 lines** of foundational SQL/MongoDB CRUD hands-on tutorials, deep storage internals, ASCII byte/page diagrams, mathematical proofs, production runbooks, and forensic benchmarks) serve two complementary purposes:
 
@@ -13,7 +13,7 @@ Welcome to the **Master Reference Cards Library** for the **5-Day Weather Foreca
 
 ---
 
-## 🗂️ Complete Index of All 15 Reference Cards (`00`–`14`)
+## Complete Index of All 15 Reference Cards (`00`–`14`)
 
 | Card # | Reference Card File | Lines | Target Engines & Formats | Bootcamp Day Alignment | Summary of Technical Contents & Hands-On Labs |
 | :---: | :--- | :---: | :--- | :---: | :--- |
@@ -36,7 +36,7 @@ Welcome to the **Master Reference Cards Library** for the **5-Day Weather Foreca
 
 ---
 
-## 🚨 Symptom-to-Reference-Card Diagnostic Lookup Table (21 Meteorological Production Scenarios)
+## Symptom-to-Reference-Card Diagnostic Lookup Table (21 Meteorological Production Scenarios)
 
 > **How to Use This Directory:** When a student in the lab or an on-call engineer in a 24/7 Meteorological Operations Center encounters **Problem / Symptom X**, use this table to jump directly to **Reference Card Y — Section Z** for the root-cause analysis and exact remediation command.
 
@@ -66,7 +66,7 @@ Welcome to the **Master Reference Cards Library** for the **5-Day Weather Foreca
 
 ---
 
-## 🗺️ Curriculum Cross-Reference: Which Reference Cards to Read Each Day
+## Curriculum Cross-Reference: Which Reference Cards to Read Each Day
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -111,4 +111,4 @@ Welcome to the **Master Reference Cards Library** for the **5-Day Weather Foreca
 
 ---
 
-> **Navigation:** [🏠 Master Bootcamp README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [🛠️ Setup & Tooling Guide](../ATTENDEE_SETUP_GUIDE.md) | [💿 Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)
+> **Navigation:** [Master Bootcamp README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Setup & Tooling Guide](../ATTENDEE_SETUP_GUIDE.md) | [Blank VM Lab Guide](../VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md)

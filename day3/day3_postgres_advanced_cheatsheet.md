@@ -1,4 +1,4 @@
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](day3_master_coursebook.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](day3_master_coursebook.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 
 # Day 3 Cheatsheet: Partitioning, Advanced Indexing, PostGIS Geodesy, Window Functions & JSONB
 
@@ -100,8 +100,8 @@ DROP TABLE synoptic.obs_y2026m06;
 > **Coordinate Order Rule:** `ST_MakePoint(longitude, latitude)` always takes **`(X, Y)` = `(longitude, latitude)`**!
 
 ```sql
--- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
--- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql (Table: public.stations)
+-- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql (Table: public.stations)
 -- Find all active stations within 40 km (40,000 meters) of an offshore squall line [3.90E, 36.95N]
 SELECT
     station_id,
@@ -243,5 +243,5 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 
 ---
 
-> **Navigation:** [🏠 Master README](../README.md) | [🌐 Interactive Portal](../bootcamp_portal.html) | [📚 Reference Cards](../reference_cards/README.md) | [⏮️ Day 2 Coursebook](../day2/day2_master_coursebook.md) | [📘 Day 3 Coursebook](day3_master_coursebook.md) | [⏭️ Day 4 Coursebook](../day4/day4_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 2 Coursebook](../day2/day2_master_coursebook.md) | [Day 3 Coursebook](day3_master_coursebook.md) | [Day 4 Coursebook](../day4/day4_master_coursebook.md)
 

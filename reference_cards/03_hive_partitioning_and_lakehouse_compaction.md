@@ -2,10 +2,10 @@
 
 ## Physical Directory Topologies, Metadata Pruning, The Small Files Problem, and Modern Table Formats
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | **Card 03 of 14** | [Next Card ➡️](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | **Card 03 of 14** | [Next Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md)
 
-## 🧭 Quick-Jump Table of Contents
+## Quick-Jump Table of Contents
 
 - [Executive Summary for Systems & Meteorological Engineers](#executive-summary-for-systems--meteorological-engineers)
 - [1. Physical Directory Anatomy of Hive Partitioning](#1-physical-directory-anatomy-of-hive-partitioning)
@@ -331,7 +331,7 @@ print(f"[+] Compaction complete in {duration:.2f}s. Storage reduced by {((mb_bef
 ```
 ---
 
-### 🔗 Reference Library Navigation
+### Reference Library Navigation
 
-> **Navigation:** [🏠 Bootcamp Home](../README.md) | [📚 Reference Cards Index](./README.md) | [🌐 Interactive Portal](../bootcamp_portal.html)  
-> **Card Sequence:** [⬅️ Previous Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | **Card 03 of 14** | [Next Card ➡️](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | [⬆️ Back to Top](#hive-partitioning--data-lakehouse-architecture-reference-card)
+> **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
+> **Card Sequence:** [⬅ Previous Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | **Card 03 of 14** | [Next Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | [⬆ Back to Top](#hive-partitioning--data-lakehouse-architecture-reference-card)

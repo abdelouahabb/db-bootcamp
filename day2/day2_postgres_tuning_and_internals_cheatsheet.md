@@ -400,22 +400,7 @@ WHERE NOT blocked_locks.granted;
 -- SELECT pg_terminate_backend(12345); -- Forceful SIGTERM (closes connection & rolls back txn)
 ```
 
----
-
-## 8. The 10-Layer PostgreSQL Performance Optimization Master Checklist
-
-| Layer | Optimization Lever | Default / Anti-Pattern | Production Weather Tuning | Typical Speedup / Savings |
-| :---: | :--- | :--- | :--- | :--- |
-| **1. Hardware & OS** | Separate NVMe for `pg_wal` + `/etc/fstab` + `sysctl` | `$PGDATA` & `pg_wal` on 1 disk; `atime` on; `swappiness=60` | Dedicated `/data/pgwal` NVMe; `noatime,nodiratime`; `vm.swappiness=1`; `huge_pages=try` | **+25% read IOPS**; zero WAL `fsync()` contention |
-| **2. Connections** | Transaction Pooler (`PgBouncer`) | `max_connections = 2000` (direct sensor connections) | `max_connections = 200` + **PgBouncer (`pool_mode = transaction`)** | **$3\times\text{–}5\times$ higher TPS** under 2,000-station bursts |
-| **3. Memory Pool** | Dual-Tier RAM (`shared_buffers` + `work_mem`) | `shared_buffers = 128MB`, `work_mem = 4MB` (spills to disk) | `shared_buffers = 25% RAM` (`8GB`), `effective_cache_size = 75%` (`24GB`), `work_mem = 32MB–64MB` | **$10\times\text{–}20\times$ faster** `Hash Join` & `GROUP BY` (in-RAM) |
-| **4. Tuple Layout** | **"Tuple Tetris"** Column Ordering | Alternating `BOOLEAN` (`1B`) and `BIGINT`/`TIMESTAMPTZ` (`8B`) | Order columns `8B` (`typalign='d'`) $\rightarrow$ `4B` $\rightarrow$ `2B` $\rightarrow$ `1B` (`UUID`, `BOOLEAN`) $\rightarrow$ `varlena` | **Saves 8–21 Bytes/row** (~21 GB per 1B rows!) |
-| **5. Primary Keys** | Surrogate Key Locality (`BIGINT` / **`UUIDv7`**) | Random `UUIDv4` (`gen_random_uuid()`) or `VARCHAR(36)` (`37B`) | `BIGINT GENERATED ALWAYS AS IDENTITY` (`8B`) or **RFC 9562 `UUIDv7`** (`16B` native `UUID`) | **Eliminates 50/50 B-Tree splits** & **$500\times$ WAL `FPW` bloat** |
-| **6. In-Page Updates** | **`HOT` Updates** & `TOAST` Compression | `fillfactor = 100` on heavily updated tables; `pglz` TOAST | `fillfactor = 80–90` on station status tables (no index on updated cols); `default_toast_compression = lz4` | **$5\times\text{–}10\times$ less index bloat**; $4\times$ faster TOAST decompression |
-| **7. WAL & Checkpoints** | Checkpoint Smoothing & WAL Compression | `max_wal_size = 1GB`, `checkpoint_timeout = 5min` | `max_wal_size = 16GB–32GB`, `checkpoint_timeout = 15min`, `checkpoint_completion_target = 0.9`, `wal_compression = lz4` | **Eliminates 00Z/12Z I/O stalls**; cuts WAL volume by **40%–60%** |
-| **8. Bulk Ingestion** | Binary `COPY` + Parallel Index Build | Row-by-row `INSERT` with active secondary B-Trees | `psycopg3` Binary **`COPY`** (`UNLOGGED` staging) + `max_parallel_maintenance_workers = 4` | **`800 rows/s` $\rightarrow$ `120,000+ rows/s`** (**$150\times$ speedup!**) |
-| **9. Autovacuum** | Per-Table Scale Factor & Cost Limit | `autovacuum_vacuum_scale_factor = 0.20`, `cost_limit = 200` | `autovacuum_vacuum_scale_factor = 0.01–0.05`, `cost_limit = 2000`, `idle_in_transaction_session_timeout = 60s` | Prevents multi-GB dead-tuple table bloat & XID wraparound |
-| **10. Planner & Indexes** | NVMe Cost + Partitioning + Covering / `BRIN` + `JIT` | `random_page_cost = 4.0`, monolithic B-Trees, `jit_above_cost = 100000` | `random_page_cost = 1.1`, `effective_io_concurrency = 200`, Monthly Partitions + `BRIN` + `INCLUDE` Covering Indexes + `jit_above_cost = 500000` (`plan_cache_mode = force_custom_plan` on skewed params) | **$100\times\text{–}1,800\times$ faster** point/range queries (`Heap Fetches: 0`) |
+*(For the complete **10-Layer PostgreSQL Performance Optimization Master Matrix**, see **[Day 2 Master Coursebook — §7.3.4](./day2_master_coursebook.md)**.)*
 
 ---
 

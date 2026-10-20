@@ -112,127 +112,18 @@ In Day 3, we use two SQL scripts that work together seamlessly:
 
 ### 0.3 Automated Database Initialization & 5,000,000-Row Telemetry Seed Script
 
-Attendees can execute [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) or run the initialization block below inside `psql`:
+Run both Day 3 seed scripts from your terminal inside `day3/`:
 
-```sql
--- Connect to host: psql -U postgres
-CREATE DATABASE weather_ops_db;
-\c weather_ops_db
+```bash
+cd day3
+# 1. Seed synoptic partitions, specialized indexes, Materialized View & PostGIS geog into 'weather_ops':
+psql -d weather_ops -f day3_weather_advanced_pg.sql
 
--- ============================================================================
--- 1. Enable PostGIS Spatial Extension & Verify Version
--- ============================================================================
-CREATE EXTENSION IF NOT EXISTS postgis;
-
--- Explicit verification of PostGIS spatial engine and GEOS/PROJ/GDAL linkage
-SELECT postgis_full_version();
-
--- ============================================================================
--- 2. Create Spatial Weather Stations Master Registry Table
--- ============================================================================
-DROP TABLE IF EXISTS stations CASCADE;
-CREATE TABLE stations (
-    station_id VARCHAR(10) PRIMARY KEY,
-    station_name VARCHAR(64) NOT NULL,
-    latitude DOUBLE PRECISION NOT NULL,
-    longitude DOUBLE PRECISION NOT NULL,
-    elevation_m REAL NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    geom GEOMETRY(Point, 4326)
-);
-
--- Seed 50 Meteorological Stations with spatial geometries across Northern Algeria
-INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, is_active, geom)
-SELECT 
-    'AWS-' || LPAD(g::TEXT, 3, '0'),
-    CASE g
-        WHEN 1 THEN 'Algiers Port Marine'
-        WHEN 2 THEN 'Boumerdes Coastal Point'
-        WHEN 3 THEN 'Dellys Cape Lighthouse'
-        WHEN 4 THEN 'Tizi Ouzou Valley'
-        WHEN 5 THEN 'Bejaia Gulf Airport'
-        WHEN 6 THEN 'Jijel Achouat Ridge'
-        WHEN 7 THEN 'Oran Marine Terminal'
-        WHEN 8 THEN 'Constantine Plateau'
-        ELSE 'AWS Regional Station ' || LPAD(g::TEXT, 3, '0')
-    END,
-    ROUND((35.5 + (random() * 2.0))::numeric, 4),
-    ROUND((2.0 + (random() * 5.0))::numeric, 4),
-    ROUND((10.0 + (random() * 1200.0))::numeric, 1),
-    TRUE,
-    ST_SetSRID(ST_MakePoint(
-        ROUND((2.0 + (random() * 5.0))::numeric, 4),
-        ROUND((35.5 + (random() * 2.0))::numeric, 4)
-    ), 4326)
-FROM generate_series(1, 50) AS g;
-
--- Pin precise ground-truth coordinates for our benchmark coastal stations
-UPDATE stations SET latitude = 36.7538, longitude = 3.0588,  geom = ST_SetSRID(ST_MakePoint(3.0588, 36.7538), 4326) WHERE station_id = 'AWS-001'; -- Algiers Port
-UPDATE stations SET latitude = 36.7664, longitude = 3.4772,  geom = ST_SetSRID(ST_MakePoint(3.4772, 36.7664), 4326) WHERE station_id = 'AWS-002'; -- Boumerdes Coastal
-UPDATE stations SET latitude = 36.9172, longitude = 3.9130,  geom = ST_SetSRID(ST_MakePoint(3.9130, 36.9172), 4326) WHERE station_id = 'AWS-003'; -- Dellys Cape
-UPDATE stations SET latitude = 36.7118, longitude = 4.0459,  geom = ST_SetSRID(ST_MakePoint(4.0459, 36.7118), 4326) WHERE station_id = 'AWS-004'; -- Tizi Ouzou
-UPDATE stations SET latitude = 36.7559, longitude = 5.0699,  geom = ST_SetSRID(ST_MakePoint(5.0699, 36.7559), 4326) WHERE station_id = 'AWS-005'; -- Bejaia Airport
-
--- Create Spatial Index on Station Geometries (GiST: Generalized Search Tree)
-CREATE INDEX idx_stations_gist_geom ON stations USING GIST (geom);
-
--- ============================================================================
--- 3. Create Declarative Partitioned Master Table (Aligned Columns)
--- ============================================================================
-DROP TABLE IF EXISTS raw_telemetry_partitioned CASCADE;
-CREATE TABLE raw_telemetry_partitioned (
-    -- 8-Byte Types First (Offset 0-8)
-    recorded_at TIMESTAMPTZ NOT NULL,
-    -- 4-Byte Types Second (Offset 8-28)
-    station_id VARCHAR(10) NOT NULL,
-    temperature REAL,
-    pressure REAL,
-    wind_speed REAL,
-    rain_accum_1m REAL,
-    -- 2-Byte Types
-    wind_direction SMALLINT,
-    CONSTRAINT fk_station FOREIGN KEY (station_id) REFERENCES stations(station_id)
-) PARTITION BY RANGE (recorded_at);
-
--- ============================================================================
--- 4. Create Explicit Monthly Child Partitions
--- ============================================================================
-CREATE TABLE telemetry_y2026m09 PARTITION OF raw_telemetry_partitioned
-    FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
-
-CREATE TABLE telemetry_y2026m10 PARTITION OF raw_telemetry_partitioned
-    FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00');
-
-CREATE TABLE telemetry_y2026m11 PARTITION OF raw_telemetry_partitioned
-    FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
-
-CREATE TABLE telemetry_y2026m12 PARTITION OF raw_telemetry_partitioned
-    FOR VALUES FROM ('2026-12-01 00:00:00+00') TO ('2027-01-01 00:00:00+00');
-
-CREATE TABLE telemetry_default PARTITION OF raw_telemetry_partitioned DEFAULT;
-
--- ============================================================================
--- 5. Ingest 5,000,000 synthetic observations across Sept-Dec 2026
--- ============================================================================
-INSERT INTO raw_telemetry_partitioned (recorded_at, station_id, temperature, pressure, wind_speed, wind_direction, rain_accum_1m)
-SELECT 
-    TIMESTAMP WITH TIME ZONE '2026-09-01 00:00:00+00' + (g * INTERVAL '2.1 seconds'),
-    'AWS-' || LPAD((1 + (random() * 49)::INT)::TEXT, 3, '0'),
-    ROUND((14.0 + (sin(g / 5000.0) * 12.0) + (random() * 3.0))::numeric, 2)::REAL,
-    ROUND((1013.25 + (cos(g / 8000.0) * 8.0) + (random() * 1.5))::numeric, 2)::REAL,
-    ROUND((random() * 22.0)::numeric, 2)::REAL,
-    (random() * 359)::SMALLINT,
-    CASE WHEN random() < 0.05 THEN ROUND((random() * 4.5)::numeric, 2)::REAL ELSE 0.0 END
-FROM generate_series(1, 5000000) AS g;
-
--- ============================================================================
--- 6. Attach BRIN Index to Master Partitioned Table (propagate to all children)
--- ============================================================================
-CREATE INDEX idx_telemetry_brin_time 
-    ON raw_telemetry_partitioned 
-    USING BRIN (recorded_at) 
-    WITH (pages_per_range = 64);
+# 2. Create 'weather_ops_db' and seed 50 spatial stations + 5,000,000 partitioned rows:
+psql -d postgres -f day3_postgis_5m_benchmark.sql
 ```
+
+*(For the complete line-by-line code walkthroughs of both scripts, see **[day3_weather_advanced_pg_sql_course_walkthrough.md](./day3_weather_advanced_pg_sql_course_walkthrough.md)** and **[day3_postgis_5m_benchmark_sql_course_walkthrough.md](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)**.)*
 
 ---
 
@@ -913,33 +804,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 
 ### 5.1 Why Strict Relational Columns Hit a Schema-Rigidity Wall in Modern Meteorology
 
-Core WMO parameters (`temp_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm`) haven't changed in 100 years—they belong in strict relational columns. However, modern environmental monitoring networks also ingest **variable, hardware-specific telemetry**:
-
-```
-                            Heterogeneous Sensor Packets
- ┌───────────────────────────────────┬───────────────────────────────────┐
- │ Standard Met Station (Vaisala)    │ 3D Sonic Anemometer (Gill)        │
- ├───────────────────────────────────┼───────────────────────────────────┤
- │ {                                 │ {                                 │
- │   "station_id": "AWS-001",        │   "station_id": "SONIC-09",       │
- │   "timestamp": "2026-10-04T12:00",│   "timestamp": "2026-10-04T12:00",│
- │   "temp": 18.5,                   │   "u_vector": 2.14,               │
- │   "pressure": 1013.2,             │   "v_vector": -0.85,              │
- │   "humidity": 65.0                │   "w_vector": 0.12,               │
- │ }                                 │   "sonic_temp": 18.9,             │
- │                                   │   "turbulent_flux": 0.042         │
- │                                   │ }                                 │
- ├───────────────────────────────────┼───────────────────────────────────┤
- │ Road Surface Sensor (Vaisala)     │ Optical Disdrometer (OTT Parsivel)│
- ├───────────────────────────────────┼───────────────────────────────────┤
- │ {                                 │ {                                 │
- │   "station_id": "ROAD-104",       │   "station_id": "DISDRO-02",      │
- │   "surface_temp": 2.1,            │   "precip_rate_mmh": 12.4,        │
- │   "freezing_point": -1.4,         │   "drop_size_bins": [0,4,12,1,0], │
- │   "grip_factor": 0.82             │   "raw_spectrum": [102, 401, 88]  │
- │ }                                 │ }                                 │
- └───────────────────────────────────┴───────────────────────────────────┘
-```
+Core WMO parameters (`temp_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm`) haven't changed in 100 years—they belong in strict relational columns. However, modern environmental monitoring networks also ingest **variable, hardware-specific telemetry** (such as 3D sonic anemometer vectors, road surface freezing-point sensors, or optical disdrometer drop-size bins; see **[Day 4 Master Coursebook — §1.1](../day4/day4_master_coursebook.md)** for the complete polymorphic payload taxonomy).
 
 #### The 2 Relational Anti-Patterns to Avoid:
 1. **The Wide Table with 150 Nullable Columns:** Running `ALTER TABLE ADD COLUMN` for every new sensor vendor creates a sparse table ($90\%\text{ NULL}$).

@@ -99,21 +99,6 @@ $$\text{Cache Size} = 0.50 \times (\text{Total RAM} - 1\text{ GB}) \quad (\text{
 
 Unlike PostgreSQL (which requires external orchestration tools like `Patroni` + `etcd` + `HAProxy` for automated failover), **MongoDB has Raft-based consensus, automated elections, and smart client-driver failover built directly into `mongod` and the official MongoDB drivers!**
 
-```text
-                           3-Node Replica Set Topology
-                     ┌────────────────────────────────┐
-                     │          Primary (R/W)         │
-                     │  Holds lease, writes to oplog  │
-                     └───────┬────────────────┬───────┘
-                             │                │
-            Oplog Sync Stream│                │Oplog Sync Stream
-                             ▼                ▼
-                ┌──────────────────┐    ┌──────────────────┐
-                │ Secondary 1 (RO) │    │ Secondary 2 (RO) │
-                │ Replays oplog    │    │ Replays oplog    │
-                └──────────────────┘    └──────────────────┘
-```
-
 ### 3.1 Standard 3-Node Weather Center Replica Set (`rs_meteo`)
 - **`mongo-node1` (Primary — `priority: 2`):** Accepts all writes (`synoptic_timeseries`, `radiosonde_soundings`, `cap_alerts`) and records every operation into `local.oplog.rs` (the **Oplog**).
 - **`mongo-node2` (Secondary — `priority: 1`):** Replicates the Primary's Oplog continuously and is the preferred failover standby if `mongo-node1` goes down.
@@ -454,29 +439,11 @@ flowchart TB
 ```
 
 ### 8.2 The Shard Key Dilemma on Weather Telemetry
-Selecting the **Shard Key** is the most critical architectural decision in a sharded cluster:
-
-```text
-                              The Shard Key Spectrum
- ┌─────────────────────────────┬─────────────────────────────┬─────────────────────────────┐
- │ Strategy A: Monotonic Key   │ Strategy B: Hashed Key      │ Strategy C: Compound Key    │
- │ { obs_time: 1 }             │ { station_id: "hashed" }    │ { station_id: 1, obs_time:1}│
- ├─────────────────────────────┼─────────────────────────────┼─────────────────────────────┤
- │ • ALL writes hit ONE shard  │ • Writes evenly distributed │ • Writes split across IDs   │
- │ • Hotspot write cliff       │ • Range scans hit ALL shards│ • Targeted station+time scan│
- │ • Zero ingest concurrency   │   (Scatter-gather query tax)│ • Scalable & localized      │
- └─────────────────────────────┴─────────────────────────────┴─────────────────────────────┘
-```
-
-1. **Trap 1 — The Monotonically Increasing Key (`{ obs_time: 1 }`):**
-   - Every live weather observation arriving at `12:00 UTC` has the newest timestamp ($T_{\text{now}}$).
-   - Because $T_{\text{now}}$ always increases, **$100\%$ of live cluster writes hammer the single highest chunk on a single Shard**, leaving all other Shards idle (**Write Hotspot**)!
-2. **Trap 2 — Purely Hashed Sharding (`{ station_id: "hashed" }`):**
-   - Distributes writes evenly, but if a forecaster queries a time range across a region without specifying exact station IDs, `mongos` must perform a **Scatter-Gather Scan** across every shard in the cluster.
-3. **Trap 3 — Low Cardinality & The "Jumbo Chunk" Hazard (`{ sensor_type: 1 }`):**
-   - If you shard on a field with only 4 distinct values, chunks cannot be split once a single value exceeds $64\text{ MB}$. MongoDB flags the un-splittable chunk as a **Jumbo Chunk** and cannot balance it.
-4. **The Production Solution — Compound Shard Key (`{ "station_meta.station_id": 1, obs_time: 1 }` or `{ "metadata.region_code": 1, "metadata.station_id": 1, recorded_at: 1 }`):**
-   - Leading with high-cardinality `station_id` (or `region_code + station_id`) distributes live writes across all shards simultaneously while keeping each station's chronological history contiguous for fast targeted range scans!
+Selecting the **Shard Key** is the most critical architectural decision in a sharded cluster (see **[Day 4 Master Coursebook — §5.4 Black Box 4D](./day4_master_coursebook.md)** for the full 4-pattern Shard Key decision matrix and diagrams):
+1. **Trap 1 — Monotonic Key (`{ obs_time: 1 }`):** Routes $100\%$ of live cluster writes to the single shard holding `MaxKey` (**Write Hotspot**).
+2. **Trap 2 — Purely Hashed Key (`{ obs_time: "hashed" }`):** Forces a **Scatter-Gather Scan** across every shard on time-range queries.
+3. **Trap 3 — Low Cardinality (`{ sensor_type: 1 }`):** Creates un-splittable **Jumbo Chunks** (`> 64 MB`).
+4. **Production Solution — Compound Key (`{ "station_meta.station_id": 1, obs_time: 1 }`):** Distributes live writes across all shards simultaneously while keeping each station's chronological history contiguous for targeted single-shard range scans.
 
 ### 8.3 Essential Sharding Administration Commands (Run on `mongos`)
 

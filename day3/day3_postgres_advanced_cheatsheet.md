@@ -19,17 +19,6 @@
 
 ## 1. Declarative Time-Series Partitioning (`PARTITION BY RANGE`)
 
-```
-                   The 5 Physical Drivers of Partitioning
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │ 1. Memory Working Set Fit  : Active B-Trees stay pinned in RAM cache        │
- │ 2. Vacuum & Maintenance    : Autovacuum isolates writes; old partitions freeze│
- │ 3. Heap Fragmentation      : Eliminates dead-space holes across 8 KB pages  │
- │ 4. I/O Boundary Pruning    : Queries read ONLY matching physical disks/files│
- │ 5. Abstraction Layer       : Master table routes queries with ZERO app logic│
- └─────────────────────────────────────────────────────────────────────────────┘
-```
-
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
 -- PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql

@@ -76,31 +76,7 @@ This master reference guide details:
 
 ## 1. The Weather Data Ecosystem: Grids vs. Tables vs. Documents
 
-A common mistake in weather data engineering is trying to force **every** meteorological dataset into a single format. Here is how operational weather centers separate **Gridded Fields** from **Point / Station Databases**:
-
-```mermaid
-flowchart LR
-    subgraph RawMeteo["Upstream Meteorological Feeds"]
-        G["NWP Model Grids\n(ECMWF / GFS / AROME)\n.grib2 | .nc (NetCDF4) | .zarr"]
-        B["WMO Surface & Upper-Air\n.bufr | SYNOP | METAR | TEMP"]
-        R["Radar & Satellite Polygons\n& IoT Telemetry JSON"]
-    end
-
-    subgraph Extraction["Python Extraction Layer\n(xarray + cfgrib + pyarrow)"]
-        E1["Extract Point Time-Series\nat WMO Station Coordinates\nds.sel(lat=..., lon=..., method='nearest')"]
-        E2["Decode BUFR / METAR\n(pdbufr / eccodes)"]
-    end
-
-    subgraph TargetStores["Bootcamp Storage Engines"]
-        PG[("PostgreSQL 16 + PostGIS\n• synoptic.observations\n• nwp.forecasts (Verification)")]
-        PQ[("Apache Parquet + DuckDB\n• Multi-year Climatology Lake")]
-        MG[("MongoDB 7\n• radiosonde_soundings\n• storm_polygons & cap_alerts")]
-    end
-
-    G --> E1 --> PG & PQ
-    B --> E2 --> PG & MG
-    R --> MG
-```
+A common mistake in weather data engineering is trying to force **every** meteorological dataset into a single format. Here is how operational weather centers separate **Gridded Fields** from **Point / Station Databases** (see **[Day 5 Part 1 Coursebook — §4.2](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md)** for the end-to-end extraction topology diagram):
 
 | Format | Structure | Best Kept As... | Extract to PostgreSQL / Parquet / MongoDB When... |
 | :--- | :--- | :--- | :--- |
@@ -621,48 +597,12 @@ To solve this, modern meteorological storage engineering applies **two complemen
 
 ### 6.1 Strategy A: The Infrastructure Trick — Ceph Erasure Coding ($k=4, m=2$)
 
-Under classical enterprise storage guidelines, storage clusters deploy **$3\times$ Replication** to guarantee durability ($1\text{ primary copy} + 2\text{ mirror copies}$):
+Under classical enterprise storage guidelines, storage clusters deploy **$3\times$ Replication** to guarantee durability ($1\text{ primary copy} + 2\text{ mirror copies}$), incurring a **$200\%$ storage overhead** ($300\text{ TB}$ of raw disk required for $100\text{ TB}$ of satellite rasters).
 
-$$
-\text{Storage Overhead}_{3\times} = 3.0 \times \text{Raw Data} \implies \mathbf{200\%\text{ Overhead (Usable Capacity: } 33.3\%)}
-$$
-
-* **The Problem:** Storing $100\text{ TB}$ of satellite rasters requires procuring **$300\text{ TB}$ of raw enterprise hard drives**.
-
-**The Erasure Coding Trick:** Instead of copying complete files, Ceph breaks an object into $k$ data chunks and computes $m$ parity chunks using Reed-Solomon coding:
-
-$$
-\text{Storage Overhead}_{\text{EC}} = \frac{k + m}{k} \times \text{Raw Data}
-$$
-
-$$
-\text{Usable Capacity \%} = \frac{k}{k + m} \times 100
-$$
-
-```text
-                   Erasure Coding: Reed-Solomon (k=4, m=2)
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │ Meteorological Raster File: "MSG4-SEVIRI-CHANNEL-IR108.tif" (120 MB)        │
- └──────────────────────────────────────┬──────────────────────────────────────┘
-                                        │ Jerasure Reed-Solomon Plugin
-                                        ▼
-   DATA CHUNKS (k = 4)                             PARITY CHUNKS (m = 2)
- ┌─────────────┬─────────────┬─────────────┬─────────────┐ ┌─────────────┬─────────────┐
- │ Chunk D1    │ Chunk D2    │ Chunk D3    │ Chunk D4    │ │ Parity P1   │ Parity P2   │
- │ (30 MB)     │ (30 MB)     │ (30 MB)     │ (30 MB)     │ │ (30 MB)     │ (30 MB)     │
- └──────┬──────┴──────┬──────┴──────┬──────┴──────┬──────┘ └──────┬──────┴──────┬──────┘
-        │             │             │             │               │             │
-        ▼             ▼             ▼             ▼               ▼             ▼
-     OSD 101       OSD 102       OSD 103       OSD 104         OSD 105       OSD 106
-     (Node 1)      (Node 2)      (Node 3)      (Node 4)        (Node 5)      (Node 1)
-```
-
-* **Configuration:** $k=4, m=2$ (tolerates the catastrophic physical loss of any **2 OSDs or 2 entire server chassis simultaneously**).
-* **Storage Footprint:**
-  
-  $$\text{Overhead} = \frac{4 + 2}{4} = 1.50 \implies \mathbf{50\%\text{ Storage Overhead (Usable Capacity: } 66.7\%)}$$
-
-* **The Result:** Storing $100\text{ TB}$ of satellite data requires purchasing only **$150\text{ TB}$ of physical disk instead of $300\text{ TB}$—a flat $50\%$ reduction in physical hardware investment**.
+By using **Ceph Reed-Solomon Erasure Coding ($k=4, m=2$)** on the cold archive pool:
+$$\text{Overhead} = \frac{4 + 2}{4} = 1.50 \implies \mathbf{50\%\text{ Storage Overhead (Usable Capacity: } 66.7\%)}$$
+* Storing $100\text{ TB}$ of satellite data requires purchasing only **$150\text{ TB}$ of physical disk instead of $300\text{ TB}$—a flat $50\%$ reduction in physical hardware investment** while still surviving the simultaneous loss of any **2 OSDs or 2 entire server chassis**.
+* *(For the complete Ceph RADOS / BlueStore architecture, OSD chunk distribution diagram, and Proxmox VE deployment runbook, see **[Reference Card 05: Ceph Distributed Storage & Proxmox VE Architecture — Section 5](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md)**.)*
 
 ### 6.2 Strategy B: The Raster Encoding Trick — Precision Compaction & Bit-Rounding
 
@@ -765,48 +705,11 @@ The primary operational advantage of Cloud-Native Geospatial Formats on Ceph Obj
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.1 Stream Sub-Windows via Python Rasterio & GDAL `/vsis3/`
+### 7.1 Streaming Sub-Windows via GDAL `/vsis3/` & DuckDB `httpfs`
 
-```python
-import os
-import rasterio
-
-# Direct GDAL to On-Premises Ceph RGW Endpoint
-os.environ["AWS_S3_ENDPOINT"] = "10.10.20.100:80" # On-Prem Ceph VIP
-os.environ["AWS_ACCESS_KEY_ID"] = "METEO_ACCESS_KEY_2026"
-os.environ["AWS_SECRET_ACCESS_KEY"] = "METEO_SECRET_KEY_SUPER_SECURE_99"
-os.environ["AWS_VIRTUAL_HOSTING"] = "FALSE"        # Forces path-style addressing
-os.environ["AWS_HTTPS"] = "NO"                     # Use HTTP on local isolated network
-
-s3_cog_path = "/vsis3/satellite-archive/seviri/2026/10/04/msg4_ir108.tif"
-
-with rasterio.open(s3_cog_path) as src:
-    # Read strictly the Dellys Cape coastal sector without downloading the full image!
-    window = rasterio.windows.Window(col_off=1200, row_off=800, width=256, height=256)
-    sector_data = src.read(1, window=window)
-    print(f"[+] Successfully streamed {sector_data.shape} pixel array directly from on-prem Ceph.")
-```
-
-### 7.2 Vectorized Climatological Scans via DuckDB `httpfs`
-
-```sql
--- Query Parquet lakehouse metadata referencing Ceph S3 assets directly
-INSTALL httpfs;
-LOAD httpfs;
-
-SET s3_endpoint = '10.10.20.100:80';
-SET s3_access_key_id = 'METEO_ACCESS_KEY_2026';
-SET s3_secret_access_key = 'METEO_SECRET_KEY_SUPER_SECURE_99';
-SET s3_use_ssl = false;
-SET s3_url_style = 'path';
-
-SELECT 
-    asset_name,
-    COUNT(*) AS total_scenes,
-    ROUND(SUM(byte_size) / 1024.0 / 1024.0 / 1024.0, 2) AS total_gigabytes
-FROM read_parquet('s3://stac-lake/year=2026/month=10/*.parquet')
-GROUP BY asset_name;
-```
+- **GDAL / Rasterio (`/vsis3/`):** Set `AWS_S3_ENDPOINT`, `AWS_VIRTUAL_HOSTING="FALSE"`, and open `/vsis3/satellite-archive/.../msg4_ir108.tif` with `rasterio.windows.Window(col_off, row_off, width, height)` to stream only the requested 256 KB coastal sector without downloading the full satellite scene.
+- **DuckDB (`httpfs`):** Load `httpfs`, configure `s3_endpoint` and `s3_url_style = 'path'`, and query `read_parquet('s3://stac-lake/year=2026/month=10/*.parquet')` directly.
+- *(For the complete runnable Rasterio `/vsis3/` and DuckDB `httpfs` Ceph S3 code blocks, see **[Reference Card 05: Ceph Distributed Storage & Proxmox VE Architecture — Section 8](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md)**.)*
 
 ---
 

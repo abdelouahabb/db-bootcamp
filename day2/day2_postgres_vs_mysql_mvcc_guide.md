@@ -252,69 +252,9 @@ Every clustered index row in InnoDB contains three hidden system fields:
 
 ---
 
-## 6. If You Must Operate MySQL InnoDB: Production Tuning & Diagnostics Reference
+## 6. Side-by-Side Performance Tuning Translator: PostgreSQL (`postgresql.conf`) vs. MySQL InnoDB (`my.cnf`)
 
-When interfacing with legacy MySQL weather systems, apply these critical InnoDB configurations (`my.cnf`) and diagnostic queries:
-
-### 6.1 Critical MySQL InnoDB Configuration (`my.cnf` for 32 GB RAM Server)
-```ini
-[mysqld]
-# 1. Enforce Strict SQL Mode (Prevent '0000-00-00' zero-dates & silent truncation!)
-sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
-default_time_zone = '+00:00'          # Enforce UTC globally
-
-# 2. Single-Tier Memory Management: Bypass OS cache using O_DIRECT
-innodb_buffer_pool_size = 24G         # 70-80% of RAM on dedicated MySQL server
-innodb_buffer_pool_instances = 8      # Split pool to reduce mutex contention
-innodb_flush_method = O_DIRECT        # Prevent double-buffering with Linux page cache
-
-# 3. Crash Safety & Torn-Page Protection (16KB page vs 4KB sector)
-innodb_doublewrite = 1                # Mandatory torn-page protection
-innodb_redo_log_capacity = 16G        # MySQL 8.0.30+ dynamic Redo Log capacity
-innodb_flush_log_at_trx_commit = 1    # 1 = strict ACID; 2 = OS flush on commit, 1s disk sync
-
-# 4. Storage & NVMe IOPS
-innodb_file_per_table = 1             # Dedicated .ibd file per table
-innodb_io_capacity = 2000
-innodb_io_capacity_max = 4000
-```
-
-### 6.2 MySQL InnoDB Forensics & MVCC History List Length (HLL) Queries
-> *Note: The diagnostic queries below are **MySQL 8.0 / 8.4 (`mysql` CLI) reference commands** for engineers operating external MySQL/InnoDB weather systems (do not run `SHOW ENGINE INNODB STATUS` inside PostgreSQL `psql`!).*
-```sql
--- TARGET ENGINE: MySQL 8.0 / 8.4 CLI (mysql -u root -p weather_ops) — Reference Only
-
--- 1. Check InnoDB Engine Status (Buffer Pool, Semaphores, Undo History)
-SHOW ENGINE INNODB STATUS\G
-
--- 2. Monitor MVCC History List Length (HLL) — MySQL's Equivalent of Unvacuumed Bloat!
--- (Should stay < 1,000; if > 100,000, an open transaction is blocking Undo Purge!)
-SELECT NAME, COUNT
-FROM information_schema.INNODB_METRICS
-WHERE NAME = 'trx_rseg_history_len';
-
--- 3. Spot Long-Running / Stuck InnoDB Transactions & Lock Waits
-SELECT
-    trx_id,
-    trx_state,
-    trx_started,
-    TIMESTAMPDIFF(SECOND, trx_started, NOW()) AS duration_sec,
-    trx_rows_modified,
-    trx_query
-FROM information_schema.INNODB_TRX
-ORDER BY trx_started ASC;
-
--- 4. Profile Execution Plans in MySQL 8.0+ (Equivalent to PG's EXPLAIN (ANALYZE, BUFFERS) on observations)
-EXPLAIN FORMAT=TREE
-SELECT station_id, AVG(temp_c)
-FROM observations
-WHERE obs_time >= '2026-10-01 00:00:00'
-GROUP BY station_id;
-```
-
-### 6.3 Side-by-Side Performance Tuning Translator: PostgreSQL (`postgresql.conf`) vs. MySQL InnoDB (`my.cnf`)
-
-For full details on MySQL 8.0/8.4 performance engineering (Buffer Pool warmup dumps, `AHI` latch contention, `Dual-1` Group Commit, Parallel DDL, Optimizer Histograms, and Invisible Indexes), see **[Reference Card 14 — Section 10.3 & 10.4](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md#103-advanced-mysql-80--84-performance-engineering-7-high-impact-production-optimizations)**.
+For the complete 32 GB `my.cnf` production configuration, Top 10 MySQL `sys`/`performance_schema` forensic queries (`SHOW ENGINE INNODB STATUS`, History List Length `HLL`), and 7 MySQL 8.0/8.4 performance optimizations, see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide — Section 10](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**.
 
 | Performance Subsystem | PostgreSQL 16+ (`postgresql.conf` / SQL) | MySQL 8.0 / 8.4 InnoDB (`my.cnf` / SQL) | Key Architectural Difference |
 | :--- | :--- | :--- | :--- |

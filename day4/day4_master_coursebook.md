@@ -275,38 +275,11 @@ db.stations.insertOne({
   sensors: ["PT100_THERM", "HEATED_ULTRASONIC_WIND", "SNOW_DEPTH_LASER"],
   icing_sensor: { heated_anemometer: true, power_watts: 150, deice_threshold_c: 1.5 }
 });
-
-// =============================================================================
-// 6. WARM-UP CRUD: READ (find), UPDATE (updateOne) & DELETE (deleteOne)
-//    (See ../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md
-//     Part III for the complete MongoDB CRUD & Aggregation guide!)
-// =============================================================================
-
-// 6a. READ (find with projection & sort): List all stations sorted by elevation_m DESC
-db.stations.find(
-  { is_active: true },
-  { station_name: 1, station_type: 1, climate_zone: 1, elevation_m: 1 }
-).sort({ elevation_m: -1 });
-
-// 6b. READ nested fields & polymorphic documents in synoptic_timeseries
-db.synoptic_timeseries.find(
-  { temp_c: { $gte: 30.0 } },
-  { _id: 0, "station_meta.station_id": 1, "station_meta.climate_zone": 1, obs_time: 1, temp_c: 1, wind_gust_kt: 1 }
-).sort({ temp_c: -1 });
-
-// 6c. UPDATE (updateOne with $set & $addToSet): Update Setif (60445) power_watts and add a sensor
-db.stations.updateOne(
-  { _id: 60445 },
-  {
-    $set: { "icing_sensor.power_watts": 200, last_inspected_utc: new Date("2026-10-06T09:00:00Z") },
-    $addToSet: { sensors: "CMP11_PYRANOMETER" }
-  }
-);
-db.stations.findOne({ _id: 60445 });
-
-// 6d. DELETE (deleteOne): Optional cleanup of test station 60445 (or keep it for later labs)
-// db.stations.deleteOne({ _id: 60445 });
 ```
+
+> [!NOTE]
+> **Need a Warm-Up on Basic MongoDB CRUD (`find`, `findOne`, `$gt`/`$in`, `insertOne`, `updateOne`, `deleteOne`, `aggregate`)?**  
+> Open **[Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook — Part III (MongoDB)](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md)** for foundational `mongosh` commands on `weather_nosql`.
 
 ---
 

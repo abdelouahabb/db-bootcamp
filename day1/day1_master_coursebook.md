@@ -123,92 +123,9 @@ To inspect **`weather_ops.db` visually in DBeaver / DB Browser for SQLite**:
 1. Create a New Connection $\rightarrow$ Select **SQLite** $\rightarrow$ Browse to `day1/weather_ops.db`.
 2. Double-click the `stations` table $\rightarrow$ open the **ER Diagram** tab to inspect how `station_id` links `stations` to `observations`, `forecasts`, and `weather_alerts`.
 
-#### 3.2.1 Warm-Up Lab 0: Basic SQL Exploration & CRUD (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `INSERT`, `UPDATE`, `DELETE`) on `day1/weather_ops.db`
-> *Want the full cross-engine (`SQLite` + `PostgreSQL` + `MongoDB`) basic CRUD playbook? Open **[Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md)**!*
-
-Before we dive into engine pragmas or hardware sentinels, run these foundational SQL commands right inside your open `sqlite3 weather_ops.db` session to explore all 4 tables and practice `SELECT`, `INSERT`, `UPDATE`, and `DELETE`:
-
-```sql
--- ============================================================================
--- TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
--- In sqlite3 CLI, verify or switch with:   .open weather_ops.db
--- ============================================================================
-PRAGMA foreign_keys = ON;
-
--- 1. SHOW ALL TABLES & ROW COUNTS:
-SELECT 'stations'       AS table_name, COUNT(*) AS row_count FROM stations
-UNION ALL
-SELECT 'observations',                 COUNT(*)              FROM observations
-UNION ALL
-SELECT 'forecasts',                    COUNT(*)              FROM forecasts
-UNION ALL
-SELECT 'weather_alerts',               COUNT(*)              FROM weather_alerts;
-
--- 2. BASIC SELECT (All columns vs. Specific columns + Computed Math):
-SELECT * FROM stations;
-SELECT * FROM weather_alerts;
-
-SELECT
-    station_id,
-    obs_time,
-    temp_c,
-    ROUND(temp_c * 1.8 + 32.0, 1)   AS temp_f,
-    wind_speed_kt,
-    ROUND(wind_speed_kt * 1.852, 1) AS wind_kmh,
-    qc_flag
-FROM observations
-WHERE temp_c IS NOT NULL
-LIMIT 8;
-
--- 3. FILTERING WITH WHERE (=, >=, BETWEEN, IN, LIKE, IS NULL):
-SELECT station_id, station_name, climate_zone, elevation_m
-FROM stations
-WHERE climate_zone IN ('Mediterranean', 'Highland')
-  AND elevation_m >= 20.0;
-
-SELECT station_id, obs_time, temp_c, humidity_pct, pressure_hpa
-FROM observations
-WHERE station_id = 60390
-  AND temp_c BETWEEN 18.0 AND 30.0;
-
--- 4. SORTING (ORDER BY ... DESC) & TOP-N (LIMIT):
-SELECT station_id, obs_time, wind_speed_kt, precip_1h_mm, qc_flag
-FROM observations
-WHERE wind_speed_kt IS NOT NULL
-ORDER BY wind_speed_kt DESC
-LIMIT 5;
-
--- 5. BASIC AGGREGATION (GROUP BY & HAVING):
-SELECT
-    climate_zone,
-    COUNT(*)                   AS station_count,
-    ROUND(AVG(elevation_m), 1) AS avg_elevation_m
-FROM stations
-GROUP BY climate_zone
-ORDER BY station_count DESC;
-
--- 6. BASIC CRUD (INSERT -> UPDATE -> SELECT -> DELETE):
--- 6a. INSERT a new Saharan station (60580 Ouargla) and 1 observation:
-INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, climate_zone, is_active)
-VALUES (60580, 'Ouargla - Ain Beida', 31.9172, 5.4128, 141.0, 'Arid', 1);
-
-INSERT INTO observations (station_id, obs_time, temp_c, dewpoint_c, humidity_pct, pressure_hpa, wind_speed_kt, precip_1h_mm, qc_flag)
-VALUES (60580, '2026-10-06 12:00:00', 34.5, 9.0, 21.0, 1012.0, 12.0, 0.0, 'VALID');
-
--- 6b. UPDATE the observation's temperature and wind speed:
-UPDATE observations
-SET temp_c = 35.2, wind_speed_kt = 15.0
-WHERE station_id = 60580 AND obs_time = '2026-10-06 12:00:00';
-
--- 6c. SELECT to verify our inserted & updated row:
-SELECT s.station_id, s.station_name, o.obs_time, o.temp_c, o.wind_speed_kt
-FROM stations s
-INNER JOIN observations o ON s.station_id = o.station_id
-WHERE s.station_id = 60580;
-
--- 6d. DELETE station 60580 (ON DELETE CASCADE automatically deletes its observation, keeping weather_ops.db clean!):
-DELETE FROM stations WHERE station_id = 60580;
-```
+> [!NOTE]
+> **Need a Warm-Up on Basic SQL CRUD (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `INSERT`, `UPDATE`, `DELETE`)?**  
+> Open **[Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook — Part I (SQLite)](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md)** for step-by-step foundational queries on `day1/weather_ops.db` and `day1/weather_telemetry.db`.
 
 ### 3.3 Dataset 2 Setup: 250,000-Row High-Frequency AWS Stream (`day1/weather_telemetry.db`)
 First, exit the `sqlite>` prompt (type **`.quit`** or open a **second terminal tab** inside `day1/`) so you are back at your Linux/macOS/Windows shell prompt (`$`). Then run the standalone Python generator (`generate_weather_db.py`), which synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:
@@ -236,66 +153,29 @@ Inside `sqlite3 weather_telemetry.db` (or from an existing `sqlite>` prompt via 
 
 A critical distinction in SQLite engineering is the difference between **CLI Dot-Commands** (`.headers`, `.mode`, `.schema`) and **`PRAGMA` Statements**:
 - **CLI Dot-Commands (`.cmd`):** Evaluated **only** by the `sqlite3` terminal program. They do not end with a semicolon and will throw a syntax error if executed inside Python (`cur.execute(".tables")`) or DBeaver.
-- **`PRAGMA` Statements (`PRAGMA name = value;`):** SQLite-specific SQL extensions evaluated directly by the **SQLite Storage Core (`libsqlite3`)**. They **end with a semicolon (`;`)**, work identically across the `sqlite3` CLI, Python `sqlite3`, and DBeaver, and control runtime engine behavior, crash recovery, memory caching, and schema introspection.
+- **`PRAGMA` Statements (`PRAGMA name = value;`):** SQLite-specific SQL extensions evaluated directly by the **SQLite Storage Core (`libsqlite3`)**. They **end with a semicolon (`;`)** and work identically across the `sqlite3` CLI, Python `sqlite3`, and DBeaver.
 
 #### 1. The Scope Rule: Per-Connection vs. Persistent Database Header Pragmas
 - **Per-Connection (Session) Pragmas:** Reset to compile-time defaults every time a new connection opens! You must run them at the start of every session (or inside `~/.sqliterc` / Python connection hooks):
   - `PRAGMA foreign_keys = ON;` (Default: `OFF` / `0`)
   - `PRAGMA synchronous = NORMAL;` (Default: `FULL` / `2`)
-  - `PRAGMA busy_timeout = 5000;` (Default: `0` ms)
-  - `PRAGMA cache_size = -64000;` (Default: `-2000` $\approx 2\text{ MiB}$)
+  - `PRAGMA busy_timeout = 5000;` (Default: `0` ms — pairs with `BEGIN IMMEDIATE;` for concurrent writers)
+  - `PRAGMA cache_size = -64000;` (Default: `-2000` $\approx 2\text{ MiB}$; negative = KiB, positive = 4 KB page count)
   - `PRAGMA temp_store = MEMORY;` (Default: `DEFAULT` / `0`)
 - **Persistent (Database File Header) Pragmas:** Stored permanently inside the `.db` file header and remembered across all future connections:
   - `PRAGMA journal_mode = WAL;` (Switches the database file permanently to Write-Ahead Logging until changed back).
-  - `PRAGMA page_size = 4096;` (Persists when set before table creation or immediately followed by `VACUUM;`).
-  - `PRAGMA auto_vacuum = NONE | FULL | INCREMENTAL;`
+  - `PRAGMA page_size = 4096;` and `PRAGMA auto_vacuum = NONE | FULL | INCREMENTAL;`
 
-#### 2. Complete Categorized Matrix of Essential SQLite `PRAGMA` Options
-
-| Category | `PRAGMA` Statement | Default | Scope | Meteorological Engineering Purpose & When to Use |
-| :--- | :--- | :---: | :---: | :--- |
-| **Integrity & Constraints** | `PRAGMA foreign_keys = ON;` | `0` (`OFF`) | Connection | Enforces `FOREIGN KEY` constraints and `ON DELETE CASCADE` (Line 7 of [`weather_ops_seed.sql`](./weather_ops_seed.sql)). |
-| **Integrity & Constraints** | `PRAGMA foreign_key_check;` | — | Action | Scans existing tables (or a single table: `PRAGMA foreign_key_check(observations);`) for orphaned rows inserted while foreign keys were disabled. |
-| **Integrity & Constraints** | `PRAGMA integrity_check;` / `PRAGMA quick_check;` | — | Action | Audits physical B-Tree pages, index sort order, `UNIQUE`, and `NOT NULL` constraints after power loss on remote field data loggers (`ok` = healthy). |
-| **Journaling & Concurrency** | `PRAGMA journal_mode = WAL \| DELETE \| TRUNCATE \| PERSIST \| MEMORY \| OFF;` | `DELETE` | **Persistent** (`WAL`) | • **`WAL`:** Enables concurrent readers + 1 writer via `.db-wal`/`.db-shm` (prevents `database is locked` when a daemon ingests while a dashboard reads).<br>• **`OFF`:** Disables rollback journal (used in [`generate_weather_db.py`](./generate_weather_db.py) for 2-second scratch generation; unsafe for live production). |
-| **Journaling & Concurrency** | `PRAGMA synchronous = EXTRA \| FULL \| NORMAL \| OFF;` | `FULL` (`2`) | Connection | Controls how often SQLite calls OS `fsync()`. Pair `WAL` + `NORMAL` (`1`) for high-speed crash-safe production ingestion; `generate_weather_db.py` uses `OFF` (`0`) during disposable bulk seeding. |
-| **Journaling & Concurrency** | `PRAGMA busy_timeout = 5000;` | `0` ms | Connection | Instructs SQLite to wait up to `5000 ms` (5 seconds) for an active write lock to clear instead of failing immediately with `SQLITE_BUSY` (`database is locked`). |
-| **Journaling & Concurrency** | `PRAGMA wal_autocheckpoint = 1000;` | `1000` pages | Connection | Automatically triggers a `PASSIVE` checkpoint once `.db-wal` reaches `1000` 4 KB frames ($\approx 4\text{ MB}$). |
-| **Journaling & Concurrency** | `PRAGMA wal_checkpoint(PASSIVE \| FULL \| RESTART \| TRUNCATE);` | — | Action | Flushes committed frames from `.db-wal` back into `.db` and returns the 3-integer tuple `(busy, log, checkpointed)`. |
-| **Journaling & Concurrency** | `PRAGMA journal_size_limit = 67108864;` | `-1` (No limit) | Connection | Automatically truncates `.db-wal` down to the specified byte cap (e.g., `64 MiB`) whenever a checkpoint rewinds the WAL to frame 1. |
-| **Memory & I/O Tuning** | `PRAGMA cache_size = -64000;` *(or `+100000`)* | `-2000` ($2\text{ MiB}$) | Connection | Negative = KiB (`-64000` = `64 MiB` RAM cache). Positive = page count (`100000` pages $\times 4\text{ KB} \approx 400\text{ MB}$ RAM in `generate_weather_db.py` for rapid index builds). |
-| **Memory & I/O Tuning** | `PRAGMA temp_store = MEMORY;` | `0` (`DEFAULT`) | Connection | Keeps temporary B-Trees for `ORDER BY`, `GROUP BY`, `DISTINCT`, and window functions in RAM rather than `/tmp` disk files. |
-| **Memory & I/O Tuning** | `PRAGMA mmap_size = 268435456;` | `0` | Connection | Memory-maps up to `256 MiB` of the `.db` file directly into process memory, avoiding `read()` syscall overhead during large analytical scans. |
-| **Schema Introspection** | `PRAGMA table_info('observations');` | — | Query / TVF | Returns columns (`cid, name, type, notnull, dflt_value, pk`). Can also be queried as a table in SQL: `SELECT * FROM pragma_table_info('observations');`! |
-| **Schema Introspection** | `PRAGMA index_list('observations');` & `PRAGMA index_info('...');` | — | Query / TVF | Lists table indexes (including `sqlite_autoindex_observations_1` created by `UNIQUE (station_id, obs_time)`) and their indexed column order. |
-| **Schema Introspection** | `PRAGMA foreign_key_list('observations');` | — | Query / TVF | Lists parent tables (`stations`), referencing columns (`station_id`), and `on_delete` rules (`CASCADE`). |
-| **Planner Maintenance** | `PRAGMA optimize;` | — | Action | Run right before closing a database connection; selectively runs `ANALYZE` on tables whose row counts shifted substantially. |
-
-#### 3. Why `generate_weather_db.py` Uses `OFF` While Production Uses `WAL`
+#### 2. Why `generate_weather_db.py` Uses `OFF` While Production Uses `WAL`
 Notice Lines 23–25 of [`generate_weather_db.py`](./generate_weather_db.py):
 ```python
 cur.execute("PRAGMA journal_mode = OFF;")
 cur.execute("PRAGMA synchronous = OFF;")
 cur.execute("PRAGMA cache_size = 100000;")
 ```
-- **Why this is valid in `generate_weather_db.py`:** The script builds a brand-new synthetic `.db` file from scratch in 2 seconds. If power fails mid-script, you simply re-run `./generate_weather_db.py`. Turning off the rollback journal (`journal_mode = OFF`) and OS disk barriers (`synchronous = OFF`) while allocating `100,000` pages ($\approx 400\text{ MB}$) of RAM cache allows 250,000 rows + 2 composite B-Tree indexes to materialize in ~2 seconds.
+- **Why this is valid in `generate_weather_db.py`:** The script builds a brand-new synthetic `.db` file from scratch in 2 seconds. Turning off the rollback journal (`journal_mode = OFF`) and OS disk barriers (`synchronous = OFF`) while allocating `100,000` pages ($\approx 400\text{ MB}$) of RAM cache allows 250,000 rows + 2 composite B-Tree indexes to materialize in ~2 seconds.
 - **Why you must NEVER use `OFF` on a live weather station:** On a real station logger or operational database (`weather_ops.db`), a power cut during `journal_mode = OFF` corrupts the B-Tree permanently. In production, always use `PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`.
-
-#### 4. Deep-Dive: SQLite `WAL` Checkpointing, Durability & Production Pitfalls
-When `PRAGMA journal_mode = WAL;` is active, writers append modified 4 KB frames to `.db-wal` while readers consult `.db-shm` (Shared Memory WAL Index). Mastering WAL in production requires understanding four operational rules:
-1. **Decoding `PRAGMA wal_checkpoint(<MODE>);` Output (`busy | log | checkpointed`):**
-   - Every checkpoint call returns `(busy, log, checkpointed)`: `busy` (`0` = completed, `1` = blocked by active reader/writer), `log` (total 4 KB frames currently in `.db-wal`), and `checkpointed` (frames copied back to `.db`).
-   - **The 4 Checkpoint Modes:**
-     - `PASSIVE` *(used by `wal_autocheckpoint = 1000`)*: Never blocks readers or writers; stops at the oldest active reader snapshot ("Read-Mark").
-     - `FULL`: Waits (up to `busy_timeout`) for active writers/readers to finish and flushes all frames.
-     - `RESTART`: Flushes all frames and waits for readers so the next writer **must** rewind `.db-wal` back to frame 1 (reusing the file without shrinking it).
-     - `TRUNCATE`: Flushes all frames, rewinds to frame 1, and calls `ftruncate()` to shrink `.db-wal` to **`0` bytes** on disk.
-2. **Why `WAL` + `PRAGMA synchronous = NORMAL;` Is the Production Sweet Spot:**
-   - In legacy `DELETE` mode, `synchronous = NORMAL` has a small corruption risk on sudden power loss. In **`WAL` mode**, `synchronous = NORMAL` is **100% B-Tree corruption-safe**: commits append to `.db-wal` in RAM without stalling on OS `fsync()`, and `fsync()` is only called during checkpoints ($10\text{--}25\times$ faster writes while preserving SD/SSD flash lifespan).
-3. **Preventing "WAL Starvation" (Unbounded `.db-wal` Growth):**
-   - If a Python script or GUI leaves an unfinished `SELECT` cursor open, it holds a "Read-Mark" that prevents `wal_autocheckpoint` from rewinding `.db-wal`, causing `.db-wal` to grow to gigabytes. Always close read cursors promptly and set `PRAGMA journal_size_limit = 67108864;` (`64 MiB`).
-4. **Why `PRAGMA busy_timeout = 5000;` Requires `BEGIN IMMEDIATE;` for Concurrent Writers:**
-   - If Connection A starts with a deferred `BEGIN;`, runs a `SELECT`, and later tries to run `INSERT` after Connection B has already committed a new WAL frame, SQLite **immediately aborts with `SQLITE_BUSY_SNAPSHOT` (`0 ms`)—ignoring `busy_timeout`**—because upgrading a stale read snapshot would violate serializability. Always begin write transactions with **`BEGIN IMMEDIATE;`** so the write lock is acquired up front and `busy_timeout` is honored!
+- *(For the complete 16-option categorized `PRAGMA` reference table and the 4 `PRAGMA wal_checkpoint` modes, see **[Day 1 Cheatsheet — Part I §5](./day1_sqlite_and_sql_cheatsheet.md)** and **[Reference Card 07: WAL & Crash Recovery](../reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md)**.)*
 
 ---
 

@@ -7,8 +7,22 @@
 **Target Audience:** Weather Forecast Engineers, Meteorological Software Engineers, Weather Systems Administrators & Environmental Data Scientists  
 **Execution Environment:** Local zero-friction `sqlite3` CLI (3.38+) + DBeaver / DB Browser for SQLite / TablePlus  
 **Primary Working Datasets:**
-1. **`weather_ops.db` (`weather_ops_seed.sql`):** Curated WMO Surface Synoptic Network (`stations`, `observations`, `forecasts`, `weather_alerts`) with physical `CHECK` constraints and multi-model NWP verification data (`ECMWF-HRES`, `GFS`, `AROME`).
-2. **`weather_telemetry.db` (`generate_weather_db.py`):** 250,000 synthetic high-frequency observations across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) with injected hardware sentinels (`-999.0`), barometric plunges, thermal spikes, and a 6-hour communications blackout.
+1. **`day1/weather_ops.db` (`weather_ops_seed.sql`):** Curated WMO Surface Synoptic Network (`stations`, `observations`, `forecasts`, `weather_alerts`) with physical `CHECK` constraints and multi-model NWP verification data (`ECMWF-HRES`, `GFS`, `AROME`).
+2. **`day1/weather_telemetry.db` (`generate_weather_db.py`):** 250,000 synthetic high-frequency observations across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) with injected hardware sentinels (`-999.0`), barometric plunges, thermal spikes, and a 6-hour communications blackout (`stations`, `raw_telemetry`).
+
+> [!IMPORTANT]
+> **🚨 STOP & READ FIRST — Which SQLite `.db` File Do I Open? (Fixing `"no such table: raw_telemetry"` / `"no such table: observations"`)**  
+> Day 1 uses **TWO separate SQLite database files** inside the `day1/` folder. Because each SQLite file is a standalone database, running a `raw_telemetry` query while connected to `weather_ops.db` (or running `sqlite3` from the wrong folder so SQLite creates an empty 0-byte file!) immediately throws `Parse error: no such table: raw_telemetry`.
+>
+> | Database File (`cd day1` first!) | How to Build / Open It | Exact Tables Inside This File | Key Columns | Coursebook Sections Using This File |
+> | :--- | :--- | :--- | :--- | :--- |
+> | **📂 File 1: `weather_ops.db`**<br>*(69 rows — WMO Synoptic & NWP)* | `sqlite3 weather_ops.db < weather_ops_seed.sql`<br>Open: **`sqlite3 weather_ops.db`**<br>*(or inside `sqlite>`: **`.open weather_ops.db`**)* | • `stations` *(7 WMO stations: `60390`..`60680`)*<br>• **`observations`** *(36 hourly rows)*<br>• **`forecasts`** *(22 NWP rows)*<br>• **`weather_alerts`** *(4 CAP alerts)* | `obs_time`, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm` (`-9999.0`), `qc_flag` | • **§3.2** (Dataset 1 Setup)<br>• **§4.2 Lab 1** (DDL & CRUD)<br>• **§6.5 Lab 2** (Synoptic Cleaning)<br>• **§7.3 & §7.4 Lab 3** (All 7 `JOIN`s)<br>• **§9 Part A** (NWP Verification) |
+> | **📂 File 2: `weather_telemetry.db`**<br>*(250,050 rows — 50 AWS Stream)* | `python3 generate_weather_db.py`<br>Open: **`sqlite3 weather_telemetry.db`**<br>*(or inside `sqlite>`: **`.open weather_telemetry.db`**)* | • `stations` *(50 AWS stations: `'AWS-001'`..`'AWS-050'``)*<br>• **`raw_telemetry`** *(250,000 1-min rows)* | `recorded_at`, `temperature` (`-999.0`), `pressure` (`-999.0`), `wind_speed`, `wind_direction`, `rain_accum_1m` | • **§3.3** (Dataset 2 Setup)<br>• **§5.3–5.4** (`WHERE` vs `HAVING`)<br>• **§6.2–6.4** (`-999.0` Sentinels)<br>• **§8.1–8.3** (CTEs & Window `OVER`)<br>• **§9 Part B & §10.2** (Diagnostics) |
+>
+> **3 Instant Rules so You Never Get Lost:**
+> 1. **Check which file you are inside right now:** Type **`.databases`** and **`.tables`** at the `sqlite>` prompt (if `.tables` is blank, you opened `sqlite3` in the wrong folder—type `.quit`, run `cd day1`, and reopen!).
+> 2. **Switch between the two files in 1 second without exiting `sqlite3`:** Type **`.open weather_ops.db`** or **`.open weather_telemetry.db`** directly at the `sqlite>` prompt!
+> 3. **Recommended Classroom Setup:** Open **Two Terminal Tabs** in `day1/` (**Tab 1:** `sqlite3 weather_ops.db`, **Tab 2:** `sqlite3 weather_telemetry.db`), or in **DBeaver / DB Browser for SQLite** use the top database dropdown to select the matching `.db` file shown at the top of each SQL block below.
 
 **Companion Reference Files in `day1/`:**
 - [day1_sqlite_and_sql_cheatsheet.md](./day1_sqlite_and_sql_cheatsheet.md) — Authoritative CLI Directives, 3VL Truth Tables, WMO Queries & Window Recipes
@@ -71,20 +85,26 @@ Move beyond ad-hoc procedural file scripts (nested loops over fragile CSV/ASCII 
   - **Concurrency Limitation (Bridge to Day 2):** SQLite arbitrates writes using OS file locks (even in `WAL` mode, only **one writer** can append at a time). When 500 automated weather stations push telemetry simultaneously while forecasters query live dashboards, a client-server engine with row-level MVCC (**PostgreSQL**) is required.
   - **Row Store vs. Columnar OLAP Preview (Parquet & DuckDB):** SQLite stores entire rows contiguously inside 4 KB B-Tree pages, which is optimal for inserting individual station pings or retrieving all attributes of station `60390`. For scanning 50 years of temperature alone across 10 billion rows, columnar formats (**Apache Parquet**) and vectorized engines (**DuckDB**) read only the compressed temperature bytes.
 
-### 3.2 Dataset 1 Setup: Curated WMO Synoptic & NWP Database (`weather_ops.db`)
-Open a terminal in the `day1` directory and build/inspect `weather_ops.db` from `weather_ops_seed.sql`:
+### 3.2 Dataset 1 Setup: Curated WMO Synoptic & NWP Database (`day1/weather_ops.db`)
+Open a terminal, change into the **`day1`** directory (`cd day1`), and build/open `weather_ops.db` from `weather_ops_seed.sql`:
 
 ```bash
+cd day1
 sqlite3 weather_ops.db < weather_ops_seed.sql
 sqlite3 weather_ops.db
 ```
 
-#### Essential `sqlite3` CLI Dot-Commands
+#### Essential `sqlite3` CLI Dot-Commands (Inside `sqlite3 weather_ops.db`)
 Dot-commands are evaluated directly by the `sqlite3` client shell (not the SQL parser), must begin at column 1 with a `.`, and **never** end with a semicolon:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- 👉 In sqlite3 CLI, verify or switch with:   .open weather_ops.db
+-- ============================================================================
 .help                  -- Show available shell commands
-.tables                -- List all tables (forecasts, observations, stations, weather_alerts)
+.databases             -- Confirm you are connected to day1/weather_ops.db
+.tables                -- List all 4 tables (forecasts, observations, stations, weather_alerts)
 .schema stations       -- Show exact CREATE TABLE DDL for stations
 .headers on            -- Display column names
 .mode box              -- Pretty-print output in Unicode box tables (or .mode column)
@@ -102,24 +122,27 @@ To inspect **`weather_ops.db` visually in DBeaver / DB Browser for SQLite**:
 1. Create a New Connection $\rightarrow$ Select **SQLite** $\rightarrow$ Browse to `day1/weather_ops.db`.
 2. Double-click the `stations` table $\rightarrow$ open the **ER Diagram** tab to inspect how `station_id` links `stations` to `observations`, `forecasts`, and `weather_alerts`.
 
-### 3.3 Dataset 2 Setup: 250,000-Row High-Frequency AWS Stream (`weather_telemetry.db`)
-Run the standalone Python generator (`generate_weather_db.py`) using Python 3 (standard library only; zero external dependencies). It synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:
+### 3.3 Dataset 2 Setup: 250,000-Row High-Frequency AWS Stream (`day1/weather_telemetry.db`)
+First, exit the `sqlite>` prompt (type **`.quit`** or open a **second terminal tab** inside `day1/`) so you are back at your Linux/macOS/Windows shell prompt (`$`). Then run the standalone Python generator (`generate_weather_db.py`), which synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:
 
 ```bash
+# Run from your bash/terminal prompt inside day1/ (if still in sqlite>, type .quit first!):
 chmod +x generate_weather_db.py
 ./generate_weather_db.py
 sqlite3 weather_telemetry.db
 ```
 
-Inside `sqlite3 weather_telemetry.db`:
+Inside `sqlite3 weather_telemetry.db` (or from an existing `sqlite>` prompt via `.open weather_telemetry.db`):
 ```text
+.open weather_telemetry.db
+.databases
 .headers on
 .mode box
 .timer on
 .tables
 .schema raw_telemetry
 ```
-*(Refer to `day1_sqlite_and_sql_cheatsheet.md` for how `.tables` and `.schema` query `sqlite_schema` under the hood and how to configure `~/.sqliterc` permanently).*
+*(Notice that `.tables` inside `weather_telemetry.db` displays **`raw_telemetry`** and **`stations`**. Whenever a section below queries `raw_telemetry`, use `.open weather_telemetry.db`; whenever a section queries `observations`, `forecasts`, or `weather_alerts`, use `.open weather_ops.db`!)*
 
 ### 3.4 SQLite `PRAGMA` Engine Directives vs. CLI Dot-Commands
 
@@ -355,9 +378,18 @@ erDiagram
    - **Operational Rule:** Never run an `UPDATE` or `DELETE` statement on production telemetry without first testing the exact `WHERE` predicate using a `SELECT` query.
 
 ### 4.2 Lab 1 Walkthrough: DDL, Physical Constraints & CRUD on `weather_ops.db`
+> **📂 Active Database File for Lab 1:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
+> - **In `sqlite3` CLI:** Type **`.open weather_ops.db`** first (if you were previously in `weather_telemetry.db`).  
+> - **In DBeaver / DB Browser:** Select **`weather_ops.db`** in the active connection dropdown.
+
 In this walkthrough on `weather_ops.db`, we verify foreign-key and physical `CHECK` constraints, add a new desert synoptic station (`60602 In Salah`), create a `sensor_calibration` metadata table, and reactivate a station returning from maintenance (`60402 Bejaia - Soummam`):
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
+
 -- Enable referential integrity enforcement on the current connection
 PRAGMA foreign_keys = ON;
 
@@ -424,9 +456,17 @@ flowchart LR
 ```
 
 ### 5.3 The Premature Alias Bug (Why `WHERE` Cannot Reference `SELECT` Aliases)
+> **📂 Active Database File for Sections 5.3 & 5.4:** **`day1/weather_telemetry.db`** (`stations`, `raw_telemetry`)  
+> - **⚠️ SWITCH DATABASE NOW:** If you are still in `weather_ops.db` from Lab 1, type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running `FROM raw_telemetry`!
+
 Executing this query against `weather_telemetry.db` triggers an immediate planner error:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
+
 -- DELIBERATE FAILURE: Run directly in SQLite terminal
 SELECT 
     station_id,
@@ -436,10 +476,14 @@ FROM raw_telemetry
 WHERE temp_f > 85.0;
 ```
 
-* **Observed Error:** `Error: no such column: temp_f`
+* **Observed Error:** `Error: no such column: temp_f` *(Note: if you instead see `Parse error: no such table: raw_telemetry`, you are still connected to `weather_ops.db`—run `.open weather_telemetry.db` first!)*
 * **Architectural Reason:** `WHERE` evaluates at **Step 2** to determine which disk pages and rows to filter. `SELECT` does not evaluate scalar column expressions or assign aliases until **Step 5/6**. Therefore, the alias `temp_f` does not exist when `WHERE` executes at Step 2!
 * **Production Fix (Expression Repetition or CTE):**
   ```sql
+  -- ============================================================================
+  -- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+  -- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+  -- ============================================================================
   SELECT 
       station_id,
       recorded_at,
@@ -453,9 +497,14 @@ WHERE temp_f > 85.0;
   - Dewpoint depression (indicator of dry air / cloud base height): `ROUND(temp_c - dewpoint_c, 1) AS dewpoint_spread_c`
 
 ### 5.4 The Cost of `HAVING` vs. `WHERE` Pushdown
-Comparing filter placement on 250,000 rows demonstrates why non-aggregate filters belong in `WHERE` rather than `HAVING`:
+Comparing filter placement on 250,000 rows in **`weather_telemetry.db`** demonstrates why non-aggregate filters belong in `WHERE` rather than `HAVING`:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
+
 -- POOR: Allocates memory for 250,000 rows across 50 stations before discarding 48
 SELECT station_id, AVG(temperature) AS mean_temp
 FROM raw_telemetry
@@ -494,8 +543,15 @@ In embedded systems and legacy WMO/Fortran files, sensors communicate over fixed
 *(See `day1_hardware_sentinels_and_qc_guide.md` for the full ADC physics and variance explosion math).*
 
 ### 6.2 Naive Query Contamination Across Both Datasets
+> **📂 Active Database File for Sections 6.2–6.4:** **`day1/weather_telemetry.db`** (`raw_telemetry`, 250,000 rows)  
+> - **In `sqlite3` CLI:** Ensure you are connected via **`.open weather_telemetry.db`**.
+
 1. **In `weather_telemetry.db` (250,000 rows):**
    ```sql
+   -- ============================================================================
+   -- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+   -- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+   -- ============================================================================
    SELECT 
        COUNT(*) AS total_records,
        ROUND(AVG(temperature), 2) AS network_avg_temp,
@@ -520,9 +576,13 @@ In embedded systems and legacy WMO/Fortran files, sensors communicate over fixed
 > The query engine did not make an arithmetic error: it treated `-999.0` and `-9999.0` as legitimate physical readings. Just a ~2% rate of `-999.0` sensor dropouts (`MIN(temperature) = -999.0`) pulled the average temperature across a warm Mediterranean station network down from $+18.4^\circ\text{C}$ to $-1.42^\circ\text{C}$. Operational databases require explicit sentinel translation (`NULLIF`) or physical range filtering (`CASE WHEN`) before computing climatological aggregates.
 
 ### 6.3 The Core Rule: Clean at the Attribute Level, Not the Row Level
-Inspect an anomaly row in `weather_telemetry.db`:
+Inspect an anomaly row in **`weather_telemetry.db`**:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT station_id, recorded_at, temperature, pressure, wind_speed 
 FROM raw_telemetry 
 WHERE temperature <= -900.0 
@@ -541,8 +601,12 @@ LIMIT 3;
 
 ### 6.4 Remediation Patterns (`NULLIF` and `CASE WHEN`)
 
-#### Pattern A: `NULLIF()` (Exact Sentinel Matching)
+#### Pattern A: `NULLIF()` (Exact Sentinel Matching on `weather_telemetry.db`)
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT 
     COUNT(*) AS total_rows,
     COUNT(NULLIF(temperature, -999.0)) AS valid_readings,
@@ -551,10 +615,14 @@ SELECT
 FROM raw_telemetry;
 ```
 
-#### Pattern B: Physical Guard-Rails (`CASE WHEN`)
+#### Pattern B: Physical Guard-Rails (`CASE WHEN` on `weather_telemetry.db`)
 Handles real-world variations such as dying sensor drift (`-998.2`) or electrical short spikes (`9999.0` or `68.5°C`):
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT 
     station_id,
     ROUND(AVG(CASE 
@@ -571,9 +639,17 @@ LIMIT 5;
 ```
 
 ### 6.5 Lab 2 Walkthrough: Synoptic Filtering, Data Cleaning & Operational Classification (`weather_ops.db`)
+> **📂 Active Database File for Lab 2:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
+> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_ops.db`** at the `sqlite>` prompt (or select `weather_ops.db` in DBeaver) before running `FROM observations`!
+
 In this walkthrough on `weather_ops.db`, we isolate observations with non-valid QC flags or out-of-range measurements (`precip_1h_mm < 0` or `temp_c > 58.0`), remediate the `-9999.0` sentinel and `68.5°C` thermal spike into proper SQL `NULL`s, and classify wind speeds into operational Beaufort warning tiers (`Light Breeze`, `Moderate Wind`, `Strong Wind`, `Gale Warning`):
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
+
 -- 1. Inspect suspect/erroneous or out-of-range rows
 SELECT obs_id, station_id, obs_time, temp_c, precip_1h_mm, qc_flag
 FROM observations
@@ -787,11 +863,18 @@ When data is normalized into `stations`, `observations`, `forecasts`, and `weath
 
 #### 3. Complete Runnable Examples of All 7 `JOIN` Types on `weather_ops.db`
 
+> **📂 Active Database File for Sections 7.3 & 7.4 (Lab 3):** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`, `weather_alerts`)  
+> - **In `sqlite3` CLI:** Ensure you are connected via **`.open weather_ops.db`**.
+
 Every query below runs directly against `day1/weather_ops.db` (`sqlite3 -header -box weather_ops.db`):
 
 ##### 1. `INNER JOIN` — Stations With Active Weather Alerts
 Returns **only** stations that have at least one matching row in `weather_alerts` (4 rows; stations without alerts like `Oran`, `Tlemcen`, and `Bejaia` are excluded):
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, weather_alerts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
 SELECT
     s.station_id,
     s.station_name,
@@ -808,6 +891,10 @@ ORDER BY a.issued_at;
 ##### 2. `LEFT OUTER JOIN` — Complete Station Network Rollup (Preserving Unmatched Left Rows)
 Preserves **all 7 stations** from the left table (`stations`), even **`60402 Bejaia - Soummam`** which has `0` observations (`COUNT(o.obs_id)` returns `0`, whereas `COUNT(*)` would mistakenly return `1` for the `NULL`-padded row!):
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
 SELECT
     s.station_id,
     s.station_name,
@@ -824,6 +911,10 @@ ORDER BY obs_count ASC, s.station_id;
 ##### 3. `LEFT ANTI-JOIN` (`LEFT JOIN ... WHERE IS NULL`) — Detect Silent / Uncovered Stations
 Finds stations in `stations` that have **zero** NWP forecasts in `forecasts` (`Oran 60490`, `Tamanrasset 60680`, `Tlemcen 60531`, and `Bejaia 60402`):
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, forecasts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
 SELECT
     s.station_id,
     s.station_name,
@@ -838,6 +929,11 @@ ORDER BY s.station_id;
 ##### 4. `RIGHT OUTER JOIN` — Native SQLite `3.39+` vs. Portable `< 3.39` `LEFT JOIN` Flip
 Suppose a query puts `weather_alerts` on the left and `stations` on the right, and we want **all 7 stations** even if they have no alert:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: weather_alerts, stations)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
+
 -- A) Native Syntax (Supported in SQLite 3.39.0+, PostgreSQL, DuckDB):
 SELECT
     s.station_id,
@@ -864,6 +960,11 @@ ORDER BY s.station_id;
 ##### 5. `FULL OUTER JOIN` — Bi-Directional Reconciliation Audit (Native `3.39+` vs. Portable `< 3.39` `UNION ALL`)
 Suppose we want to reconcile `forecasts` at `2026-10-05 12:00:00` (which exist only for `Algiers`, `Constantine`, and `Bechar`) against `weather_alerts` (which exist for `Algiers`, `Constantine`, `Bechar`, and `Tamanrasset`), returning rows present in **either** set:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: forecasts, weather_alerts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
+
 -- A) Native FULL OUTER JOIN (SQLite 3.39.0+, PostgreSQL, DuckDB):
 WITH ecmwf_noon AS (
     SELECT station_id, pred_temp_c
@@ -908,6 +1009,10 @@ ORDER BY station_id;
 ##### 6. `CROSS JOIN` — Generating a Complete Station $\times$ NWP Model Expected Matrix
 A `CROSS JOIN` generates the Cartesian product ($7 \text{ stations} \times 3 \text{ models} = 21 \text{ expected pairs}$). Combining `CROSS JOIN` with `LEFT JOIN` is the standard data-engineering pattern to audit **missing NWP model coverage** per station:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, forecasts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
 WITH models AS (
     SELECT 'ECMWF-HRES' AS model_name
     UNION ALL SELECT 'GFS'
@@ -931,6 +1036,10 @@ ORDER BY s.station_id, m.model_name;
 ##### 7. `SELF JOIN` — Comparing Distinct Stations Within the Same Climate Zone
 By joining `stations` to itself (`stations s1 INNER JOIN stations s2`) using the inequality predicate `s1.station_id < s2.station_id` (which eliminates both self-pairs like `Algiers = Algiers` and mirror duplicates like `(Oran, Algiers)` after `(Algiers, Oran)`), we can compare elevation differences between stations sharing the same `climate_zone`:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Table: stations)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
 SELECT
     s1.climate_zone,
     s1.station_name                              AS station_a,
@@ -946,9 +1055,14 @@ ORDER BY s1.climate_zone, station_a;
 ---
 
 ### 7.4 Lab 3 Walkthrough: Daily Climatological Summaries & Sensor Quality Audit (`weather_ops.db`)
-The following queries on `weather_ops.db` compute per-station sensor uptime and diurnal temperature range, generate a daily synoptic climate rollup per station (`obs_date`, `daily_min_c`, `daily_max_c`, `avg_mslp_hpa`, `daily_rain_mm`), and isolate heavy rainfall events (`> 15.0 mm/day`) using `HAVING`:
+The following queries on **`weather_ops.db`** compute per-station sensor uptime and diurnal temperature range, generate a daily synoptic climate rollup per station (`obs_date`, `daily_min_c`, `daily_max_c`, `avg_mslp_hpa`, `daily_rain_mm`), and isolate heavy rainfall events (`> 15.0 mm/day`) using `HAVING`:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Table: observations)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
+
 -- 1. Station Summary & Sensor Uptime Report
 SELECT
     station_id,
@@ -992,10 +1106,17 @@ ORDER BY daily_rain_mm DESC;
 
 ## 8. Module 6: CTE Time Pipelines, Recursive Outage Grids & Window Functions
 
+> **📂 Active Database File for All of Module 6 (Sections 8.1, 8.2 & 8.3):** **`day1/weather_telemetry.db`** (`stations`, `raw_telemetry` — 250,000 rows)  
+> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running any query in Module 6!
+
 ### 8.1 Constructing Multi-Stage Pipelines with CTEs (`WITH`)
-CTEs (`WITH` blocks) transform queries from deeply nested subqueries into readable linear Directed Acyclic Graphs (DAGs). Run this on `weather_telemetry.db`:
+CTEs (`WITH` blocks) transform queries from deeply nested subqueries into readable linear Directed Acyclic Graphs (DAGs). Run this on **`weather_telemetry.db`**:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 WITH stage1_cleansed AS (
     -- Stage 1: Strip out electrical artifacts and invalid bounds
     SELECT 
@@ -1029,9 +1150,13 @@ LIMIT 10;
 ```
 
 ### 8.2 Network Outage Gap Detection via Recursive Time Grid (`WITH RECURSIVE`)
-A standard `GROUP BY` cannot report on hours where a station sent zero packets. To detect communication blackouts, build a continuous time series using a **Recursive CTE** and `LEFT JOIN` the observations:
+A standard `GROUP BY` cannot report on hours where a station sent zero packets. To detect communication blackouts, build a continuous time series using a **Recursive CTE** and `LEFT JOIN` the observations in **`weather_telemetry.db`**:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 WITH RECURSIVE time_grid(slot) AS (
     -- Start 48 hours ago
     SELECT strftime('%Y-%m-%d %H:00:00', datetime('now', '-48 hours'))
@@ -1109,9 +1234,13 @@ A classic SQL "black box" is wondering why moving a condition like `o.qc_flag = 
 └──────────┴──────┘                      └──────────┴──────┴─────────────────────────┘
 ```
 
-#### Recipe 1: 3-Hour Barometric Tendency ($\Delta P$ with `LAG`)
+#### Recipe 1: 3-Hour Barometric Tendency ($\Delta P$ with `LAG` on `weather_telemetry.db`)
 In synoptic meteorology, barometric tendency ($\Delta P \le -4\text{ hPa}$ over 3 steps/hours) triggers automated squall line and storm warnings:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT 
     station_id,
     recorded_at,
@@ -1130,9 +1259,13 @@ WHERE station_id = 'AWS-007'
 LIMIT 15;
 ```
 
-#### Recipe 2: Latest Sensor State Deduplication (`ROW_NUMBER()`)
+#### Recipe 2: Latest Sensor State Deduplication (`ROW_NUMBER()` on `weather_telemetry.db`)
 Avoid correlated subqueries (`SELECT ... WHERE recorded_at = (SELECT MAX...)`) which force nested loop scans:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 WITH ranked_observations AS (
     SELECT 
         station_id,
@@ -1152,9 +1285,13 @@ FROM ranked_observations
 WHERE recency_rank = 1;
 ```
 
-#### Recipe 3: Rolling 5-Point Moving Average (`ROWS BETWEEN`)
+#### Recipe 3: Rolling 5-Point Moving Average (`ROWS BETWEEN` on `weather_telemetry.db`)
 Smooth out turbulent wind gusts into a 5-step simple moving average:
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT 
     station_id,
     recorded_at,
@@ -1202,9 +1339,17 @@ When engineers write `OVER (PARTITION BY station_id ORDER BY obs_time)`, what ro
 
 ### Part A: NWP Forecast Verification Capstone (`weather_ops.db`)
 
+> **📂 Active Database File for Section 9 Part A:** **`day1/weather_ops.db`** (`stations`, `observations`, `forecasts`)  
+> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_ops.db`** at the `sqlite>` prompt (or select `weather_ops.db` in DBeaver) before running Part A!
+
 This 3-part operational suite on `weather_ops.db` (1) identifies silent stations with zero recorded observations using an anti-join (`LEFT JOIN ... WHERE o.obs_id IS NULL`), (2) performs point-by-point forecast verification joining `forecasts`, `observations`, and `stations` on both `station_id` and `valid_time = obs_time`, and (3) builds an **NWP Model Verification Leaderboard** ranking `AROME`, `ECMWF-HRES`, and `GFS` by **Mean Absolute Error (MAE)** and **Mean Bias**:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_ops.db
+-- ============================================================================
+
 -- 1. Detect Silent Stations (0 observations logged) using LEFT JOIN
 SELECT
     s.station_id,
@@ -1268,12 +1413,19 @@ ORDER BY temp_mae_c ASC;
 
 ### Part B: High-Frequency Telemetry Production Diagnostics (`weather_telemetry.db`)
 
+> **📂 Active Database File for Section 9 Part B & Section 10.2:** **`day1/weather_telemetry.db`** (`raw_telemetry` — 250,000 rows)  
+> - **⚠️ SWITCH DATABASE NOW:** Type **`.open weather_telemetry.db`** at the `sqlite>` prompt (or select `weather_telemetry.db` in DBeaver) before running Part B!
+
 These three diagnostic queries analyze the 250,000-row high-frequency AWS dataset (`weather_telemetry.db`):
 
 #### 1. Sensor Quality Control (QC) Network Audit (`AWS-013` and `AWS-042` at ~17–19% Failure Rate)
 **Operational Scenario:** Two stations in the network have failing hardware emitting high rates of sentinel codes (`-999.0`). Using conditional aggregation (`COUNT(CASE WHEN ...)`), we compute total readings, faulty readings, and failure rate percentage for every station, filtering for stations exceeding a $10\%$ failure threshold:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT 
     station_id,
     COUNT(*) AS total_readings,
@@ -1292,6 +1444,10 @@ ORDER BY failure_rate_pct DESC;
 **Operational Scenario:** A sharp barometric drop accompanied by increasing wind gusts marks an approaching cold front. Using `LAG(pressure, 3)` and a sliding `MAX(wind_speed)` window (`ROWS BETWEEN 3 PRECEDING AND CURRENT ROW`), this query surfaces every timestamp where a station's barometric pressure dropped by $\ge 4.0\text{ hPa}$ within a 3-step reading window:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 WITH stream_analysis AS (
     SELECT 
         station_id,
@@ -1327,6 +1483,10 @@ ORDER BY pressure_drop_hpa ASC;
 **Operational Scenario:** Sudden thermal spikes signal microbursts or radiation shield damage. By first filtering out `-999.0` sentinels in a CTE and then computing a centered 5-reading moving average (`ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING`), this query isolates any observation deviating by $>6.0^\circ\text{C}$ from its local temporal neighborhood:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 WITH filtered_stream AS (
     SELECT 
         station_id,
@@ -1373,9 +1533,13 @@ ORDER BY thermal_deviation DESC;
 | **Schema Flexibility** | Fixed relational columns (`ALTER TABLE`) | Fixed relational + indexed `JSONB` hybrid | Dynamic schema-per-document |
 
 ### 10.2 Performance Benchmark & Architectural Bridge to Day 2
-Executing a full-table aggregation on `weather_telemetry.db` with `.timer on` enabled highlights why in-memory page caching masks row-store I/O bottlenecks at small scale:
+Executing a full-table aggregation on **`weather_telemetry.db`** with `.timer on` enabled highlights why in-memory page caching masks row-store I/O bottlenecks at small scale:
 
 ```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_telemetry.db  (Table: raw_telemetry)
+-- 👉 In sqlite3 CLI, switch first with:   .open weather_telemetry.db
+-- ============================================================================
 SELECT station_id, ROUND(AVG(temperature), 2) AS mean_temp
 FROM raw_telemetry 
 WHERE temperature > -900.0 

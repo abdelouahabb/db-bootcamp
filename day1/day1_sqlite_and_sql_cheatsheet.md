@@ -5,8 +5,20 @@
 **Companion to:**
 - `day1_master_coursebook.md` — Complete Day 1 Master Coursebook & Telemetry Reference
 - `day1_hardware_sentinels_and_qc_guide.md` — Deep-Dive on `-9999` In-Band Signaling & 3VL
-- `weather_ops_seed.sql` / `weather_ops.db` — WMO Synoptic & NWP Verification Database
-- `generate_weather_db.py` / `weather_telemetry.db` — 250,000-Row High-Frequency AWS Telemetry Stream
+- `weather_ops_seed.sql` / `weather_ops.db` — WMO Synoptic & NWP Verification Database (`stations`, `observations`, `forecasts`, `weather_alerts`)
+- `generate_weather_db.py` / `weather_telemetry.db` — 250,000-Row High-Frequency AWS Telemetry Stream (`stations`, `raw_telemetry`)
+
+> [!IMPORTANT]
+> **🚨 STOP & READ FIRST — Which SQLite `.db` File Do I Open? (Fixing `"no such table: raw_telemetry"` / `"no such table: observations"`)**  
+> Day 1 uses **TWO separate SQLite database files** in the `day1/` directory. If you run a `FROM raw_telemetry` query while connected to `weather_ops.db` (or run `FROM observations` while connected to `weather_telemetry.db`), SQLite throws `Parse error: no such table: ...`.
+>
+> | Database File (`cd day1` first!) | How to Open / Switch in `sqlite3` CLI | Exact Tables Inside This File | Key Columns | Cheatsheet Sections Using This File |
+> | :--- | :--- | :--- | :--- | :--- |
+> | **📂 File 1: `weather_ops.db`**<br>*(69 rows — WMO Synoptic & NWP)* | Shell: `sqlite3 weather_ops.db`<br>Inside `sqlite>`: **`.open weather_ops.db`** | • `stations` *(7 WMO IDs: `60390`..`60680`)*<br>• **`observations`** *(36 hourly rows)*<br>• **`forecasts`** *(22 NWP rows)*<br>• **`weather_alerts`** *(4 CAP alerts)* | `obs_time`, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm` (`-9999.0`), `qc_flag` | • **Part I §5.6** (Profile 1)<br>• **Part II §4B** (`observations` cleaning)<br>• **Part III §1 & §5** (`CASE WHEN`, `GROUP BY`, All 7 `JOIN`s) |
+> | **📂 File 2: `weather_telemetry.db`**<br>*(250,050 rows — 50 AWS Stream)* | Shell: `sqlite3 weather_telemetry.db`<br>Inside `sqlite>`: **`.open weather_telemetry.db`** | • `stations` *(50 AWS IDs: `'AWS-001'`..`'AWS-050'``)*<br>• **`raw_telemetry`** *(250,000 1-min rows)* | `recorded_at`, `temperature` (`-999.0`), `pressure` (`-999.0`), `wind_speed`, `wind_direction`, `rain_accum_1m` | • **Part I §4.4** (`sqlite_schema`)<br>• **Part II §1 & §4A** (`raw_telemetry`)<br>• **Part IV §1–§4** (CTEs, `WITH RECURSIVE`, Window `OVER`) |
+>
+> **Instant Check & Switch Commands (Inside `sqlite>`):**  
+> Run **`.databases`** and **`.tables`** to see which file you are currently inside, and type **`.open weather_ops.db`** or **`.open weather_telemetry.db`** to switch files in 1 second without exiting `sqlite3`!
 
 ---
 
@@ -39,18 +51,27 @@ When working with SQLite, engineers must distinguish between **three** fundament
                                           └────────────────────────────────────────────────┘
 ```
 
-### 2. Launching & Building Databases from Terminal
+### 2. Launching & Switching Databases from Terminal
 
 ```bash
+# Always cd into day1/ first! (Opening sqlite3 in the wrong folder creates an empty 0-byte .db file!)
+cd day1
+
 # Build weather_ops.db from the WMO synoptic seed script:
 sqlite3 weather_ops.db < weather_ops_seed.sql
 
 # Generate the 250,000-row AWS telemetry database:
 python3 generate_weather_db.py
 
-# Open interactive shell:
+# Open interactive shell on File 1 (stations, observations, forecasts, weather_alerts):
 sqlite3 weather_ops.db
+
+# Or open interactive shell on File 2 (stations, raw_telemetry):
 sqlite3 weather_telemetry.db
+
+# Inside sqlite>, switch between the two files at any time without exiting:
+# sqlite> .open weather_ops.db
+# sqlite> .open weather_telemetry.db
 ```
 
 ### 3. Complete `sqlite3` CLI Dot-Commands Reference Table
@@ -58,6 +79,8 @@ sqlite3 weather_telemetry.db
 | Dot-Command | Category | Purpose in Weather Lab | Typical Output / Effect |
 | :--- | :--- | :--- | :--- |
 | `.help` | Help | List all available `sqlite3` CLI dot-commands | Full command index |
+| **`.databases`** | **Session** | **Show exact file path of currently open `.db` file** | `main: .../day1/weather_ops.db r/w` |
+| **`.open <file.db>`** | **Session** | **Switch active `.db` file without exiting `sqlite3`** | `.open weather_telemetry.db` or `.open weather_ops.db` |
 | `.headers on` | Formatting | Render column attribute names above data rows | `station_id \| temperature` displayed at top |
 | `.mode box` | Formatting | Draw clean Unicode table borders (SQLite 3.33+) | Box grid with aligned column widths |
 | `.mode column` | Formatting | Format query output in aligned plain-text columns | Traditional fixed-width columns |
@@ -350,6 +373,9 @@ SQL is not executed top-to-bottom. The query planner evaluates statements in eig
 
 > **The Alias Trap:** You **cannot** use a `SELECT` column alias in `WHERE` or `GROUP BY` because Step 2 and Step 3 execute **before** Step 5 allocates the alias.
 > ```sql
+> -- 📂 TARGET FILE: day1/weather_telemetry.db
+> -- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+> 
 > -- FAILS (Step 2 doesn't know temp_f):
 > SELECT station_id, (temperature * 1.8 + 32.0) AS temp_f
 > FROM raw_telemetry
@@ -366,11 +392,13 @@ SQL is not executed top-to-bottom. The query planner evaluates statements in eig
 ### 2. DDL & Physical Meteorology Constraints (`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK`)
 
 ```sql
+-- 📂 TARGET FILE: day1/weather_ops.db (DDL Reference — already created by weather_ops_seed.sql)
+-- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
 -- CRITICAL: SQLite disables Foreign Keys by default on every new connection!
 -- Always run this first:
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE stations (
+CREATE TABLE IF NOT EXISTS stations (
     station_id   INTEGER PRIMARY KEY,               -- Natural key (5-digit WMO ID)
     station_name TEXT    NOT NULL UNIQUE,           -- Pattern 1: Mandatory presence + unique
     latitude     REAL    NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0),          -- Pattern 2: Mandatory + range
@@ -447,27 +475,47 @@ In SQL, **`NULL` means "missing/unknown"** and is **ignored** by `AVG()`, `MIN()
 
 #### In-Flight & Permanent Sanitization Patterns
 
+> [!WARNING]
+> **Notice the two different `.db` files below!**
+> - **Block 4A** queries `raw_telemetry` in **`day1/weather_telemetry.db`** (`.open weather_telemetry.db`), where hardware sentinels are `-999.0` on `temperature`, `pressure`, and `wind_speed`.
+> - **Block 4B** queries `observations` in **`day1/weather_ops.db`** (`.open weather_ops.db`), where the legacy Fortran sentinel is `-9999.0` on `precip_1h_mm`.
+
+**4A. High-Frequency AWS Stream Sanitization (`day1/weather_telemetry.db` — table `raw_telemetry`):**
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
+
 -- 1. Exact sentinel replacement in-flight with NULLIF
 SELECT
-    AVG(NULLIF(temperature, -999.0))    AS clean_aws_temp,
-    AVG(NULLIF(precip_1h_mm, -9999.0))  AS clean_synoptic_rain
+    ROUND(AVG(NULLIF(temperature, -999.0)), 2) AS clean_aws_temp,
+    ROUND(AVG(NULLIF(pressure, -999.0)), 2)    AS clean_aws_pressure
 FROM raw_telemetry;
 
 -- 2. Range-bound clamping with CASE WHEN (Handles sensor drift like -998.2 or 9999.0)
 SELECT
-    AVG(CASE 
+    ROUND(AVG(CASE 
         WHEN temperature BETWEEN -60.0 AND 60.0 THEN temperature 
         ELSE NULL 
-    END) AS physical_mean_temp
+    END), 2) AS physical_mean_temp
 FROM raw_telemetry;
 
 -- 3. ANSI SQL / PostgreSQL Native FILTER clause (Supported in SQLite 3.30+ & PostgreSQL)
 SELECT
-    AVG(temperature) FILTER (WHERE temperature BETWEEN -60.0 AND 60.0) AS filtered_mean_temp
+    ROUND(AVG(temperature) FILTER (WHERE temperature BETWEEN -60.0 AND 60.0), 2) AS filtered_mean_temp
 FROM raw_telemetry;
+```
 
--- 4. Permanently clean sentinel values in a table via UPDATE:
+**4B. Synoptic Observation Sanitization (`day1/weather_ops.db` — table `observations`):**
+```sql
+-- 📂 TARGET FILE: day1/weather_ops.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+
+-- 1. In-flight sentinel neutralization on synoptic precipitation (-9999.0 -> NULL):
+SELECT
+    ROUND(AVG(NULLIF(precip_1h_mm, -9999.0)), 2) AS clean_synoptic_rain_mm
+FROM observations;
+
+-- 2. Permanently clean sentinel values in a table via UPDATE:
 UPDATE observations
 SET precip_1h_mm = NULL
 WHERE precip_1h_mm = -9999.0;
@@ -477,9 +525,19 @@ WHERE precip_1h_mm = -9999.0;
 
 ## PART III: Filtering, Classification, Temporal Bucketing & `JOIN` Verification
 
+> [!IMPORTANT]
+> **📂 Database Switch — All SQL Queries in Part III Run on `day1/weather_ops.db`!**
+> Before running any query in Part III (`observations`, `stations`, `forecasts`, `weather_alerts`), switch your `sqlite3` session:
+> ```sql
+> .open weather_ops.db
+> ```
+
 ### 1. Operational Classification (`CASE WHEN`) & Climatological Rollups (`GROUP BY` / `HAVING`)
 
 ```sql
+-- 📂 TARGET FILE: day1/weather_ops.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+
 -- 1. Operational Wind Classification (Beaufort Categories via CASE WHEN)
 SELECT
     station_id,
@@ -566,6 +624,9 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 ### 5. All 7 Relational `JOIN` Recipes on `weather_ops.db`
 
 ```sql
+-- 📂 TARGET FILE: day1/weather_ops.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_ops.db
+
 -- 1. LEFT ANTI-JOIN (LEFT JOIN + IS NULL): Find silent/offline stations with 0 observations!
 SELECT s.station_id, s.station_name, s.climate_zone, s.is_active
 FROM stations s
@@ -635,11 +696,20 @@ INNER JOIN stations s2
 
 ## PART IV: Common Table Expressions (CTEs), Recursive Grids & Window Functions
 
+> [!IMPORTANT]
+> **📂 Database Switch — All SQL Queries in Part IV Run on `day1/weather_telemetry.db`!**
+> Part IV queries the 250,000-row `raw_telemetry` table. Before running any query below, switch your `sqlite3` session:
+> ```sql
+> .open weather_telemetry.db
+> ```
+
 ### 1. Multi-Stage CTE Pipeline Blueprint
 
 Use CTEs (`WITH` clauses) to organize transformations as a linear Directed Acyclic Graph (DAG) instead of deeply nested subqueries:
 
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH stage1_cleansed AS (
     -- Strip impossible hardware voltages and wire sentinels
     SELECT 
@@ -674,6 +744,8 @@ ORDER BY peak_gust DESC;
 A simple `GROUP BY` cannot report on hours where a station sent zero packets. Generate a continuous reference grid to spot communication blackouts:
 
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH RECURSIVE timeline(slot) AS (
     SELECT datetime('2026-10-01 00:00:00')
     UNION ALL
@@ -744,6 +816,8 @@ ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING
 #### Recipe 1: 3-Hour Barometric Tendency ($\Delta P$)
 Detect approaching squall lines or frontal passages:
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     station_id,
     recorded_at,
@@ -763,6 +837,8 @@ WHERE pressure > -900.0;
 #### Recipe 2: Latest State Deduplication (`ROW_NUMBER()`)
 Retrieve the single latest observation per station without correlated subqueries:
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH indexed_stream AS (
     SELECT 
         station_id,
@@ -785,6 +861,8 @@ WHERE recency_rank = 1;
 #### Recipe 3: Rolling 5-Point Wind Gust Smoother
 Filter out single-ping turbulent noise:
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
 SELECT 
     station_id,
     recorded_at,
@@ -806,6 +884,8 @@ WHERE wind_speed >= 0.0;
 #### Recipe 4: Thermal Spike / Inversion Detector
 Flag measurements deviating by $>6.0^\circ\text{C}$ from a centered moving window:
 ```sql
+-- 📂 TARGET FILE: day1/weather_telemetry.db
+-- 👉 In sqlite3 CLI, switch first with: .open weather_telemetry.db
 WITH baseline AS (
     SELECT 
         station_id,

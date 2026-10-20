@@ -324,6 +324,9 @@ PRAGMA foreign_keys = ON;
 -- A. CREATE (INSERT INTO): Add a new Saharan WMO Station & 2 Observations
 -- ============================================================================
 
+-- Safe pre-cleanup in case you run this INSERT block more than once:
+DELETE FROM stations WHERE station_id = 60580;
+
 -- 1. Insert a single row into 'stations' (WMO 60580: Ouargla - Ain Beida):
 INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, climate_zone, is_active)
 VALUES (60580, 'Ouargla - Ain Beida', 31.9172, 5.4128, 141.0, 'Arid', 1);
@@ -589,6 +592,9 @@ Unlike older SQL engines where you have to run a second `SELECT` after an `INSER
 -- ============================================================================
 -- A. INSERT INTO ... RETURNING (Create rows and immediately see generated IDs!)
 -- ============================================================================
+
+-- Safe pre-cleanup in case you run this INSERT block more than once:
+DELETE FROM synoptic.stations WHERE station_id = 60580;
 
 -- 1. Insert a new station and return the inserted row:
 INSERT INTO synoptic.stations (

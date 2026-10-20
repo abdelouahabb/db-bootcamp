@@ -19,7 +19,7 @@ db.createCollection("stations", {
       bsonType: "object",
       required: ["_id", "station_name", "station_type", "location", "is_active"],
       properties: {
-        _id: { bsonType: "int", description: "WMO 5-digit station ID" },
+        _id: { bsonType: ["int", "long", "double"], description: "WMO 5-digit station ID" },
         station_name: { bsonType: "string" },
         station_type: { enum: ["SURFACE_AWS", "COASTAL_BUOY", "UPPER_AIR_RADIOSONDE", "AGRO_SOIL"] },
         is_active: { bsonType: "bool" },

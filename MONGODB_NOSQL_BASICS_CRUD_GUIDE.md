@@ -20,7 +20,7 @@ Every single `mongosh` block in this guide is **copy-and-paste runnable** agains
 | :--- | :--- | :--- | :--- |
 | **1. [`day4/day4_weather_ops_mongo.js`](./day4/day4_weather_ops_mongo.js)**<br/>*(Main Operational Seed)* | ```bash\ncd day4\nmongosh weather_nosql day4_weather_ops_mongo.js\nmongosh weather_nosql\n``` | **`weather_nosql`**<br/>*(Switch in `mongosh`: `use weather_nosql`)* | • **`db.stations`** (`6` docs): `_id` *(Int32: `60390`..)*, `station_name`, `station_type`, `climate_zone`, `elevation_m`, `is_active`, `location` *(GeoJSON `[lon, lat]`)*, `sensors` *(Array)*, `calibration`, `buoy_specs`, `soil_depths_cm`<br/>• **`db.synoptic_timeseries`** (`6` docs): `obs_time`, `station_meta` *(`station_id`, `station_type`, `climate_zone`)*, `temp_c`, `dewpoint_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm`, `soil_profile`, `marine_telemetry`, `aerosol_telemetry`, `diagnostics`<br/>• **`db.radiosonde_soundings`** (`3` docs): `station_id`, `station_name`, `launch_time`, `sonde_serial`, `burst_altitude_m`, `cape_j_kg`, `k_index`, `vertical_levels` *(Array of pressure levels)*<br/>• **`db.cap_alerts`** (`2` docs): `_id` *(String)*, `issued_at`, `expires_at`, `phenomenon`, `severity`, `certainty`, `affected_stations` *(Array)*, `max_observed_gust_kt`, `headline` |
 | **2. [`day4/day4_weather_ops_mongo_advanced.js`](./day4/day4_weather_ops_mongo_advanced.js)**<br/>*(Geospatial & Aggregations)* | ```bash\ncd day4\nmongosh weather_nosql day4_weather_ops_mongo_advanced.js\n``` | **`weather_nosql`**<br/>*(Switch in `mongosh`: `use weather_nosql`)* | • **`db.storm_polygons`** (`2` docs): `_id`, `storm_name`, `valid_from`, `valid_until`, `max_reflectivity_dbz`, `vil_kg_m2`, `footprint` *(GeoJSON `Polygon`)*<br/>• **`db.upper_air_climatology`** (`6` docs): `_id` *(`station_id`, `pressure_hpa`)*, `sample_count`, `mean_temp_c`, `max_wind_kt`, `mean_height_m` |
-| **3. [`day4/day4_mongo_50k_polymorphic_benchmark.js`](./day4/day4_mongo_50k_polymorphic_benchmark.js)**<br/>*(50k Polymorphic Benchmark)* | ```bash\ncd day4\nmongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js\nmongosh weather_telemetry_db\n``` | **`weather_telemetry_db`**<br/>*(Switch in `mongosh`: `use weather_telemetry_db`)* | • **`db.sensor_payloads`** (`50,000` docs): `metadata.station_id`, `metadata.sensor_type` *(`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`)*, `metadata.region`, `timestamp`, `hardware_faults`, `temp_c`, `turbulent_kinetic_energy`, `visibility_meters`, `water_film_height_mm`, `grip_factor`<br/>• **`db.weather_stream`** (`50,000` docs in Native Time-Series collection)<br/>• **`db.hourly_sensor_buckets`** (Hourly Manual Bucket Pattern docs) |
+| **3. [`day4/day4_mongo_50k_polymorphic_benchmark.js`](./day4/day4_mongo_50k_polymorphic_benchmark.js)**<br/>*(50k Polymorphic Benchmark)* | ```bash\ncd day4\nmongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js\nmongosh weather_telemetry_db\n``` | **`weather_telemetry_db`**<br/>*(Switch in `mongosh`: `use weather_telemetry_db`)* | • **`db.sensor_payloads`** (`50,000` docs): `metadata.station_id`, `metadata.sensor_type` *(`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`)*, `metadata.region`, `timestamp`, `hardware_faults`, `temperature`, `pressure`, `relative_humidity`, `turbulent_kinetic_energy`, `visibility_meters`, `surface_temp`, `subsurface_temp_5cm`, `water_film_height_mm`, `grip_factor`<br/>• **`db.weather_stream`** (`50,000` docs in Native Time-Series collection)<br/>• **`db.hourly_sensor_buckets`** (Hourly Manual Bucket Pattern docs) |
 
 ---
 
@@ -214,6 +214,10 @@ db.stations.find(
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
 // PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
+
+// Safe pre-cleanup in case you run this insert block more than once:
+db.stations.deleteOne({ _id: 60580 });
+db.synoptic_timeseries.deleteMany({ "station_meta.station_id": 60580 });
 
 // 1. insertOne() — Insert a new Saharan station (WMO 60580: Ouargla - Ain Beida):
 db.stations.insertOne({
@@ -491,17 +495,19 @@ db.sensor_payloads.aggregate([
   { $sort: { doc_count: -1 } }
 ]).toArray();
 
-// 4. Filter ROAD_SURFACE_RADAR sensors for black-ice / hydroplaning risk (grip_factor < 0.35):
+// 4. Filter ROAD_SURFACE_RADAR sensors for wet road / reduced grip risk (water_film_height_mm > 1.0 and grip_factor < 0.75):
 db.sensor_payloads.find(
   {
     "metadata.sensor_type": "ROAD_SURFACE_RADAR",
-    grip_factor: { $lt: 0.35 }
+    water_film_height_mm: { $gt: 1.0 },
+    grip_factor: { $lt: 0.75 }
   },
   {
     _id: 0,
     "metadata.station_id": 1,
     timestamp: 1,
-    road_surface_temp_c: 1,
+    surface_temp: 1,
+    subsurface_temp_5cm: 1,
     water_film_height_mm: 1,
     grip_factor: 1
   }

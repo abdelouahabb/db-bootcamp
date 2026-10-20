@@ -443,11 +443,12 @@ WHERE obs_time BETWEEN '2026-10-05 00:00:00+00' AND '2026-10-06 23:00:00+00'
 GROUP BY station_id;
 
 -- 3. Create November 2026 partition & verify automatic routing
-CREATE TABLE synoptic.obs_y2026m11 PARTITION OF synoptic.observations_part
+CREATE TABLE IF NOT EXISTS synoptic.obs_y2026m11 PARTITION OF synoptic.observations_part
     FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
 
 INSERT INTO synoptic.observations_part (station_id, obs_time, temp_c, pressure_hpa, qc_flag)
-VALUES (60390, '2026-11-01 00:00:00+00', 18.2, 1016.5, 'VALID');
+VALUES (60390, '2026-11-01 00:00:00+00', 18.2, 1016.5, 'VALID')
+ON CONFLICT (obs_time, station_id) DO NOTHING;
 
 -- Confirm the row lives physically inside synoptic.obs_y2026m11:
 SELECT tableoid::regclass AS physical_partition, station_id, obs_time, temp_c
@@ -634,6 +635,9 @@ Empirically compare index creation time and physical disk footprint between a st
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
 -- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
+
+-- Drop pre-created benchmark indexes first so you can time creation from scratch:
+DROP INDEX IF EXISTS idx_oct_btree, idx_oct_brin;
 
 -- 1. Create a B-Tree index on the October child partition
 \timing on

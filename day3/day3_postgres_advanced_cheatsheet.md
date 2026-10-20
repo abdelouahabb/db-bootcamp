@@ -31,8 +31,11 @@
 ```
 
 ```sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
+-- PREREQUISITE SCRIPT: day3/day3_weather_advanced_pg.sql
+
 -- 1. Create Parent Partitioned Table (Partition key MUST be in PRIMARY KEY / UNIQUE)
-CREATE TABLE synoptic.observations_part (
+CREATE TABLE IF NOT EXISTS synoptic.observations_part (
     station_id     INTEGER     NOT NULL,
     obs_time       TIMESTAMPTZ NOT NULL,
     temp_c         NUMERIC(4,1),
@@ -44,11 +47,11 @@ CREATE TABLE synoptic.observations_part (
 ) PARTITION BY RANGE (obs_time);
 
 -- 2. Create Monthly Child Partition (Inclusive lower bound, Exclusive upper bound)
-CREATE TABLE synoptic.obs_y2026m11 PARTITION OF synoptic.observations_part
+CREATE TABLE IF NOT EXISTS synoptic.obs_y2026m11 PARTITION OF synoptic.observations_part
     FOR VALUES FROM ('2026-11-01 00:00:00+00') TO ('2026-12-01 00:00:00+00');
 
 -- 3. Default Partition (Safety net for out-of-range timestamps)
-CREATE TABLE synoptic.obs_default PARTITION OF synoptic.observations_part DEFAULT;
+CREATE TABLE IF NOT EXISTS synoptic.obs_default PARTITION OF synoptic.observations_part DEFAULT;
 
 -- 4. Inspect Partition Sizes & Estimated Row Counts
 SELECT
@@ -125,6 +128,7 @@ ORDER BY distance_km ASC;
 ## 4. Meteorological Window Functions Quick Reference
 
 ```sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
 SELECT
     station_id,
     obs_time,
@@ -164,6 +168,7 @@ FROM synoptic.observations;
 
 ### Safe Synoptic `UPSERT` (Handles Duplicate or `COR` Corrected Transmissions Without Bloat)
 ```sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
 INSERT INTO synoptic.observations (station_id, obs_time, temp_c, pressure_hpa, precip_1h_mm, qc_flag)
 VALUES (60390, '2026-10-06 12:00:00+00', 24.8, 1014.4, 2.5, 'VALID')
 ON CONFLICT (station_id, obs_time)
@@ -182,8 +187,9 @@ RETURNING obs_id, (xmax = 0) AS was_inserted;
 
 ### Non-Blocking Dashboard Refresh (`MATERIALIZED VIEW CONCURRENTLY`)
 ```sql
+-- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
 -- Requires a UNIQUE INDEX on the Materialized View:
-CREATE UNIQUE INDEX idx_mv_verif_uq ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_verif_uq ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 
 -- Refreshes in background without locking out forecasters reading the view:
 REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;

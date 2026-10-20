@@ -1,4 +1,4 @@
-> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)
+> **Navigation:** [Master README](../README.md) | [MongoDB NoSQL Basics Guide](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](../bootcamp_portal.html) | [⬅ Day 3: PostgreSQL Scaling](../day3/day3_master_coursebook.md) | [Day 5: Analytical OLAP & Lakehouse](../day5/day5_part1_olap_duckdb_parquet_and_gridded_data_coursebook.md) | [Reference Cards](../reference_cards/README.md)
 
 # Weather Forecast Engineering Database Bootcamp
 # Day 4 Master Coursebook: MongoDB & Polymorphic Telemetry Engineering (Soup-to-Nuts Edition)
@@ -8,7 +8,7 @@
 **Curriculum Scope:** 5 Comprehensive Technical Modules + 7 Hands-On Production Labs  
 **Execution Environment:** MongoDB 7.0+ (`mongod` & `mongosh` CLI + MongoDB Compass / VS Code MongoDB Extension)  
 **Companion Files in `day4/` & `reference_cards/`:**
-- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`find`, `findOne`, `$gt`/`$in`, `$exists`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)** on `weather_nosql` (`stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`)
+- [../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) — **Dedicated MongoDB NoSQL Basics & CRUD Guide (`find`, `findOne`, `$gt`/`$in`, `$exists`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)** on `weather_nosql` and `weather_telemetry_db`
 - [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) ([Course Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md)) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
 - [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) ([Course Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
 - [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) ([Course Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics

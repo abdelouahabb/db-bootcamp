@@ -1,4 +1,4 @@
-> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [SQL Basics & CRUD Guide](../SQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | [Day 1 Coursebook](../day1/day1_master_coursebook.md) | **Day 2 Coursebook** | [Day 3 Coursebook](../day3/day3_master_coursebook.md)
 
 # Weather Forecast Engineering Database Bootcamp — Day 2 Master Coursebook
 ## PostgreSQL Architecture, Storage Engine Internals, Production Hardening & The Row-Store Bottleneck
@@ -8,7 +8,7 @@
 **Curriculum Scope:** 5 Core Architectural Modules + 7 Hands-On Forensics Labs  
 **Execution Environment:** PostgreSQL 16+ running on Linux/macOS or Docker (`postgres:16`), `psql` CLI + DBeaver  
 **Companion Files in `day2/` & `reference_cards/`:**
-- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)** on `weather_ops` (`synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, `alerts.weather_alerts`)
+- [../SQL_BASICS_CRUD_GUIDE.md](../SQL_BASICS_CRUD_GUIDE.md) — **Dedicated SQL Basics & CRUD Guide (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)** on `weather_ops` (`synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, `alerts.weather_alerts`)
 - [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md) — Complete Installation, `postgresql.conf` Weather Tuning, WAL, Vacuum, Lock Debugging & `EXPLAIN` Reference Card
 - [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) — Definitive Comparative Guide: PostgreSQL Heap/MVCC vs. MySQL InnoDB Clustered B+Tree/Undo Logs
 - [../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) — **Dedicated MySQL 8.0/8.4 & MariaDB Complete Engineering Guide** (InnoDB 16 KB Clustered B+Trees, `MyRocks` LSM-Tree, In-Place MVCC, Change Buffer, Next-Key Locking, GTID/InnoDB Cluster HA, and `my.cnf` production reference)

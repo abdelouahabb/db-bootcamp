@@ -995,7 +995,13 @@
       <button class="tab-btn" onclick="switchTab('tab-quiz', this)">
         <span class="tab-num">06</span> 15-Question Quiz
       </button>
-      <button class="tab-btn" onclick="openDocModal('./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md')" style="margin-left: auto; border-color: var(--accent-cyan);">
+      <button class="tab-btn" onclick="openDocModal('./SQL_BASICS_CRUD_GUIDE.md')" style="margin-left: auto; border-color: var(--accent-emerald);">
+        SQL Basics Guide
+      </button>
+      <button class="tab-btn" onclick="openDocModal('./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md')" style="border-color: var(--accent-purple);">
+        MongoDB NoSQL Basics
+      </button>
+      <button class="tab-btn" onclick="openDocModal('./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md')" style="border-color: var(--accent-cyan);">
         Blank Ubuntu VM Lab
       </button>
       <button class="tab-btn" onclick="openDocModal('./ATTENDEE_SETUP_GUIDE.md')" style="border-color: var(--border-strong);">
@@ -1015,9 +1021,9 @@
           <p>Click any <code>.md</code>, <code>.sql</code>, <code>.js</code>, <code>.py</code>, or <code>.yml</code> file below to open it in the built-in reader, or copy the terminal quick-start commands.</p>
         </div>
         <div class="btn-group">
-          <button class="action-btn active" onclick="filterCurriculum('all', this)">All Files (70)</button>
+          <button class="action-btn active" onclick="filterCurriculum('all', this)">All Files (73)</button>
           <button class="action-btn" onclick="filterCurriculum('days', this)">Days 0–5</button>
-          <button class="action-btn" onclick="filterCurriculum('refs', this)">14 Reference Cards</button>
+          <button class="action-btn" onclick="filterCurriculum('refs', this)">15 Reference Cards</button>
           <button class="action-btn" onclick="filterCurriculum('docker', this)">Docker Stacks</button>
         </div>
       </div>
@@ -1026,13 +1032,21 @@
         <!-- DAY 0: ATTENDEE SETUP & PORTAL LAUNCHER -->
         <div class="card curr-card" data-category="days" style="grid-column: 1 / -1;">
           <div class="card-header">
-            <div class="card-title">Day 0 — Blank Ubuntu VM Lab Runbook, Attendee Setup Guide &amp; Verification Suite</div>
-            <span class="pill pill-emerald">VMware Ubuntu 24.04 • Native + Docker</span>
+            <div class="card-title">Day 0 — SQL &amp; MongoDB Basics Guides, Blank Ubuntu VM Runbook &amp; Verification Suite</div>
+            <span class="pill pill-emerald">Start Here • SQL &amp; NoSQL CRUD Basics</span>
           </div>
           <p style="font-size: 0.85rem; color: var(--text-secondary);">
-            Complete step-by-step runbook for building the blank Ubuntu 24.04 LTS VM in VMware and installing every database engine, CLI tool, Python environment, and GUI client from scratch (Native Linux packages + Docker Compose alternative).
+            Dedicated step-by-step guides for <strong>SQL Basics &amp; CRUD</strong> (SQLite &amp; PostgreSQL) and <strong>MongoDB NoSQL Basics &amp; CRUD</strong> (<code>mongosh</code>), plus the Blank Ubuntu 24.04 VMware runbook and Attendee Setup Guide.
           </p>
           <ul class="file-list">
+            <li class="file-item">
+              <a href="./SQL_BASICS_CRUD_GUIDE.md" title="./SQL_BASICS_CRUD_GUIDE.md">SQL_BASICS_CRUD_GUIDE.md</a>
+              <span class="file-desc">Dedicated SQL Basics &amp; CRUD Playbook (SELECT, WHERE, GROUP BY, JOIN, INSERT, UPDATE, DELETE — SQLite &amp; PostgreSQL)</span>
+            </li>
+            <li class="file-item">
+              <a href="./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md" title="./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md">MONGODB_NOSQL_BASICS_CRUD_GUIDE.md</a>
+              <span class="file-desc">Dedicated MongoDB NoSQL Basics &amp; CRUD Playbook (find, insertOne, updateOne, deleteOne, aggregate — mongosh)</span>
+            </li>
             <li class="file-item">
               <a href="./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md" title="./VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md">VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md</a>
               <span class="file-desc">Complete VMware Ubuntu 24.04 Blank Lab From-Scratch Installation Guide (Native + Docker)</span>
@@ -1070,6 +1084,10 @@
             SQLite <code>PRAGMA</code> engine options vs. CLI dot-commands; declarative execution order; <code>NOT NULL</code> vs. <code>CHECK</code> 3VL asymmetry; <code>1NF–3NF</code> vs. Denormalization; all 7 SQL <code>JOIN</code>s &amp; <code>LEFT JOIN ON</code> vs. <code>WHERE</code> trap; Window Frame defaults (<code>ROWS</code> vs. <code>RANGE</code>); and <code>NULLIF(-9999.0)</code> sentinel hygiene.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
+            <li class="file-item">
+              <a href="./SQL_BASICS_CRUD_GUIDE.md" title="./SQL_BASICS_CRUD_GUIDE.md">SQL_BASICS_CRUD_GUIDE.md</a>
+              <span class="file-desc">Dedicated SQL Basics &amp; CRUD Guide (648 lines)</span>
+            </li>
             <li class="file-item">
               <a href="./day1/day1_master_coursebook.md" title="./day1/day1_master_coursebook.md">day1/day1_master_coursebook.md</a>
               <span class="file-desc">Full Day 1 Coursebook (1,532 lines)</span>
@@ -1119,6 +1137,10 @@
             <code>TIMESTAMPTZ</code> vs. <code>TIMESTAMP</code> (8B UTC math); <code>NUMERIC(p,s)</code> vs. IEEE-754 floats; <code>PRIMARY KEY</code> vs. <code>UNIQUE NULLS DISTINCT</code>; <code>UUIDv7</code> (RFC 9562) vs. <code>UUIDv4</code> &amp; <code>BIGINT IDENTITY</code>; 8KB Heap Page &amp; Tuple Tetris; MVCC <code>xmin</code>/<code>xmax</code> vs. MySQL InnoDB &amp; Dual-Log (<code>Redo</code> + <code>binlog</code>) Replication.
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
+            <li class="file-item">
+              <a href="./SQL_BASICS_CRUD_GUIDE.md">SQL_BASICS_CRUD_GUIDE.md</a>
+              <span class="file-desc">Dedicated SQL Basics &amp; CRUD Guide (Part II: PG)</span>
+            </li>
             <li class="file-item">
               <a href="./day2/day2_master_coursebook.md">day2/day2_master_coursebook.md</a>
               <span class="file-desc">Full Day 2 Coursebook (1,456 lines)</span>
@@ -1221,6 +1243,10 @@
             <code>$jsonSchema</code> &amp; <code>{ field: null }</code> vs. <code>$type: 10</code>; Time-Series buckets; <code>$unwind</code> empty-array drop vs. <code>preserveNullAndEmptyArrays</code>; <code>2dsphere</code> &amp; <strong>ESR Rule</strong>; PG vs. MongoDB Failover (<code>w: 1</code> rollback trap) &amp; Shard Key selection (<code>MaxKey</code> hotspot).
           </p>
           <ul class="file-list" style="max-height: 310px; overflow-y: auto; padding-right: 4px;">
+            <li class="file-item">
+              <a href="./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md">MONGODB_NOSQL_BASICS_CRUD_GUIDE.md</a>
+              <span class="file-desc">Dedicated MongoDB NoSQL Basics Guide (476 lines)</span>
+            </li>
             <li class="file-item">
               <a href="./day4/day4_master_coursebook.md">day4/day4_master_coursebook.md</a>
               <span class="file-desc">Full Day 4 Coursebook (1,179 lines)</span>

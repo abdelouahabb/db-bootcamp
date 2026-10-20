@@ -1,4 +1,4 @@
-> **Navigation:** [Master README](../README.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
+> **Navigation:** [Master README](../README.md) | [SQL Basics & CRUD Guide](../SQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards](../reference_cards/README.md) | **Day 1 Coursebook** | [Day 2 Coursebook](../day2/day2_master_coursebook.md)
 
 # Weather Forecast Engineering Database Bootcamp
 ## Day 1 Master Coursebook: SQL Foundations, WMO Relational Modeling & Telemetry Wrangling with SQLite

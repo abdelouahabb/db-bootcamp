@@ -78,6 +78,8 @@ done
 
 EXPECTED_FILES=(
     "README.md"
+    "SQL_BASICS_CRUD_GUIDE.md"
+    "MONGODB_NOSQL_BASICS_CRUD_GUIDE.md"
     "VM_BLANK_LAB_FROM_SCRATCH_GUIDE.md"
     "ATTENDEE_SETUP_GUIDE.md"
     "start_bootcamp.py"

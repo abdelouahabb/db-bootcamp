@@ -128,6 +128,7 @@ EXPECTED_FILES=(
     "day5/compact_hot_to_cold.py"
     "day5/serving_api.py"
     "reference_cards/README.md"
+    "reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md"
     "docker/docker-compose.ha-replicaset.yml"
     "docker/docker-compose.polyglot-lakehouse.yml"
     "docker/docker_lab_guide.md"
@@ -144,10 +145,10 @@ for f in "${EXPECTED_FILES[@]}"; do
 done
 
 REF_CARD_COUNT=$(find "$BASE_DIR/reference_cards" -maxdepth 1 -name "*.md" -size +0c | wc -l)
-if [[ "$REF_CARD_COUNT" -eq 15 ]]; then
-    log_pass "All 14 Reference Cards + Diagnostic Index (15 files) in 'reference_cards/' verified non-empty"
+if [[ "$REF_CARD_COUNT" -eq 16 ]]; then
+    log_pass "All 15 Reference Cards (00-14) + Diagnostic Index (16 files) in 'reference_cards/' verified non-empty"
 else
-    log_fail "Expected 15 files in 'reference_cards/', found ${REF_CARD_COUNT}"
+    log_fail "Expected 16 files in 'reference_cards/', found ${REF_CARD_COUNT}"
 fi
 
 # ==============================================================================
@@ -170,6 +171,25 @@ if [[ "$STATIONS_CNT" -eq 7 && "$OBS_CNT" -eq 36 && "$FCST_CNT" -eq 22 && "$ALER
     log_pass "weather_ops.db seeded cleanly (stations=${STATIONS_CNT}, observations=${OBS_CNT}, forecasts=${FCST_CNT}, weather_alerts=${ALERTS_CNT})"
 else
     log_fail "weather_ops.db row count mismatch (stations=${STATIONS_CNT}, observations=${OBS_CNT}, forecasts=${FCST_CNT}, weather_alerts=${ALERTS_CNT})"
+fi
+
+# Test Warm-Up Lab 0 / Reference Card 00 CRUD Lifecycle (INSERT, SELECT, UPDATE, DELETE + ON DELETE CASCADE)
+CRUD_AUDIT=$(sqlite3 "$TMP_OPS_DB" "
+PRAGMA foreign_keys = ON;
+INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, climate_zone, is_active)
+VALUES (60580, 'Ouargla - Ain Beida', 31.9172, 5.4128, 141.0, 'Arid', 1);
+INSERT INTO observations (station_id, obs_time, temp_c, dewpoint_c, humidity_pct, pressure_hpa, wind_speed_kt, precip_1h_mm, qc_flag)
+VALUES (60580, '2026-10-06 12:00:00', 34.5, 9.0, 21.0, 1012.0, 12.0, 0.0, 'VALID');
+UPDATE observations SET temp_c = ROUND(temp_c + 0.7, 1), qc_flag = 'SUSPECT'
+WHERE station_id = 60580 AND obs_time = '2026-10-06 12:00:00';
+SELECT temp_c || '|' || qc_flag FROM observations WHERE station_id = 60580;
+DELETE FROM stations WHERE station_id = 60580;
+SELECT (SELECT COUNT(*) FROM stations) || '|' || (SELECT COUNT(*) FROM observations);
+" | tr '\n' '|')
+if [[ "$CRUD_AUDIT" == "35.2|SUSPECT|7|36|" ]]; then
+    log_pass "Reference Card 00 SQLite CRUD Lifecycle verified (INSERT 60580 -> UPDATE 35.2|SUSPECT -> DELETE CASCADE -> 7 stations, 36 obs)"
+else
+    log_fail "Reference Card 00 SQLite CRUD Lifecycle unexpected output: ${CRUD_AUDIT}"
 fi
 
 # Test SQLite PRAGMA Integrity, Foreign Key Check, Introspection TVFs & WAL Checkpointing

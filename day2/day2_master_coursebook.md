@@ -8,6 +8,7 @@
 **Curriculum Scope:** 5 Core Architectural Modules + 7 Hands-On Forensics Labs  
 **Execution Environment:** PostgreSQL 16+ running on Linux/macOS or Docker (`postgres:16`), `psql` CLI + DBeaver  
 **Companion Files in `day2/` & `reference_cards/`:**
+- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)** on `weather_ops` (`synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, `alerts.weather_alerts`)
 - [day2_postgres_tuning_and_internals_cheatsheet.md](./day2_postgres_tuning_and_internals_cheatsheet.md) — Complete Installation, `postgresql.conf` Weather Tuning, WAL, Vacuum, Lock Debugging & `EXPLAIN` Reference Card
 - [day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md) — Definitive Comparative Guide: PostgreSQL Heap/MVCC vs. MySQL InnoDB Clustered B+Tree/Undo Logs
 - [../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md) — **Dedicated MySQL 8.0/8.4 & MariaDB Complete Engineering Guide** (InnoDB 16 KB Clustered B+Trees, `MyRocks` LSM-Tree, In-Place MVCC, Change Buffer, Next-Key Locking, GTID/InnoDB Cluster HA, and `my.cnf` production reference)
@@ -306,6 +307,67 @@ SELECT
     ROUND(100.0 * blks_hit / NULLIF(blks_hit + blks_read, 0), 2) AS cache_hit_ratio_pct
 FROM pg_stat_database
 WHERE datname = current_database();
+
+-- =============================================================================
+-- 5. WARM-UP CRUD & DATA EXPLORATION ON weather_ops (synoptic, nwp, alerts)
+--    (See ../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md
+--     Part II for the complete PostgreSQL CRUD guide!)
+-- =============================================================================
+
+-- 5a. SELECT: View all 7 WMO stations and per-climate-zone observation summary
+SELECT station_id, station_name, climate_zone, latitude, longitude, elevation_m, is_active
+FROM synoptic.stations
+ORDER BY station_id;
+
+SELECT
+    s.station_id,
+    s.station_name,
+    s.climate_zone,
+    COUNT(o.obs_id)                 AS total_obs,
+    ROUND(MIN(o.temp_c), 1)         AS min_temp_c,
+    ROUND(AVG(o.temp_c), 1)         AS avg_temp_c,
+    ROUND(MAX(o.temp_c), 1)         AS max_temp_c,
+    ROUND(MAX(o.wind_speed_kt), 1)  AS peak_wind_kt
+FROM synoptic.stations s
+LEFT JOIN synoptic.observations o
+       ON s.station_id = o.station_id
+GROUP BY s.station_id, s.station_name, s.climate_zone
+ORDER BY max_temp_c DESC NULLS LAST;
+
+-- 5b. INSERT ... RETURNING: Register a new Sahara station (60580 Ouargla) & 1 observation
+INSERT INTO synoptic.stations (
+    station_id, station_name, latitude, longitude, elevation_m, climate_zone, is_active, raw_metadata
+) VALUES (
+    60580, 'Ouargla - Ain Beida', 31.9172, 5.4128, 141.0, 'Arid', TRUE,
+    '{"sensor_suite": "Vaisala AWS310", "telemetry": "Cellular_4G_Backup_Iridium"}'
+)
+ON CONFLICT (station_id) DO UPDATE
+SET is_active = EXCLUDED.is_active
+RETURNING station_id, station_name, climate_zone, is_active;
+
+INSERT INTO synoptic.observations (
+    station_id, obs_time, temp_c, dewpoint_c, humidity_pct, pressure_hpa, wind_speed_kt, precip_1h_mm, qc_flag, raw_metar
+) VALUES (
+    60580, '2026-10-06 12:00:00+00', 35.4, 9.1, 20.5, 1011.8, 14.0, 0.0, 'VALID',
+    'METAR DAUU 061200Z 09014KT CAVOK 35/09 Q1012'
+)
+ON CONFLICT (station_id, obs_time) DO UPDATE
+SET temp_c  = EXCLUDED.temp_c,
+    qc_flag = EXCLUDED.qc_flag
+RETURNING obs_id, station_id, obs_time, temp_c, pressure_hpa, qc_flag;
+
+-- 5c. UPDATE ... RETURNING: Apply a +0.3 C calibration correction to Ouargla (60580)
+UPDATE synoptic.observations
+SET temp_c  = temp_c + 0.3,
+    qc_flag = 'SUSPECT'
+WHERE station_id = 60580
+  AND obs_time   = '2026-10-06 12:00:00+00'
+RETURNING obs_id, station_id, obs_time, temp_c AS corrected_temp_c, qc_flag;
+
+-- 5d. DELETE ... RETURNING: Clean up the test station (ON DELETE CASCADE removes its observation)
+DELETE FROM synoptic.stations
+WHERE station_id = 60580
+RETURNING station_id, station_name;
 ```
 
 ---

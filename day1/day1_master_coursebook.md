@@ -24,7 +24,8 @@
 > 2. **Switch between the two files in 1 second without exiting `sqlite3`:** Type **`.open weather_ops.db`** or **`.open weather_telemetry.db`** directly at the `sqlite>` prompt!
 > 3. **Recommended Classroom Setup:** Open **Two Terminal Tabs** in `day1/` (**Tab 1:** `sqlite3 weather_ops.db`, **Tab 2:** `sqlite3 weather_telemetry.db`), or in **DBeaver / DB Browser for SQLite** use the top database dropdown to select the matching `.db` file shown at the top of each SQL block below.
 
-**Companion Reference Files in `day1/`:**
+**Companion Reference Files in `day1/` & `reference_cards/`:**
+- **[../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — ⭐ START HERE: Complete Basic SQL & MongoDB CRUD Playbook (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `INSERT`, `UPDATE`, `DELETE`) on All Bootcamp Datasets**
 - [day1_sqlite_and_sql_cheatsheet.md](./day1_sqlite_and_sql_cheatsheet.md) — Authoritative CLI Directives, 3VL Truth Tables, WMO Queries & Window Recipes
 - [day1_hardware_sentinels_and_qc_guide.md](./day1_hardware_sentinels_and_qc_guide.md) — Deep-Dive on `-9999` / `-999` In-Band Signaling, ADC Physics, WMO QC Flags & Contamination Math
 - [weather_ops_seed_sql_course_walkthrough.md](./weather_ops_seed_sql_course_walkthrough.md) — **Detailed Markdown Course Walkthrough** explaining every SQL statement, constraint, and telemetry anomaly in `weather_ops_seed.sql`
@@ -121,6 +122,93 @@ SELECT * FROM stations;
 To inspect **`weather_ops.db` visually in DBeaver / DB Browser for SQLite**:
 1. Create a New Connection $\rightarrow$ Select **SQLite** $\rightarrow$ Browse to `day1/weather_ops.db`.
 2. Double-click the `stations` table $\rightarrow$ open the **ER Diagram** tab to inspect how `station_id` links `stations` to `observations`, `forecasts`, and `weather_alerts`.
+
+#### 3.2.1 Warm-Up Lab 0: Basic SQL Exploration & CRUD (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `INSERT`, `UPDATE`, `DELETE`) on `day1/weather_ops.db`
+> *Want the full cross-engine (`SQLite` + `PostgreSQL` + `MongoDB`) basic CRUD playbook? Open **[Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md)**!*
+
+Before we dive into engine pragmas or hardware sentinels, run these foundational SQL commands right inside your open `sqlite3 weather_ops.db` session to explore all 4 tables and practice `SELECT`, `INSERT`, `UPDATE`, and `DELETE`:
+
+```sql
+-- ============================================================================
+-- 📂 TARGET FILE: day1/weather_ops.db  (Tables: stations, observations, forecasts, weather_alerts)
+-- 👉 In sqlite3 CLI, verify or switch with:   .open weather_ops.db
+-- ============================================================================
+PRAGMA foreign_keys = ON;
+
+-- 1. SHOW ALL TABLES & ROW COUNTS:
+SELECT 'stations'       AS table_name, COUNT(*) AS row_count FROM stations
+UNION ALL
+SELECT 'observations',                 COUNT(*)              FROM observations
+UNION ALL
+SELECT 'forecasts',                    COUNT(*)              FROM forecasts
+UNION ALL
+SELECT 'weather_alerts',               COUNT(*)              FROM weather_alerts;
+
+-- 2. BASIC SELECT (All columns vs. Specific columns + Computed Math):
+SELECT * FROM stations;
+SELECT * FROM weather_alerts;
+
+SELECT
+    station_id,
+    obs_time,
+    temp_c,
+    ROUND(temp_c * 1.8 + 32.0, 1)   AS temp_f,
+    wind_speed_kt,
+    ROUND(wind_speed_kt * 1.852, 1) AS wind_kmh,
+    qc_flag
+FROM observations
+WHERE temp_c IS NOT NULL
+LIMIT 8;
+
+-- 3. FILTERING WITH WHERE (=, >=, BETWEEN, IN, LIKE, IS NULL):
+SELECT station_id, station_name, climate_zone, elevation_m
+FROM stations
+WHERE climate_zone IN ('Mediterranean', 'Highland')
+  AND elevation_m >= 20.0;
+
+SELECT station_id, obs_time, temp_c, humidity_pct, pressure_hpa
+FROM observations
+WHERE station_id = 60390
+  AND temp_c BETWEEN 18.0 AND 30.0;
+
+-- 4. SORTING (ORDER BY ... DESC) & TOP-N (LIMIT):
+SELECT station_id, obs_time, wind_speed_kt, precip_1h_mm, qc_flag
+FROM observations
+WHERE wind_speed_kt IS NOT NULL
+ORDER BY wind_speed_kt DESC
+LIMIT 5;
+
+-- 5. BASIC AGGREGATION (GROUP BY & HAVING):
+SELECT
+    climate_zone,
+    COUNT(*)                   AS station_count,
+    ROUND(AVG(elevation_m), 1) AS avg_elevation_m
+FROM stations
+GROUP BY climate_zone
+ORDER BY station_count DESC;
+
+-- 6. BASIC CRUD (INSERT -> UPDATE -> SELECT -> DELETE):
+-- 6a. INSERT a new Saharan station (60580 Ouargla) and 1 observation:
+INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, climate_zone, is_active)
+VALUES (60580, 'Ouargla - Ain Beida', 31.9172, 5.4128, 141.0, 'Arid', 1);
+
+INSERT INTO observations (station_id, obs_time, temp_c, dewpoint_c, humidity_pct, pressure_hpa, wind_speed_kt, precip_1h_mm, qc_flag)
+VALUES (60580, '2026-10-06 12:00:00', 34.5, 9.0, 21.0, 1012.0, 12.0, 0.0, 'VALID');
+
+-- 6b. UPDATE the observation's temperature and wind speed:
+UPDATE observations
+SET temp_c = 35.2, wind_speed_kt = 15.0
+WHERE station_id = 60580 AND obs_time = '2026-10-06 12:00:00';
+
+-- 6c. SELECT to verify our inserted & updated row:
+SELECT s.station_id, s.station_name, o.obs_time, o.temp_c, o.wind_speed_kt
+FROM stations s
+INNER JOIN observations o ON s.station_id = o.station_id
+WHERE s.station_id = 60580;
+
+-- 6d. DELETE station 60580 (ON DELETE CASCADE automatically deletes its observation, keeping weather_ops.db clean!):
+DELETE FROM stations WHERE station_id = 60580;
+```
 
 ### 3.3 Dataset 2 Setup: 250,000-Row High-Frequency AWS Stream (`day1/weather_telemetry.db`)
 First, exit the `sqlite>` prompt (type **`.quit`** or open a **second terminal tab** inside `day1/`) so you are back at your Linux/macOS/Windows shell prompt (`$`). Then run the standalone Python generator (`generate_weather_db.py`), which synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:

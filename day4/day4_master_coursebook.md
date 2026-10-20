@@ -7,12 +7,33 @@
 **Target Audience:** Weather Forecast & Meteorological Data Engineers, Environmental Systems Architects  
 **Curriculum Scope:** 5 Comprehensive Technical Modules + 7 Hands-On Production Labs  
 **Execution Environment:** MongoDB 7.0+ (`mongod` & `mongosh` CLI + MongoDB Compass / VS Code MongoDB Extension)  
-**Companion Files in `day4/`:**
+**Companion Files in `day4/` & `reference_cards/`:**
+- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`find`, `findOne`, `$gt`/`$in`, `$exists`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)** on `weather_nosql` (`stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`)
 - [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) ([📖 Course Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md)) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
 - [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) ([📖 Course Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
 - [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) ([📖 Course Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics
 - [day4_mongodb_complete_cheatsheet.md](./day4_mongodb_complete_cheatsheet.md) — Complete CLI, SQL-to-MQL Translator, Aggregation Pipeline, `2dsphere`, and `ESR` Cheatsheet
 - [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md) — Deep-dive reference card on BSON binary encoding, WiredTiger internals, 3-node Replica Set failover, Tunable CAP/PACELC, GridFS, and Sharded Clusters
+
+---
+
+> [!CAUTION]
+> ### 🚨 STOP & READ FIRST — Day 4 MongoDB Databases (`weather_nosql` vs. `weather_telemetry_db`), JS Scripts & Collections Master Map
+>
+> Day 4 uses **three `.js` seed/benchmark scripts** inside `day4/` across **two MongoDB databases (`weather_nosql` and `weather_telemetry_db`)**. Before running any `mongosh` query, check the table below so you always know which database and collection you are querying:
+>
+> | JS Script in `day4/` | How to Load / Run It | Target MongoDB Database & Collections Created | Key Document Fields & Coursebook Labs |
+> | :--- | :--- | :--- | :--- |
+> | **1. [`day4/day4_weather_ops_mongo.js`](./day4_weather_ops_mongo.js)**<br/>*(Main Operational Seed)* | ```bash\ncd day4\nmongosh weather_nosql day4_weather_ops_mongo.js\nmongosh weather_nosql\n``` | Database: **`weather_nosql`**<br/>• **`db.stations`** (`6` polymorphic stations with `$jsonSchema`)<br/>• **`db.radiosonde_soundings`** (`3` upper-air balloon launches with `vertical_levels` arrays)<br/>• **`db.synoptic_timeseries`** (`6` docs in Native Time-Series + 90-day TTL collection)<br/>• **`db.cap_alerts`** (`2` severe weather CAP bulletins) | • `stations`: `_id` (Int32 WMO ID), `station_name`, `station_type`, `climate_zone`, `elevation_m`, `is_active`, `location` (`[lon, lat]`), `sensors`, `calibration`, `buoy_specs`, `soil_depths_cm`<br/>• **Used in:** Warm-Up CRUD ([Reference Card 00](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md#part-iii-mongodb-70--crud--aggregation-fundamentals-day-4)), Lab 1 (`§1.4`), Lab 2 (`§2.6`), Lab 3A (`§3.4`) |
+> | **2. [`day4/day4_weather_ops_mongo_advanced.js`](./day4_weather_ops_mongo_advanced.js)**<br/>*(Geospatial `2dsphere` & `ESR` Seed)* | ```bash\ncd day4\nmongosh weather_nosql day4_weather_ops_mongo_advanced.js\n``` | Database: **`weather_nosql`**<br/>• **`db.storm_polygons`** (`2` GeoJSON `Polygon` radar cells)<br/>• **`db.upper_air_climatology`** (Materialized via `$merge`)<br/>• Creates `2dsphere` & `idx_sonde_esr` indexes | • `storm_polygons`: `_id`, `storm_name`, `phenomenon`, `severity`, `max_reflectivity_dbz`, `geometry` (`Polygon`)<br/>• **Used in:** Lab 4 (`§4.4` — `$geoNear`, `$geoWithin`, `$geoIntersects`, `ESR` `.explain("executionStats")`) |
+> | **3. [`day4/day4_mongo_50k_polymorphic_benchmark.js`](./day4_mongo_50k_polymorphic_benchmark.js)**<br/>*(50k Polymorphic & Bucket Benchmark)* | ```bash\ncd day4\nmongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js\n``` | Database: **`weather_telemetry_db`**<br/>• **`db.telemetry_raw`** (`50,000` polymorphic sensor docs across 4 instrument types)<br/>• **`db.telemetry_buckets`** (Hourly Manual Bucket Pattern docs) | • `telemetry_raw`: `station_id`, `sensor_type` (`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`), `timestamp`, `measurements`, `fault_codes`<br/>• **Used in:** Lab 3B (`§3.4` — 50k `$unwind` fault diagnostics & Manual Bucket Pattern) |
+>
+> #### 💡 Three Instant `mongosh` Commands to Check Where You Are
+> ```javascript
+> db.getName()       // Shows active database ("weather_nosql" or "weather_telemetry_db")
+> show collections   // Lists all collections in the active database
+> use weather_nosql  // Switches active database to weather_nosql
+> ```
 
 ---
 
@@ -244,7 +265,7 @@ try {
 
 // 5. Insert valid station 60445 (Setif) with custom winter icing_sensor metadata
 db.stations.insertOne({
-  _id: 60445,
+  _id: Int32(60445),
   station_name: "Setif - Ain Arnat",
   station_type: "SURFACE_AWS",
   climate_zone: "Highland",
@@ -254,6 +275,37 @@ db.stations.insertOne({
   sensors: ["PT100_THERM", "HEATED_ULTRASONIC_WIND", "SNOW_DEPTH_LASER"],
   icing_sensor: { heated_anemometer: true, power_watts: 150, deice_threshold_c: 1.5 }
 });
+
+// =============================================================================
+// 6. WARM-UP CRUD: READ (find), UPDATE (updateOne) & DELETE (deleteOne)
+//    (See ../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md
+//     Part III for the complete MongoDB CRUD & Aggregation guide!)
+// =============================================================================
+
+// 6a. READ (find with projection & sort): List all stations sorted by elevation_m DESC
+db.stations.find(
+  { is_active: true },
+  { station_name: 1, station_type: 1, climate_zone: 1, elevation_m: 1 }
+).sort({ elevation_m: -1 });
+
+// 6b. READ nested fields & polymorphic documents in synoptic_timeseries
+db.synoptic_timeseries.find(
+  { temp_c: { $gte: 30.0 } },
+  { _id: 0, "station_meta.station_id": 1, "station_meta.climate_zone": 1, obs_time: 1, temp_c: 1, wind_gust_kt: 1 }
+).sort({ temp_c: -1 });
+
+// 6c. UPDATE (updateOne with $set & $addToSet): Update Setif (60445) power_watts and add a sensor
+db.stations.updateOne(
+  { _id: 60445 },
+  {
+    $set: { "icing_sensor.power_watts": 200, last_inspected_utc: new Date("2026-10-06T09:00:00Z") },
+    $addToSet: { sensors: "CMP11_PYRANOMETER" }
+  }
+);
+db.stations.findOne({ _id: 60445 });
+
+// 6d. DELETE (deleteOne): Optional cleanup of test station 60445 (or keep it for later labs)
+// db.stations.deleteOne({ _id: 60445 });
 ```
 
 ---

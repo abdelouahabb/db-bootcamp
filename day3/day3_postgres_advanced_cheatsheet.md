@@ -2,7 +2,18 @@
 
 # Day 3 Cheatsheet: Partitioning, Advanced Indexing, PostGIS Geodesy, Window Functions & JSONB
 
-**Companion to:** [day3_master_coursebook.md](./day3_master_coursebook.md)
+**Companion to:**
+- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`SELECT`, `INSERT ... RETURNING`, `UPDATE`, `DELETE`, `JOIN`s)**
+- [day3_master_coursebook.md](./day3_master_coursebook.md)
+- [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) (`weather_ops`: `synoptic.observations_part`, `nwp.mv_daily_model_verification`, `synoptic.stations.geog`)
+- [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) (`weather_ops_db`: 5M-row `public.raw_telemetry_partitioned` & 50-station `public.stations.geom`)
+
+---
+
+> [!IMPORTANT]
+> **Which Database Am I In? (`weather_ops` vs. `weather_ops_db`)**
+> - Queries on **`synoptic.observations_part`**, **`synoptic.observations`**, **`synoptic.stations`**, and **`nwp.mv_daily_model_verification`** run in **`weather_ops`** (`\c weather_ops`, loaded via `day3_weather_advanced_pg.sql`).
+> - Queries on **`public.raw_telemetry_partitioned`** (`5,000,000` rows) and **`public.stations`** (`AWS-001`..`AWS-050`, `geom`) run in **`weather_ops_db`** (`\c weather_ops_db`, loaded via `day3_postgis_5m_benchmark.sql`).
 
 ---
 
@@ -89,6 +100,8 @@ DROP TABLE synoptic.obs_y2026m06;
 > **Coordinate Order Rule:** `ST_MakePoint(longitude, latitude)` always takes **`(X, Y)` = `(longitude, latitude)`**!
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
+-- 📜 PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql (Table: public.stations)
 -- Find all active stations within 40 km (40,000 meters) of an offshore squall line [3.90E, 36.95N]
 SELECT
     station_id,

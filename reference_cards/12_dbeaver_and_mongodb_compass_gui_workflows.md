@@ -56,10 +56,14 @@
 ## 2. Top 6 DBeaver Superpowers for Weather Engineers
 
 ### 1. Interactive Spatial / GIS Map Viewer (For `PostGIS` on Days 2–3!)
-Whenever a query in DBeaver returns a `PostGIS` `GEOGRAPHY` or `GEOMETRY` column (such as `synoptic.stations.geog` or storm polygons):
+Whenever a query in DBeaver returns a `PostGIS` `GEOGRAPHY` or `GEOMETRY` column (such as `synoptic.stations.geog` in `weather_ops` or `public.stations.geom` in `weather_ops_db`):
 1. Run:
    ```sql
+   -- In database 'weather_ops' (after running day3/day3_weather_advanced_pg.sql):
    SELECT station_id, station_name, climate_zone, geog FROM synoptic.stations;
+
+   -- OR in database 'weather_ops_db' (after running day3/day3_postgis_5m_benchmark.sql):
+   SELECT station_id, station_name, elevation_m, geom FROM public.stations;
    ```
 2. In the **Results Grid**, click the **`Spatial` (Globe/Map)** tab on the right-hand panel (or click the cell value under `geog`).
 3. DBeaver automatically plots all WMO weather stations and storm polygons on an interactive **OpenStreetMap / Leaflet** map!

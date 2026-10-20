@@ -317,7 +317,7 @@ psql -d weather_ops_db -f day3/day3_postgis_5m_benchmark.sql
 > | **2** | 🧪 **[Switch to Portal Tab 04: Storage & BRIN vs B-Tree Calculator](./bootcamp_portal.html#tab-scaling)** | Scale the row slider from 1 Million to 1 Billion rows to compare PostgreSQL B-Tree (`~28 MB / 1M rows`) against BRIN (`~32 KB / 1M rows` — 99.89% smaller!). |
 > | **3** | 📖 **[day3/day3_weather_advanced_pg_sql_course_walkthrough.md](./day3/day3_weather_advanced_pg_sql_course_walkthrough.md)** | Line-by-line walkthrough of `synoptic.observations_part`, the 5 specialized indexes, `nwp.mv_daily_model_verification`, and dynamic PostGIS `GEOGRAPHY`. |
 > | **4** | 📖 **[day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md](./day3/day3_postgis_5m_benchmark_sql_course_walkthrough.md)** | Line-by-line walkthrough of the 5,000,000-row partitioned benchmark, WGS-84 Haversine great-circle math, B-Tree (`28 MB`) vs BRIN (`24 KB`) size audit, and `ST_DWithin` Dellys Cape squall-line queries. |
-> | **5** | 🖥️ **DBeaver Spatial Map Lab (on Windows Host):** In DBeaver on Windows, connect to `<VM_IP>:5432/weather_ops_db` (`postgres` / `meteo_password`), run `SELECT station_id, station_name, region, geom FROM stations;`, and click the **Spatial** tab on the right of the result grid to view your Algerian weather stations on an interactive **OpenStreetMap / Leaflet map**! |
+> | **5** | 🖥️ **DBeaver Spatial Map Lab (on Windows Host):** In DBeaver on Windows, connect to `<VM_IP>:5432/weather_ops_db` (`postgres` / `meteo_password`), run `SELECT station_id, station_name, elevation_m, geom FROM stations;` (or in `weather_ops`, run `SELECT station_id, station_name, climate_zone, geog FROM synoptic.stations;`), and click the **Spatial** tab on the right of the result grid to view your Algerian weather stations on an interactive **OpenStreetMap / Leaflet map**! |
 > | **6** | 📋 **[day3/day3_postgres_extensions_guide.md](./day3/day3_postgres_extensions_guide.md)** & **[day3/day3_postgres_ha_patroni_and_ops_guide.md](./day3/day3_postgres_ha_patroni_and_ops_guide.md)** | Deep-dive reference guides on 15 essential extensions and Patroni + `etcd` + HAProxy High Availability. |
 >
 > *(Once you finish Day 3, return here and proceed to **Phase 3** below for Day 4!)*
@@ -359,9 +359,9 @@ mongosh --eval "db.runCommand({ connectionStatus: 1, buildInfo: 1 }).version"
 ### 3.3 Seed the Day 4 MongoDB Databases & Run the 50,000-Document Polymorphic Benchmark
 ```bash
 cd ~/db-bootcamp
-mongosh day4/day4_weather_ops_mongo.js
-mongosh day4/day4_weather_ops_mongo_advanced.js
-mongosh day4/day4_mongo_50k_polymorphic_benchmark.js
+mongosh weather_nosql day4/day4_weather_ops_mongo.js
+mongosh weather_nosql day4/day4_weather_ops_mongo_advanced.js
+mongosh "mongodb://localhost:27017/weather_telemetry_db" day4/day4_mongo_50k_polymorphic_benchmark.js
 ```
 
 ### 3.4 Optional Native HA Lab: Running a 3-Node Replica Set (`rs_meteo`) Natively Without Docker

@@ -226,25 +226,26 @@ less day2_two_terminal_acid_lab.sql
 ```bash
 cd "day3"
 
-# 1. Load monthly range partitions, BRIN/Partial/Covering/GIN indexes & Materialized View
+# 1. Load monthly range partitions, BRIN/Partial/Covering/GIN indexes & Materialized View into 'weather_ops'
 psql -d weather_ops -f day3_weather_advanced_pg.sql
 
-# 2. Run the 5,000,000-row PostGIS & BRIN vs. B-Tree physical benchmark
+# 2. Run the 5,000,000-row PostGIS & BRIN vs. B-Tree physical benchmark (creates 'weather_ops_db')
 psql -d postgres -f day3_postgis_5m_benchmark.sql
+psql -d weather_ops_db
 ```
 
 ### Day 4: MongoDB 7 Polymorphic Stations, Radiosondes, `2dsphere` & 50k Benchmark
 ```bash
 cd "day4"
 
-# 1. Load $jsonSchema stations, upper-air radiosonde soundings & Native Time-Series collection
+# 1. Load $jsonSchema stations, upper-air radiosonde soundings & Native Time-Series collection into 'weather_nosql'
 mongosh weather_nosql day4_weather_ops_mongo.js
 
-# 2. Load 2dsphere storm warning polygons, ESR compound indexes & isobaric aggregations
+# 2. Load 2dsphere storm warning polygons, ESR compound indexes & isobaric aggregations into 'weather_nosql'
 mongosh weather_nosql day4_weather_ops_mongo_advanced.js
 
-# 3. Run the 50,000-document polymorphic sensor ingestion, Bucket Pattern & $unwind fault lab
-mongosh weather_nosql day4_mongo_50k_polymorphic_benchmark.js
+# 3. Run the 50,000-document polymorphic sensor ingestion, Bucket Pattern & $unwind fault lab in 'weather_telemetry_db'
+mongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js
 ```
 
 ### Day 5: DuckDB Vectorized OLAP, 10M-Row Parquet Lake, 4D NetCDF & Polyglot Streaming Capstone

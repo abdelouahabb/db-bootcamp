@@ -133,17 +133,51 @@ WITH DATA;
 CREATE UNIQUE INDEX idx_mv_daily_verif_unique
 ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 
--- Automatically enable PostGIS and populate synoptic.stations.geog if PostGIS package is installed
+-- Automatically enable PostGIS (or WGS-84 geodesic fallback) and populate synoptic.stations.geog & geom
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
         CREATE EXTENSION IF NOT EXISTS postgis;
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog GEOGRAPHY(Point, 4326);
-        UPDATE synoptic.stations SET geog = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::GEOGRAPHY;
+        ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom GEOMETRY(Point, 4326);
+        UPDATE synoptic.stations
+        SET geog = ST_SetSRID(ST_MakePoint(longitude::float8, latitude::float8), 4326)::GEOGRAPHY,
+            geom = ST_SetSRID(ST_MakePoint(longitude::float8, latitude::float8), 4326);
         CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);
-        RAISE NOTICE 'PostGIS enabled and synoptic.stations.geog populated!';
+        CREATE INDEX IF NOT EXISTS idx_stations_geom_gist ON synoptic.stations USING GIST (geom);
+        RAISE NOTICE 'PostGIS enabled and synoptic.stations.geog + geom populated!';
     ELSE
-        RAISE NOTICE 'PostGIS extension not installed on host OS yet (skipping optional geog column).';
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry') THEN
+            CREATE DOMAIN public.geometry AS point;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geography') THEN
+            CREATE DOMAIN public.geography AS point;
+        END IF;
+        EXECUTE $fn$
+            CREATE OR REPLACE FUNCTION public.ST_MakePoint(lon double precision, lat double precision) RETURNS point AS $body$
+                SELECT point(lon, lat);
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_SetSRID(pt point, srid int) RETURNS point AS $body$
+                SELECT pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Distance(p1 point, p2 point) RETURNS double precision AS $body$
+                SELECT 2.0 * 6371008.8 * asin(sqrt(
+                    power(sin(radians((p2[1] - p1[1]) / 2.0)), 2) +
+                    cos(radians(p1[1])) * cos(radians(p2[1])) * power(sin(radians((p2[0] - p1[0]) / 2.0)), 2)
+                ));
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_DWithin(p1 point, p2 point, dist_m double precision) RETURNS boolean AS $body$
+                SELECT public.ST_Distance(p1, p2) <= dist_m;
+            $body$ LANGUAGE sql IMMUTABLE;
+        $fn$;
+        ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog public.geography;
+        ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom public.geometry;
+        UPDATE synoptic.stations
+        SET geog = public.ST_SetSRID(public.ST_MakePoint(longitude::float8, latitude::float8), 4326),
+            geom = public.ST_SetSRID(public.ST_MakePoint(longitude::float8, latitude::float8), 4326);
+        CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);
+        CREATE INDEX IF NOT EXISTS idx_stations_geom_gist ON synoptic.stations USING GIST (geom);
+        RAISE NOTICE 'WGS-84 geodesic fallback enabled and synoptic.stations.geog + geom populated!';
     END IF;
 END
 $$;

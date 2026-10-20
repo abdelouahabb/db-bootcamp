@@ -311,7 +311,7 @@ WHERE datname = current_database();
 
 > [!NOTE]
 > **Need a Warm-Up on Basic PostgreSQL CRUD (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)?**  
-> Open **[Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook — Part II (PostgreSQL)](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md)** for foundational queries on `synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, and `alerts.weather_alerts`.
+> Open **[SQL_BASICS_CRUD_GUIDE.md — Part II (PostgreSQL)](../SQL_BASICS_CRUD_GUIDE.md)** for foundational queries on `synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, and `alerts.weather_alerts`.
 
 ---
 

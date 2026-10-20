@@ -24,8 +24,8 @@
 > 2. **Switch between the two files in 1 second without exiting `sqlite3`:** Type **`.open weather_ops.db`** or **`.open weather_telemetry.db`** directly at the `sqlite>` prompt!
 > 3. **Recommended Classroom Setup:** Open **Two Terminal Tabs** in `day1/` (**Tab 1:** `sqlite3 weather_ops.db`, **Tab 2:** `sqlite3 weather_telemetry.db`), or in **DBeaver / DB Browser for SQLite** use the top database dropdown to select the matching `.db` file shown at the top of each SQL block below.
 
-**Companion Reference Files in `day1/` & `reference_cards/`:**
-- **[../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — ⭐ START HERE: Complete Basic SQL & MongoDB CRUD Playbook (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `INSERT`, `UPDATE`, `DELETE`) on All Bootcamp Datasets**
+**Companion Reference Files in `day1/` & Root:**
+- **[../SQL_BASICS_CRUD_GUIDE.md](../SQL_BASICS_CRUD_GUIDE.md) — START HERE: Dedicated SQL Basics & CRUD Guide (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `JOIN`, `INSERT`, `UPDATE`, `DELETE`) on `weather_ops.db` & `weather_telemetry.db`**
 - [day1_sqlite_and_sql_cheatsheet.md](./day1_sqlite_and_sql_cheatsheet.md) — Authoritative CLI Directives, 3VL Truth Tables, WMO Queries & Window Recipes
 - [day1_hardware_sentinels_and_qc_guide.md](./day1_hardware_sentinels_and_qc_guide.md) — Deep-Dive on `-9999` / `-999` In-Band Signaling, ADC Physics, WMO QC Flags & Contamination Math
 - [weather_ops_seed_sql_course_walkthrough.md](./weather_ops_seed_sql_course_walkthrough.md) — **Detailed Markdown Course Walkthrough** explaining every SQL statement, constraint, and telemetry anomaly in `weather_ops_seed.sql`
@@ -125,7 +125,7 @@ To inspect **`weather_ops.db` visually in DBeaver / DB Browser for SQLite**:
 
 > [!NOTE]
 > **Need a Warm-Up on Basic SQL CRUD (`SELECT`, `WHERE`, `ORDER BY`, `GROUP BY`, `INSERT`, `UPDATE`, `DELETE`)?**  
-> Open **[Reference Card 00: SQL & MongoDB CRUD Fundamentals & Data Exploration Playbook — Part I (SQLite)](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md)** for step-by-step foundational queries on `day1/weather_ops.db` and `day1/weather_telemetry.db`.
+> Open **[SQL_BASICS_CRUD_GUIDE.md — Part I (Day 1 SQLite)](../SQL_BASICS_CRUD_GUIDE.md)** for step-by-step foundational queries on `day1/weather_ops.db` and `day1/weather_telemetry.db`.
 
 ### 3.3 Dataset 2 Setup: 250,000-Row High-Frequency AWS Stream (`day1/weather_telemetry.db`)
 First, exit the `sqlite>` prompt (type **`.quit`** or open a **second terminal tab** inside `day1/`) so you are back at your Linux/macOS/Windows shell prompt (`$`). Then run the standalone Python generator (`generate_weather_db.py`), which synthesizes 250,000 rows across 50 Automated Weather Stations (`AWS-001` to `AWS-050`) over a 48-hour window in $\approx 2\text{--}3\text{ seconds}$:

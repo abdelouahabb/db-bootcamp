@@ -8,8 +8,8 @@
 **Curriculum Scope:** Modules 0–5 + Hands-On Production Engineering Labs  
 **Execution Environment:** PostgreSQL 16+ with PostGIS 3.4+ (`psql` CLI + DBeaver, local host or Docker `postgis/postgis:16-3.4`)  
 
-**Companion Files in Day 3 Directory & `reference_cards/`:**
-- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)**
+**Companion Files in Day 3 Directory & Root:**
+- [../SQL_BASICS_CRUD_GUIDE.md](../SQL_BASICS_CRUD_GUIDE.md) — **Dedicated SQL Basics & CRUD Guide (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)**
 - [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) ([Course Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md)) — Partitioned synoptic tables (`synoptic.observations_part`), BRIN/Partial/Covering/GIN indexes, `JSONB` sensor payloads, and Materialized Views (`nwp.mv_daily_model_verification`)
 - [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) ([Course Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)) — Automated 5,000,000-row partitioned telemetry seed (`raw_telemetry_partitioned`), B-Tree vs. BRIN benchmark, and PostGIS `ST_DWithin` geodesic radial queries
 - [day3_postgres_advanced_cheatsheet.md](./day3_postgres_advanced_cheatsheet.md) — Quick-reference guide for Partitioning, Index Selection, PostGIS Geodesy, Window Functions, `UPSERT`, and `JSONB`

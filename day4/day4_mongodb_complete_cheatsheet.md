@@ -4,7 +4,7 @@
 
 **Bootcamp:** Weather Forecast & Meteorological Data Engineering (5-Day Intensive — Unified Best-of-Both Edition)  
 **Companion to:**
-- [../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md](../reference_cards/00_sql_and_mongodb_crud_fundamentals_for_weather_data.md) — **Dedicated SQL & MongoDB CRUD & Data Exploration Fundamentals (`find`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)**
+- [../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) — **Dedicated MongoDB NoSQL Basics & CRUD Guide (`find`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)**
 - [day4_master_coursebook.md](./day4_master_coursebook.md)
 - [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md)
 - [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) (`weather_nosql`: `stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`)

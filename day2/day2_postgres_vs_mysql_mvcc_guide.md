@@ -280,7 +280,10 @@ innodb_io_capacity_max = 4000
 ```
 
 ### 6.2 MySQL InnoDB Forensics & MVCC History List Length (HLL) Queries
+> *Note: The diagnostic queries below are **MySQL 8.0 / 8.4 (`mysql` CLI) reference commands** for engineers operating external MySQL/InnoDB weather systems (do not run `SHOW ENGINE INNODB STATUS` inside PostgreSQL `psql`!).*
 ```sql
+-- 📂 TARGET ENGINE: MySQL 8.0 / 8.4 CLI (mysql -u root -p weather_ops) — Reference Only
+
 -- 1. Check InnoDB Engine Status (Buffer Pool, Semaphores, Undo History)
 SHOW ENGINE INNODB STATUS\G
 
@@ -301,11 +304,11 @@ SELECT
 FROM information_schema.INNODB_TRX
 ORDER BY trx_started ASC;
 
--- 4. Profile Execution Plans in MySQL 8.0+
+-- 4. Profile Execution Plans in MySQL 8.0+ (Equivalent to PG's EXPLAIN (ANALYZE, BUFFERS) on observations)
 EXPLAIN FORMAT=TREE
-SELECT station_id, AVG(temperature)
-FROM raw_telemetry
-WHERE recorded_at >= '2026-10-01 00:00:00'
+SELECT station_id, AVG(temp_c)
+FROM observations
+WHERE obs_time >= '2026-10-01 00:00:00'
 GROUP BY station_id;
 ```
 

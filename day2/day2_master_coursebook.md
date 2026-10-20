@@ -17,6 +17,42 @@
 
 ---
 
+> [!CAUTION]
+> ### 🚨 STOP & READ FIRST — Day 2 PostgreSQL Database (`weather_ops`), SQL Scripts, Schemas & Tables Master Map
+>
+> All Day 2 labs execute inside the **PostgreSQL 16+ database named `weather_ops`** (`psql -d weather_ops`), **NOT** SQLite (`sqlite3`)!  
+> However, Day 2 uses **three different `.sql` scripts** inside the `day2/` directory, and **four different PostgreSQL schemas (`synoptic`, `nwp`, `alerts`, `public`)**. If you get `ERROR: relation "..." does not exist`, check the table below to see which script creates that table and which schema it lives in:
+>
+> | SQL Script in `day2/` | How to Load / Run It | Schemas & Tables Created Inside `weather_ops` | Which Coursebook Labs Use These Tables |
+> | :--- | :--- | :--- | :--- |
+> | **1. [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql)**<br/>*(Main Operational Seed)* | ```bash\ncd day2\npsql -d weather_ops -f weather_ops_pg.sql\n```<br/>*(Or inside `psql`: `\i weather_ops_pg.sql`)* | • **`synoptic.stations`** (`7` WMO stations + TOAST `raw_metadata`)<br/>• **`synoptic.observations`** (`18,432` hourly observations)<br/>• **`nwp.forecasts`** (`4,608` NWP forecast rows with `STORED` `valid_time`)<br/>• **`alerts.weather_alerts`** (`4` severe weather alerts) | • **Lab 1** (`§3.6` — Cluster & Cache Hit Ratio)<br/>• **Lab 2A** (`§4.8` — Heap sizes, `ctid`, TOAST)<br/>• **Lab 3A Part 1 & Part 3** (`§5.5` — MVCC & `VACUUM`)<br/>• **Lab 4** (`§6.5` — WAL LSN & `\copy`)<br/>• **Lab 5A** (`§7.2` — NWP `JOIN` & `INCLUDE` Index) |
+> | **2. [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)**<br/>*(8 KB Block, Bloat & 1M-Row Plan Forensics)* | ```bash\ncd day2\npsql -d weather_ops -f day2_pageinspect_and_storage_lab.sql\n```<br/>*(Or inside `psql`: `\i day2_pageinspect_and_storage_lab.sql`)* | Enables `pageinspect` & `pgstattuple` extensions and creates in **`public`** schema:<br/>• **`public.telemetry_unaligned`** & **`public.telemetry_aligned`** (`10k` rows — `80B` vs. `64B`)<br/>• **`public.layout_padded`** & **`public.layout_packed`** (`10k` rows — `48B` vs. `40B`)<br/>• **`public.mvcc_demo`** (`1` row updated — `t_xmin`, `t_xmax`, `t_ctid`)<br/>• **`public.bloat_lab`** (`100k` rows — `pgstattuple` `VACUUM` vs. `VACUUM FULL`)<br/>• **`public.plan_lab`** (`1,000,000` rows — Row-Store Scan Penalty & `Index Only Scan`) | • **Lab 2B** (`§4.8` — Tuple Tetris & `pageinspect`)<br/>• **Lab 3A Part 2 & 3B** (`§5.5` — `mvcc_demo` & `bloat_lab`)<br/>• **Lab 5B** (`§7.2` — `plan_lab` 1,000,000-row scan penalty & covering index) |
+> | **3. [`day2/day2_two_terminal_acid_lab.sql`](./day2_two_terminal_acid_lab.sql)**<br/>*(Interactive Two-Terminal Locking & Deadlock Lab)* | **Do NOT run with `-f` all at once!**<br/>Open **Terminal A** & **Terminal B** side-by-side (`psql -d weather_ops`) and paste steps interactively. | Creates in **`public`** schema:<br/>• **`public.station_calibration`** (`3` rows: `'AWS-001'`, `'AWS-002'`, `'AWS-003'`) | • **Lab 3A Companion** (`§5.5` — Two-Terminal Snapshot Isolation, Row Lock Waits, `pg_blocking_pids()`, Deadlock `40P01`) |
+>
+> #### 💡 Three Instant `psql` Commands If You Ever Get `"ERROR: relation ... does not exist"`
+> 1. **Check which database & directory you are connected to:**
+>    ```sql
+>    \conninfo
+>    \! pwd
+>    ```
+> 2. **List all schemas and tables across all schemas (`synoptic`, `nwp`, `alerts`, `public`):**
+>    ```sql
+>    \dn+
+>    \dt+ synoptic.*
+>    \dt+ nwp.*
+>    \dt+ alerts.*
+>    \dt+ public.*
+>    ```
+> 3. **Fix the Schema `search_path` Permanently for `weather_ops`:**
+>    By default, a new `psql -d weather_ops` session only searches `"$user", public`. If you type `SELECT * FROM observations;` without `synoptic.`, PostgreSQL won't find it unless you either write **`synoptic.observations`** OR persist the search path once for the entire database:
+>    ```sql
+>    ALTER DATABASE weather_ops SET search_path TO synoptic, nwp, alerts, public;
+>    -- Reconnect (\c weather_ops) or run in your current session:
+>    SET search_path TO synoptic, nwp, alerts, public;
+>    ```
+
+---
+
 ## 1. Day 2 Objective & Core Philosophy
 
 On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today we answer the critical engineering question:
@@ -218,17 +254,22 @@ Setting `shared_buffers` to $80\%$ of RAM (an InnoDB habit) harms PostgreSQL per
 > Unlike `shared_buffers` (which is a single global pool), **`work_mem` is allocated per sort or hash node, per query, per parallel worker!** If a single complex NWP verification query contains 4 Hash Joins and runs across 4 parallel workers with `max_connections = 100`, setting `work_mem = 2GB` globally allows a burst of queries to request $4 \times 4 \times 2\text{ GB} = 32\text{ GB}$ per connection, immediately invoking the Linux OOM-Killer! Keep global `work_mem` at `32MB–64MB` and boost it selectively inside heavy analytical sessions using `SET LOCAL work_mem = '256MB';`.
 
 ### Lab 1 Walkthrough: Verifying Installation, Live Processes, UTC & Memory Tuning
-Initialize the `weather_ops` database and load [weather_ops_pg.sql](./weather_ops_pg.sql):
+First, `cd` into `day2/`, initialize the `weather_ops` PostgreSQL database, and load [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql):
 
 ```bash
+cd day2
 sudo -u postgres createuser --superuser $USER 2>/dev/null || true
-createdb weather_ops
+createdb weather_ops 2>/dev/null || true
 psql -d weather_ops -f weather_ops_pg.sql
 ```
 
-Connect via `psql -d weather_ops` (or **DBeaver**) to inspect physical cluster paths, verify active background daemons (`checkpointer`, `background writer`, `walwriter`, `autovacuum launcher`) in `pg_stat_activity`, apply non-restart UTC and memory tuning via `ALTER SYSTEM`, and measure the database's **Buffer Cache Hit Ratio** in `pg_stat_database` (target: **> 99%**):
+Now connect via `psql -d weather_ops` (or **DBeaver**) to inspect physical cluster paths, verify active background daemons (`checkpointer`, `background writer`, `walwriter`, `autovacuum launcher`) in `pg_stat_activity`, apply non-restart UTC and memory tuning via `ALTER SYSTEM`, and measure the database's **Buffer Cache Hit Ratio** in `pg_stat_database` (target: **> 99%**):
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (Connect with: psql -d weather_ops)
+-- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql (\i weather_ops_pg.sql)
+-- 🗄️ TABLES / CATALOGS QUERIED: pg_stat_activity, pg_stat_database
+
 -- 1. Locate physical cluster and configuration files
 SHOW data_directory;
 SHOW config_file;
@@ -616,9 +657,13 @@ PostgreSQL does not allow a single tuple to span across two 8 KB heap pages. Wha
 
 ### Lab 2A & 2B: Inspecting Disk Files, `ctid`, TOAST & `pageinspect` Byte Alignment
 #### Lab 2A: Inspecting `weather_ops` Physical Files, 8 KB Pages, `ctid` & TOAST
-Run these queries in `psql -d weather_ops`:
+Run these queries in `psql -d weather_ops` (requires [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql) loaded in Lab 1):
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- 🗄️ TABLES QUERIED: pg_stat_user_tables, synoptic.observations, synoptic.stations
+
 -- 1. Inspect table sizes, index sizes, TOAST sizes, and exact 8KB heap page counts
 SELECT
     schemaname || '.' || relname                  AS table_name,
@@ -652,9 +697,14 @@ FROM synoptic.stations;
 ```
 
 #### Lab 2B: Physical Block Forensics & Tuple Tetris with `pageinspect`
-Run this lab (also included in [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql)) to verify both the **16-byte Tuple Tetris savings** (`80B` vs. `64B`) and the **8-byte `layout_padded` vs. `layout_packed` block inspection** (`48B` vs. `40B`):
+Run this lab in `psql -d weather_ops` (either paste the block below directly or run `\i day2_pageinspect_and_storage_lab.sql` from [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql) Lab 1) to verify both the **16-byte Tuple Tetris savings** (`80B` vs. `64B` on `public.telemetry_unaligned` vs. `public.telemetry_aligned`) and the **8-byte block inspection** (`48B` vs. `40B` on `public.layout_padded` vs. `public.layout_packed`):
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 SOURCE SCRIPT: day2/day2_pageinspect_and_storage_lab.sql (Lab 1A & 1B)
+-- 🗄️ TABLES CREATED & QUERIED (in 'public' schema):
+--    public.telemetry_unaligned, public.telemetry_aligned, public.layout_padded, public.layout_packed
+
 CREATE EXTENSION IF NOT EXISTS pageinspect;
 
 -- 1. 8-Column Tuple Tetris Lab: 80 Bytes vs. 64 Bytes (16 Bytes Saved per Row!)
@@ -879,10 +929,16 @@ $$
 ```
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 PREREQUISITE SCRIPTS:
+--    • Part 1 & Part 3 use synoptic.stations & synoptic.observations (from day2/weather_ops_pg.sql)
+--    • Part 2 creates public.mvcc_demo (also in day2/day2_pageinspect_and_storage_lab.sql Lab 2)
+--    • Optional: For the 4-part Two-Terminal Lab on public.station_calibration, open day2/day2_two_terminal_acid_lab.sql
+
 -- ============================================================================
--- PART 1: Two-Window MVCC Isolation & ctid Movement Test
+-- PART 1: Two-Window MVCC Isolation & ctid Movement Test (Table: synoptic.stations)
 -- ============================================================================
--- In Window A (psql):
+-- In Window A (psql -d weather_ops):
 SELECT ctid, xmin, xmax, station_id, station_name, elevation_m
 FROM synoptic.stations WHERE station_id = 60390;
 
@@ -894,13 +950,13 @@ UPDATE synoptic.stations SET elevation_m = 26.5 WHERE station_id = 60390;
 SELECT ctid, xmin, xmax, station_id, station_name, elevation_m
 FROM synoptic.stations WHERE station_id = 60390;
 
--- Meanwhile, run the exact same SELECT in Window B (DBeaver):
+-- Meanwhile, run the exact same SELECT in Window B (DBeaver or 2nd psql -d weather_ops):
 -- Window B still sees the OLD ctid and elevation_m = 25.0 with zero lock wait!
 -- Now commit in Window A:
 COMMIT;
 
 -- ============================================================================
--- PART 2: Inspecting Physical Tuple Chains with pageinspect
+-- PART 2: Inspecting Physical Tuple Chains with pageinspect (Table: public.mvcc_demo)
 -- ============================================================================
 CREATE EXTENSION IF NOT EXISTS pageinspect;
 DROP TABLE IF EXISTS mvcc_demo;
@@ -914,7 +970,7 @@ SELECT lp, lp_off, lp_len AS bytes, t_xmin, t_xmax, t_ctid, t_infomask
 FROM heap_page_items(get_raw_page('mvcc_demo', 0));
 
 -- ============================================================================
--- PART 3: Bulk QC Update Bloat Monitor & VACUUM (VERBOSE, ANALYZE)
+-- PART 3: Bulk QC Update Bloat Monitor & VACUUM (Table: synoptic.observations)
 -- ============================================================================
 UPDATE synoptic.observations
 SET qc_flag = 'VALID'
@@ -1048,6 +1104,10 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
 ### Lab 4 Walkthrough: Tuning Checkpoints, Tracking WAL Volume (`LSN`) & Benchmarking `\copy`
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- 🗄️ TABLES QUERIED / WRITTEN: nwp.forecasts, synoptic.observations, synoptic.observations_staging
+
 \timing on
 
 -- 1. Tune WAL & Checkpoint parameters for spiky NWP/synoptic loads
@@ -1163,10 +1223,14 @@ $$
 ---
 
 ### Lab 5A & 5B Walkthrough (Capstone): Accelerating NWP Forecast Verification & Proving the Row-Store Scan Penalty
-#### Lab 5A: NWP Forecast Verification (`weather_ops` Database)
-Run in `psql -d weather_ops`:
+#### Lab 5A: NWP Forecast Verification (`weather_ops` Database — `nwp.forecasts` $\bowtie$ `synoptic.observations`)
+Run in `psql -d weather_ops` (requires [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql)):
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+-- 🗄️ TABLES QUERIED: pg_stats, nwp.forecasts, synoptic.observations
+
 -- 1. Tune Planner for modern SSD/NVMe & enable I/O timing
 ALTER SYSTEM SET random_page_cost = 1.1;
 ALTER SYSTEM SET effective_io_concurrency = 200;
@@ -1196,7 +1260,7 @@ WHERE f.station_id = 60390
   AND f.valid_time BETWEEN '2026-10-01 00:00:00+00' AND '2026-10-06 23:59:59+00';
 
 -- 3. Create Composite Covering Index on nwp.forecasts (station_id, valid_time) INCLUDE (model_name, pred_temp_c)
-CREATE INDEX idx_forecasts_station_valid
+CREATE INDEX IF NOT EXISTS idx_forecasts_station_valid
 ON nwp.forecasts (station_id, valid_time)
 INCLUDE (model_name, pred_temp_c);
 
@@ -1218,42 +1282,88 @@ WHERE f.station_id = 60390
   AND f.valid_time BETWEEN '2026-10-01 00:00:00+00' AND '2026-10-06 23:59:59+00';
 ```
 
-#### Lab 5B: Mathematical Proof of the Row-Store Analytical Scan Penalty (2,000,000 Rows)
-Why do row-store engines struggle when computing multi-decade climatological aggregations across all stations? Consider running an analytical scan across `2,000,000` weather telemetry rows (see [day2_pageinspect_and_storage_lab.sql](./day2_pageinspect_and_storage_lab.sql)):
+#### Lab 5B: Mathematical Proof of the Row-Store Analytical Scan Penalty (`public.plan_lab` — 1,000,000 to 2,000,000 Rows)
+> [!IMPORTANT]
+> **📂 Which Script & Table Does Lab 5B Use?**
+> - Lab 5B uses the **`public.plan_lab`** table created in **Lab 4 of [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)** (NOT Day 1's SQLite `raw_telemetry` table!).
+> - If you have not already run `psql -d weather_ops -f day2_pageinspect_and_storage_lab.sql`, the SQL block below includes the `CREATE TABLE IF NOT EXISTS plan_lab` + `1,000,000`-row generator so you can paste and run it directly in `psql -d weather_ops`!
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 SOURCE SCRIPT: day2/day2_pageinspect_and_storage_lab.sql (Lab 4: Lines 249–332)
+-- 🗄️ TABLE CREATED & QUERIED: public.plan_lab (1,000,000 rows across 11,236 8KB pages)
+
+-- Step 0: Create and populate public.plan_lab (if you haven't already run day2_pageinspect_and_storage_lab.sql)
+DROP TABLE IF EXISTS plan_lab CASCADE;
+CREATE TABLE plan_lab (
+    recorded_at    TIMESTAMPTZ NOT NULL,
+    id             SERIAL PRIMARY KEY,
+    temperature    REAL,
+    pressure       REAL,
+    wind_speed     REAL,
+    rain_accum_1m  REAL,
+    wind_direction SMALLINT,
+    station_id     VARCHAR(10) NOT NULL,
+    payload        TEXT
+) WITH (fillfactor = 100);
+
+INSERT INTO plan_lab (
+    recorded_at, station_id, temperature, pressure,
+    wind_speed, wind_direction, rain_accum_1m, payload
+)
+SELECT
+    TIMESTAMPTZ '2026-01-01 00:00:00+00' + (g * INTERVAL '2 seconds'),
+    'AWS-' || LPAD((1 + (g % 50))::TEXT, 3, '0'),
+    ROUND((15.0 + (sin(g / 1000.0) * 10.0) + (random() * 2.0))::numeric, 2),
+    ROUND((1013.25 + (cos(g / 1000.0) * 5.0))::numeric, 2),
+    ROUND((random() * 15.0)::numeric, 2),
+    (random() * 359)::SMALLINT,
+    0.0,
+    repeat('A', 32)
+FROM generate_series(1, 1000000) AS g;
+
+ANALYZE plan_lab;
+
+-- Step 1 (Phase 4A): Demonstrate the Row-Store Analytical Scan I/O Amplification Penalty
 EXPLAIN (ANALYZE, BUFFERS, TIMING)
 SELECT 
     station_id, 
     ROUND(AVG(temperature)::numeric, 2) AS mean_temp
-FROM raw_telemetry
+FROM plan_lab
 WHERE temperature > -900.0
 GROUP BY station_id;
 ```
 
-```
-HashAggregate  (cost=42150.00..42155.00 rows=50 width=36) (actual time=242.312..242.325 rows=50 loops=1)
+```text
+Finalize GroupAggregate  (cost=18315.43..18329.39 rows=50 width=40) (actual time=112.418..112.463 rows=50 loops=1)
   Group Key: station_id
-  Buffers: shared hit=18520
-  ->  Seq Scan on raw_telemetry  (cost=0.00..32150.00 rows=1999980 width=8) (actual time=0.035..135.410 rows=2000000 loops=1)
-        Filter: (temperature > '-900'::numeric)
-        Buffers: shared hit=18520
-Planning Time: 0.125 ms
-Execution Time: 242.410 ms
+  Buffers: shared hit=11236
+  ->  Gather Merge  (cost=18315.43..18327.10 rows=100 width=40) (actual time=112.390..112.435 rows=150 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=11236
+        ->  Partial HashAggregate  (cost=17313.38..17314.00 rows=50 width=40) (actual time=106.740..106.752 rows=50 loops=3)
+              Group Key: station_id
+              Buffers: shared hit=11236
+              ->  Parallel Seq Scan on plan_lab  (cost=0.00..15427.67 rows=377142 width=12) (actual time=0.015..42.190 rows=333333 loops=3)
+                    Filter: (temperature > '-900'::double precision)
+                    Buffers: shared hit=11236
+Planning Time: 0.142 ms
+Execution Time: 112.540 ms
 ```
 
-#### The Mathematical Proof of Row-Store I/O Waste:
-1. **Total 8 KB Blocks Fetched:** $18,520\text{ blocks}$.
-2. **Total Data Transferred from Memory/Disk:**
-   $$18,520 \times 8\text{ KB} = 148,160\text{ KB} \approx \mathbf{144.69\text{ MB}}$$
-3. **Actual Mathematical Payload Needed to Answer the Query:**
-   The query only inspects two columns—`station_id` ($4\text{ bytes}$) and `temperature` ($4\text{ bytes}$)—across $2,000,000$ rows:
-   $$2,000,000 \times 8\text{ bytes} = 16,000,000\text{ bytes} \approx \mathbf{15.25\text{ MB}}$$
-4. **The Row-Store I/O Amplification Factor:**
-   $$\text{I/O Waste Factor} = \frac{144.69\text{ MB}}{15.25\text{ MB}} = \mathbf{9.48\times}$$
+#### The Mathematical Proof of Row-Store I/O Waste (`plan_lab` 1M Rows & 2M-Row Scale):
+1. **On `plan_lab` (`1,000,000` rows):**
+   - **Total 8 KB Blocks Fetched:** $11,236\text{ blocks} \times 8\text{ KB} = \mathbf{92.05\text{ MB}}$ (`87.78 MiB`).
+   - **Actual Payload Needed (`station_id` + `temperature`):** $\approx \mathbf{9.6\text{–}11.4\text{ MB}}$ $\implies$ **$\approx 9.5\times$ I/O amplification!**
+2. **At `2,000,000` Rows ($18,520$ blocks):**
+   - **Total Data Transferred from Memory/Disk:** $18,520 \times 8\text{ KB} = 148,160\text{ KB} \approx \mathbf{144.69\text{ MB}}$.
+   - **Actual Mathematical Payload Needed (`4B` ID + `4B` `temperature`):** $2,000,000 \times 8\text{ bytes} \approx \mathbf{15.25\text{ MB}}$.
+   - **The Row-Store I/O Amplification Factor:**
+     $$\text{I/O Waste Factor} = \frac{144.69\text{ MB}}{15.25\text{ MB}} = \mathbf{9.48\times}$$
 
 > **Architectural Synthesis:**  
-> To calculate the mean temperature across 2 million rows, PostgreSQL is forced to read **144.7 MB** of 8 KB heap blocks, even though the calculation mathematically requires only **15.25 MB** of numbers ($9.48\times$ I/O amplification!). Because PostgreSQL is a row-store engine, it cannot fetch only the `temperature` column; it must pull the entire 8 KB page containing timestamps, pressure, wind vectors, rainfall, and 23-byte MVCC headers for every row. On 500 million rows, that single scan pulls **36 GB** through the buffer pool!
+> Because PostgreSQL is a row-store engine, it cannot fetch only the `temperature` column from the heap; it must pull the entire 8 KB page containing timestamps, pressure, wind vectors, rainfall, payload, and 23-byte MVCC headers for every row. On 500 million rows, that single scan pulls **36 GB** through the buffer pool! *(See [day2_pageinspect_and_storage_lab_course_walkthrough.md](./day2_pageinspect_and_storage_lab_course_walkthrough.md) Phases 4B–4D for how a Composite Covering Index `ON plan_lab (station_id, recorded_at) INCLUDE (temperature)` + `VACUUM ANALYZE plan_lab` drops selective station range scans from `11,236` buffers down to **`3` buffers** with `Heap Fetches: 0`!)*
 
 ---
 

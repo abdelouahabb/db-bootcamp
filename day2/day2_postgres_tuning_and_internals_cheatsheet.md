@@ -6,6 +6,21 @@
 
 ---
 
+> [!CAUTION]
+> ### 🚨 STOP & READ FIRST — Day 2 PostgreSQL Database (`weather_ops`), Scripts, Schemas & Tables Map
+>
+> All Day 2 PostgreSQL commands run inside the **`weather_ops`** database (`psql -d weather_ops`). Day 2 uses **3 `.sql` scripts** in `day2/` across **4 schemas (`synoptic`, `nwp`, `alerts`, `public`)**:
+>
+> | SQL Script in `day2/` | How to Run It | Schemas & Tables Created Inside `weather_ops` |
+> | :--- | :--- | :--- |
+> | **1. [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql)** | `cd day2 && psql -d weather_ops -f weather_ops_pg.sql` | • **`synoptic.stations`** (`7` WMO stations + TOAST `raw_metadata`)<br/>• **`synoptic.observations`** (`18,432` hourly observations)<br/>• **`nwp.forecasts`** (`4,608` NWP forecast rows with `STORED` `valid_time`)<br/>• **`alerts.weather_alerts`** (`4` weather alerts) |
+> | **2. [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)** | `cd day2 && psql -d weather_ops -f day2_pageinspect_and_storage_lab.sql` | • **`public.telemetry_unaligned`** & **`public.telemetry_aligned`** (`80B` vs. `64B` Tuple Tetris)<br/>• **`public.layout_padded`** & **`public.layout_packed`** (`48B` vs. `40B` `pageinspect`)<br/>• **`public.mvcc_demo`** (`t_xmin`, `t_xmax`, `t_ctid` chain)<br/>• **`public.bloat_lab`** (`100k` rows — `pgstattuple` `VACUUM` vs. `VACUUM FULL`)<br/>• **`public.plan_lab`** (`1,000,000` rows — Row-Store Scan Penalty & `Index Only Scan`) |
+> | **3. [`day2/day2_two_terminal_acid_lab.sql`](./day2_two_terminal_acid_lab.sql)** | Open **Terminal A** & **Terminal B** side-by-side (`psql -d weather_ops`) and paste steps interactively | • **`public.station_calibration`** (`3` rows: `'AWS-001'`, `'AWS-002'`, `'AWS-003'`) |
+>
+> *💡 **Schema `search_path` Tip:** If `SELECT * FROM observations;` gives `ERROR: relation "observations" does not exist`, either qualify the schema (**`synoptic.observations`**) or run `ALTER DATABASE weather_ops SET search_path TO synoptic, nwp, alerts, public;` and reconnect (`\c weather_ops`).*
+
+---
+
 ## 1. Installing, Initializing & Hardening the Host OS
 
 ### 1.1 Installation Commands (Ubuntu/Debian, RHEL/Rocky, Docker)
@@ -306,6 +321,9 @@ EXPLAIN (ANALYZE, BUFFERS, SETTINGS, TIMING) <SQL_QUERY>;
 ### 8.2 Production Diagnostic Queries (Copy & Paste Ready)
 
 ```sql
+-- 📂 TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
+-- 📜 PREREQUISITE SCRIPT: day2/weather_ops_pg.sql
+
 -- 1. Check Database Buffer Cache Hit Ratio (Target: > 99.0%)
 SELECT
     datname,

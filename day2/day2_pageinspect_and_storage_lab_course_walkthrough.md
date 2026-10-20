@@ -6,6 +6,21 @@
 **Target Database Engine:** PostgreSQL 16+ (`weather_ops` database with `pageinspect` & `pgstattuple` extensions)  
 **Companion Coursebook:** [`day2_master_coursebook.md`](./day2_master_coursebook.md)
 
+> [!IMPORTANT]
+> **📂 Which Database, Script & Tables Does This Walkthrough Cover?**
+> - **How to Execute This Script:**
+>   ```bash
+>   cd day2
+>   psql -d weather_ops -f day2_pageinspect_and_storage_lab.sql
+>   ```
+>   *(Or from inside an open `psql -d weather_ops` session: `\i day2_pageinspect_and_storage_lab.sql`)*
+> - **7 Forensic Lab Tables Created in the `public` Schema of `weather_ops`:**
+>   - **Lab 1A (Lines 20–75):** `public.telemetry_unaligned` (`80B`/row) & `public.telemetry_aligned` (`64B`/row) — 16-byte Tuple Tetris savings (`10,000` rows each)
+>   - **Lab 1B (Lines 77–134):** `public.layout_padded` (`48B`/row) & `public.layout_packed` (`40B`/row) — `pageinspect` 8 KB block inspection (`10,000` rows each)
+>   - **Lab 2 (Lines 137–179):** `public.mvcc_demo` (`1` row updated) — `t_xmin`, `t_xmax`, `t_ctid` `(0,1) -> (0,2)` tuple chain
+>   - **Lab 3 (Lines 182–240):** `public.bloat_lab` (`100,000` rows) — `pgstattuple` dead-tuple measurement across `VACUUM` vs. `VACUUM FULL`
+>   - **Lab 4 (Lines 243–332):** `public.plan_lab` (`1,000,000` rows) — `EXPLAIN (ANALYZE, BUFFERS)` Row-Store Scan Penalty (`11,236` buffers) vs. Composite Covering Index `INCLUDE` (`3` buffers, `Heap Fetches: 0`)
+
 ---
 
 ## 1. Architectural Overview & Lab Progression

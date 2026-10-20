@@ -6,6 +6,22 @@
 **Target Database Engine:** PostgreSQL 16+ (`weather_ops` database)  
 **Companion Coursebook:** [`day2_master_coursebook.md`](./day2_master_coursebook.md)
 
+> [!IMPORTANT]
+> **📂 Which Database, Script, Schemas & Tables Does This Walkthrough Cover?**
+> - **How to Execute This Script:**
+>   ```bash
+>   cd day2
+>   createdb weather_ops 2>/dev/null || true
+>   psql -d weather_ops -f weather_ops_pg.sql
+>   ```
+>   *(Or from inside an open `psql -d weather_ops` session: `\i weather_ops_pg.sql`)*
+> - **Schemas & Tables Created by `weather_ops_pg.sql`:**
+>   - `synoptic.stations` (`7` WMO stations + TOAST `raw_metadata` on station `60390`)
+>   - `synoptic.observations` (`18,432` hourly observations)
+>   - `nwp.forecasts` (`4,608` NWP forecast rows across `ECMWF-HRES`, `GFS`, `AROME`)
+>   - `alerts.weather_alerts` (`4` operational severe weather alerts)
+> - **Schema `search_path` Reminder:** `SET search_path TO synoptic, nwp, alerts, public;` on Line 21 applies to the script session. When opening a new interactive `psql -d weather_ops` window, either write schema-qualified table names (`synoptic.observations`, `nwp.forecasts`) or persist the path once via `ALTER DATABASE weather_ops SET search_path TO synoptic, nwp, alerts, public;`.
+
 ---
 
 ## 1. Architectural Purpose & Multi-Schema Topology

@@ -6,6 +6,16 @@
 **Target Database Engine:** PostgreSQL 16+ (`weather_ops` database across 2 concurrent `psql` sessions)  
 **Companion Coursebook & Reference Card:** [`day2_master_coursebook.md`](./day2_master_coursebook.md) | [`09_acid_transactions_and_two_terminal_lock_debugging.md`](../reference_cards/09_acid_transactions_and_two_terminal_lock_debugging.md)
 
+> [!IMPORTANT]
+> **📂 How to Run This Script & Which Table It Uses (`public.station_calibration`)**
+> - **⚠️ Do NOT run `psql -d weather_ops -f day2_two_terminal_acid_lab.sql` as a single batch file!** Lock contention and deadlocks require **two separate database connections running concurrently**.
+> - **Step 1:** Open **two terminal windows** side-by-side (`Terminal A` and `Terminal B`) and connect both to `weather_ops`:
+>   ```bash
+>   psql -d weather_ops
+>   ```
+> - **Step 2:** Paste **Section 0 (Lines 22–41)** into **Terminal A** first to create and seed **`public.station_calibration`** (`3` rows: `'AWS-001'`, `'AWS-002'`, `'AWS-003'`).
+> - **Step 3:** Follow the `[TERMINAL A]` and `[TERMINAL B]` labels step-by-step across Labs 1–4.
+
 ---
 
 ## 1. Architectural Purpose & The Two-Terminal Method

@@ -17,7 +17,7 @@ The [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) script upgrad
 
 1. **Declarative Range Partitioning (`PARTITION BY RANGE (obs_time)`):** Splits the synoptic time-series stream into isolated monthly physical child tables (`synoptic.obs_y2026m06` through `synoptic.obs_y2026m10`) plus a fail-safe `DEFAULT` partition (`synoptic.obs_default`), while enriching every observation with binary `JSONB` IoT hardware diagnostics (`sensor_payload`).
 2. **Specialized Access Methods (5 Index Architectures):** Deploys and contrasts **BRIN** (Block Range Index), **B-Tree**, **Partial B-Tree** (`WHERE qc_flag != 'VALID'`), **Covering B-Tree** (`INCLUDE`), and **GIN** (Generalized Inverted Index on `JSONB`).
-3. **Pre-Aggregated NWP Model Verification (`MATERIALIZED VIEW` + `CONCURRENTLY`):** Caches daily Mean Bias and Mean Absolute Error (MAE) across NWP models (`AROME_DZ_2.5KM`, `ECMWF_IFS_9KM`, `GFS_NOAA_13KM`) and attaches a composite `UNIQUE INDEX` to unlock non-blocking concurrent refreshes.
+3. **Pre-Aggregated NWP Model Verification (`MATERIALIZED VIEW` + `CONCURRENTLY`):** Caches daily Mean Bias and Mean Absolute Error (MAE) across NWP models (`AROME`, `ECMWF-HRES`, `GFS`) and attaches a composite `UNIQUE INDEX` to unlock non-blocking concurrent refreshes.
 4. **Dynamic PostGIS Geodesic Upgrade (`GEOGRAPHY(Point, 4326)` + `GiST`):** Detects whether the PostGIS spatial extension is installed on the host and automatically upgrades `synoptic.stations` with WGS-84 spheroidal coordinates and an R-Tree-on-GiST spatial index.
 
 ```
@@ -68,7 +68,7 @@ SET search_path TO synoptic, nwp, alerts, public;
 
 ### 2.2 Line-by-Line Architectural Breakdown
 
-- **Header Comments (`Lines 1–6`):** Documents the prerequisite database state. The script expects the `weather_ops` database and its three operational schemas (`synoptic`, `nwp`, `alerts`) plus the base tables (`synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, `alerts.cap_bulletins`) created by [../day2/weather_ops_pg.sql](../day2/weather_ops_pg.sql).
+- **Header Comments (`Lines 1–6`):** Documents the prerequisite database state. The script expects the `weather_ops` database and its three operational schemas (`synoptic`, `nwp`, `alerts`) plus the base tables (`synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, `alerts.weather_alerts`) created by [../day2/weather_ops_pg.sql](../day2/weather_ops_pg.sql).
 - **`SET timezone = 'UTC';` (`Line 8`):**
   - **Meteorological Mandate:** World Meteorological Organization (WMO) synoptic reporting (`00Z`, `06Z`, `12Z`, `18Z`) and NWP initialization cycles operate strictly in Coordinated Universal Time (`UTC`).
   - **PostgreSQL Internals:** PostgreSQL always stores `TIMESTAMPTZ` (`timestamp with time zone`) on disk as a 64-bit integer (`8 bytes`) representing microseconds elapsed since `2000-01-01 00:00:00 UTC`. However, when evaluating partition boundary literals, rendering timestamps to the client, or executing `EXTRACT(HOUR FROM obs_time)` and `DATE_TRUNC('day', f.valid_time)`, PostgreSQL converts the internal UTC value into the active session `timezone`. Locking the session to `'UTC'` guarantees that partition boundaries (`00:00:00+00`), diurnal solar windows (`07:00` to `18:00 UTC`), and daily NWP aggregation buckets (`DATE_TRUNC('day', ...)`) never shift due to local Daylight Saving Time (DST) transitions or server OS timezone settings.
@@ -209,8 +209,8 @@ FROM synoptic.observations;
 #### 3.3.2 Line-by-Line Architectural Breakdown
 
 - **Bulk Tuple Routing (`INSERT INTO synoptic.observations_part ... SELECT ... FROM synoptic.observations`, `Lines 52–80`):**
-  - Reads all 4,320 historical synoptic rows from the monolithic Day 2 table `synoptic.observations` (spanning `2026-08-17` to `2026-10-15` across 8 Algerian stations) and streams them into the partitioned parent table `synoptic.observations_part`.
-  - During execution, PostgreSQL inspects `obs_time` on each row and routes August rows into `synoptic.obs_y2026m08`, September rows into `synoptic.obs_y2026m09`, and October rows into `synoptic.obs_y2026m10`.
+  - Reads all **18,432** historical synoptic rows from the monolithic Day 2 table `synoptic.observations` (spanning `2026-06-01` to `2026-10-06` across the 6 active Algerian stations) and streams them into the partitioned parent table `synoptic.observations_part`.
+  - During execution, PostgreSQL inspects `obs_time` on each row and routes June rows (`4,320`) into `synoptic.obs_y2026m06`, July rows (`4,464`) into `synoptic.obs_y2026m07`, August rows (`4,464`) into `synoptic.obs_y2026m08`, September rows (`4,320`) into `synoptic.obs_y2026m09`, and October rows (`864`) into `synoptic.obs_y2026m10`.
 - **Synthesizing Binary `JSONB` Hardware Payloads (`Lines 66–79`):**
   - **`jsonb_build_object(key1, val1, key2, val2, ...)` (`Line 66`):** Variadic PostgreSQL function that constructs a binary `JSONB` object directly in memory from alternating key/value arguments, preserving native data types (numeric, boolean, array, nested object) without string concatenation or text-parsing overhead.
   - **`'battery_v', ROUND((12.1 + RANDOM() * 1.4)::NUMERIC, 2)` (`Line 67`):** Simulates a 12V lead-acid / LiFePO4 solar-charged station battery voltage fluctuating between $12.10\text{ V}$ and $13.50\text{ V}$ with 2 decimal places. Because `RANDOM()` returns a `DOUBLE PRECISION` in $[0.0, 1.0)$, the expression is cast via `::NUMERIC` before calling `ROUND(val, 2)`.
@@ -281,10 +281,10 @@ ON synoptic.observations_part USING GIN (sensor_payload);
 
 | # | Index Name | Target Table | Access Method & Clause | What is Stored on Disk | Primary Meteorological Use Case | Relative Storage Footprint |
 | :- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | `idx_obs_brin_time` | `synoptic.observations` | `USING BRIN (obs_time) WITH (pages_per_range = 8)` | Only `[min(obs_time), max(obs_time)]` summary pair per 8 contiguous 8 KB heap pages (`64 KB` block range) | Chronological time-window scans on append-only telemetry | **Ultra-Tiny** ($\approx 24\text{ KB}$, ~95–99.9% smaller than B-Tree) |
-| **2** | `idx_obs_btree_time` | `synoptic.observations` | `USING BTREE (obs_time)` | Doubly-linked tree of 8 KB pages storing `(obs_time, ctid)` for **every single row** in the table | Baseline size comparison vs. BRIN; exact timestamp point lookups and `ORDER BY obs_time` | **Baseline Full Size** ($\approx 112\text{ KB}$ on 4.3k rows; ~28 MB per 1.27M rows) |
-| **3** | `idx_obs_suspect_only` | `synoptic.observations` | `USING BTREE (station_id, obs_time) WHERE qc_flag != 'VALID'` | B-Tree entries **only** for rows satisfying `qc_flag != 'VALID'` (`'SUSPECT'` or `'ERRONEOUS'`), skipping the 96% `'VALID'` majority | Quality Control (QC) dashboards auditing anomalous sensor readings | **Tiny** ($\approx 16\text{ KB}$, ~90%+ smaller than full composite B-Tree) |
-| **4** | `idx_obs_station_time_covering` | `synoptic.observations` | `USING BTREE (station_id, obs_time) INCLUDE (temp_c, pressure_hpa, precip_1h_mm)` | Search keys `(station_id, obs_time)` in internal + leaf nodes; non-key payload `(temp_c, pressure_hpa, precip_1h_mm)` appended to **leaf nodes only** | High-frequency API/meteogram queries fetching station time series via `Index Only Scan` (`Heap Fetches: 0`) | **Medium-Large** ($\approx 240\text{ KB}$, trades index disk space for zero random heap I/O) |
+| **1** | `idx_obs_brin_time` | `synoptic.observations` | `USING BRIN (obs_time) WITH (pages_per_range = 8)` | Only `[min(obs_time), max(obs_time)]` summary pair per 8 contiguous 8 KB heap pages (`64 KB` block range) | Chronological time-window scans on append-only telemetry | **Ultra-Tiny** (`24 kB`, ~89–99.9% smaller than B-Tree) |
+| **2** | `idx_obs_btree_time` | `synoptic.observations` | `USING BTREE (obs_time)` | Doubly-linked tree of 8 KB pages storing `(obs_time, ctid)` for **every single row** in the table | Baseline size comparison vs. BRIN; exact timestamp point lookups and `ORDER BY obs_time` | **Baseline Full Size** (`224 kB` on 18,432 rows; `27 MB` per 1.27M rows) |
+| **3** | `idx_obs_suspect_only` | `synoptic.observations` | `USING BTREE (station_id, obs_time) WHERE qc_flag != 'VALID'` | B-Tree entries **only** for rows satisfying `qc_flag != 'VALID'` (`'SUSPECT'` or `'ERRONEOUS'`), skipping the 96% `'VALID'` majority | Quality Control (QC) dashboards auditing anomalous sensor readings | **Tiny** (`40 kB`, ~93% smaller than full composite B-Tree `624 kB`) |
+| **4** | `idx_obs_station_time_covering` | `synoptic.observations` | `USING BTREE (station_id, obs_time) INCLUDE (temp_c, pressure_hpa, precip_1h_mm)` | Search keys `(station_id, obs_time)` in internal + leaf nodes; non-key payload `(temp_c, pressure_hpa, precip_1h_mm)` appended to **leaf nodes only** | High-frequency API/meteogram queries fetching station time series via `Index Only Scan` (`Heap Fetches: 0`) | **Medium-Large** (`1040 kB`, trades index disk space for zero random heap I/O) |
 | **5** | `idx_obs_part_sensor_gin` | `synoptic.observations_part` | `USING GIN (sensor_payload)` (propagates to all 6 child partitions) | Inverted B-Tree of extracted `JSONB` keys/paths/values mapped to sorted posting lists/trees of tuple `ctid`s | NoSQL-style `@>` containment queries on nested IoT diagnostics (`door_open: true`, `firmware: "v4.2.1"`) | **Large** (multi-entry per row, partitioned monthly to stay in RAM) |
 
 ---
@@ -321,7 +321,7 @@ ON synoptic.observations USING BTREE (obs_time);
 - **Why It Is Created on the Same Column:**
   - `idx_obs_btree_time` indexes the exact same `obs_time` column on `synoptic.observations` using PostgreSQL's default Lehman-Yao high-concurrency B-Tree (`USING BTREE`).
   - Creating both `idx_obs_brin_time` and `idx_obs_btree_time` side-by-side on the same table enables direct catalog inspection via `pg_relation_size('synoptic.idx_obs_btree_time')` vs. `pg_relation_size('synoptic.idx_obs_brin_time')`.
-  - Even on 4,320 rows, the B-Tree consumes `112 KB` while the BRIN consumes only `24 KB` (the minimum 3-page BRIN metadata header + revmap + summary page). At 1.27 million rows (benchmarked in [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql)), the B-Tree swells to `~28 MB` while the BRIN remains `24–48 KB` (**99.9% reduction**).
+  - Even on 18,432 rows, the B-Tree consumes `224 kB` (`229,376 bytes`) while the BRIN consumes only `24 kB` (`24,576 bytes` — the minimum 3-page BRIN metadata header + revmap + summary page). At 1.27 million rows (benchmarked in [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql)), the B-Tree swells to `27 MB` (`28,672,000 bytes`) while the BRIN remains `24 kB` (**99.914% reduction**).
 
 ---
 
@@ -337,7 +337,7 @@ WHERE qc_flag != 'VALID';
   - In operational synoptic meteorology, **$\approx 96\%$ of incoming observations pass automated WMO Quality Control (`qc_flag = 'VALID'`)**, while only **$\approx 4\%$ are flagged as anomalous (`'SUSPECT'` or `'ERRONEOUS'`)**.
   - If we built a standard index on `(qc_flag, station_id, obs_time)`, 96% of the index pages, RAM cache footprint, and WAL write overhead would be wasted indexing `'VALID'` rows that QC engineers never query by flag.
   - Adding the `WHERE qc_flag != 'VALID'` predicate instructs PostgreSQL to evaluate the filter during `INSERT`/`UPDATE`. If a row has `qc_flag = 'VALID'`, **no index tuple is inserted into `idx_obs_suspect_only` at all**.
-  - Whenever an analyst runs a query whose `WHERE` clause mathematically implies `qc_flag != 'VALID'` (for example, `WHERE qc_flag != 'VALID'` or `WHERE qc_flag IN ('SUSPECT', 'ERRONEOUS')`), the PostgreSQL planner automatically selects `idx_obs_suspect_only`, scanning a tiny `16 KB` B-Tree containing only the anomalous 4% of rows.
+  - Whenever an analyst runs a query whose `WHERE` clause mathematically implies `qc_flag != 'VALID'` (for example, `WHERE qc_flag != 'VALID'` or `WHERE qc_flag IN ('SUSPECT', 'ERRONEOUS')`), the PostgreSQL planner automatically selects `idx_obs_suspect_only`, scanning a tiny `40 kB` B-Tree (compared to `624 kB` for the full `(station_id, obs_time)` B-Tree) containing only the anomalous 4% of rows.
 
 ---
 
@@ -649,7 +649,7 @@ VACUUM
 You can immediately verify the physical sizes and row distributions created by `day3_weather_advanced_pg.sql` with the following diagnostic queries:
 
 ```sql
--- 1. Verify Partitioned Child Table Row Distribution (August, September, October 2026)
+-- 1. Verify Partitioned Child Table Row Distribution (June through October 2026)
 SELECT
     tableoid::regclass AS child_partition,
     COUNT(*)           AS row_count,
@@ -657,7 +657,7 @@ SELECT
     MAX(obs_time)      AS last_obs
 FROM synoptic.observations_part
 GROUP BY tableoid
-ORDER BY child_partition::text;
+ORDER BY tableoid::regclass::text;
 
 -- 2. Compare On-Disk Sizes of the 4 Indexes on synoptic.observations
 SELECT

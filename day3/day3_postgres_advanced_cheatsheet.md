@@ -156,7 +156,7 @@ FROM synoptic.observations;
 
 ## 5. Idempotent Ingestion (`UPSERT`) & Materialized Views
 
-### Safe Synoptic `UPSERT` (Handles Duplicate or `COR` Corrected Transmissions Without Bloat)
+### 5.1 Safe Synoptic `UPSERT` (Handles Duplicate or `COR` Corrected Transmissions Without Bloat)
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
 INSERT INTO synoptic.observations (station_id, obs_time, temp_c, pressure_hpa, precip_1h_mm, qc_flag)
@@ -175,7 +175,7 @@ WHERE (
 RETURNING obs_id, (xmax = 0) AS was_inserted;
 ```
 
-### Non-Blocking Dashboard Refresh (`MATERIALIZED VIEW CONCURRENTLY`)
+### 5.2 Non-Blocking Dashboard Refresh (`MATERIALIZED VIEW CONCURRENTLY`)
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (Switch in psql with: \c weather_ops)
 -- Requires a UNIQUE INDEX on the Materialized View:
@@ -201,7 +201,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 
 ---
 
-## 6.1 Streaming Replication, Split-Brain Fencing & `synchronous_commit` Matrix (Black Box 3C)
+## 7. Streaming Replication, Split-Brain Fencing & `synchronous_commit` Matrix (Black Box 3C)
 
 * **Why PostgreSQL Needs `Patroni` + 3-Node `etcd` + `HAProxy`:** PostgreSQL has no built-in Raft election loop. If a Standby promoted itself on a 2-node network glitch, **both nodes would accept writes (`Split-Brain`)**, corrupting WAL timelines. `Patroni` uses a **10s TTL Leader Lock in 3-node `etcd`** + `/dev/watchdog` hardware fencing so an isolated Primary demotes itself *before* the Standby runs `pg_promote()`, while `HAProxy` polls `:8008/primary` to reroute port `5000`.
 * **The 4-Pattern `synchronous_commit` Durability & Failover Decision Matrix:**
@@ -215,7 +215,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 
 ---
 
-## 7. Executive Summary Card: Day 3 Production Directives
+## 8. Executive Summary Card: Day 3 Production Directives
 
 ```
 ================================================================================

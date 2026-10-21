@@ -56,18 +56,18 @@ CREATE EXTENSION IF NOT EXISTS pageinspect;
 CREATE EXTENSION IF NOT EXISTS pgstattuple;
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.1.1 Deep-Dive Architectural Explanation
 
-1. **`\pset pager off` (Line 7):**
-   - Instructs the `psql` client not to pipe query results through an external terminal pager (`less` or `more`). When executing a multi-lab script (`-f day2_pageinspect_and_storage_lab.sql`), disabling the pager guarantees uninterrupted streaming of all forensic tables and `EXPLAIN` trees to standard output.
-2. **`\timing on` (Line 8):**
-   - Enables client-side wall-clock execution timing (`Time: X.XXX ms`) after every SQL statement, allowing direct measurement of `INSERT`, `VACUUM`, `VACUUM FULL`, and `EXPLAIN ANALYZE` latency.
-3. **`SET timezone = 'UTC';` (Line 9):**
-   - Anchors session timestamp rendering and interval arithmetic to Coordinated Universal Time (Zulu time).
-4. **`CREATE EXTENSION IF NOT EXISTS pageinspect;` (Line 12):**
-   - Loads the official `contrib/pageinspect` C shared library (`pageinspect.so`) into the database catalog. `pageinspect` exposes low-level superuser functions (`get_raw_page()`, `page_header()`, `heap_page_items()`, `bt_page_items()`) that read raw 8,192-byte relation blocks from PostgreSQL's shared buffer pool and cast them directly into C structs (`PageHeaderData`, `ItemIdData`, `HeapTupleHeaderData`).
-5. **`CREATE EXTENSION IF NOT EXISTS pgstattuple;` (Line 13):**
-   - Loads the official `contrib/pgstattuple` C shared library (`pgstattuple.so`), which scans every 8 KB block of a relation and returns exact byte-level counts of live tuples, dead tuples (`dead_tuple_count`, `dead_tuple_percent`), and reusable unallocated space (`free_space`, `free_percent`).
+##### 2.1.1.1 `\pset pager off` (Line 7)
+- Instructs the `psql` client not to pipe query results through an external terminal pager (`less` or `more`). When executing a multi-lab script (`-f day2_pageinspect_and_storage_lab.sql`), disabling the pager guarantees uninterrupted streaming of all forensic tables and `EXPLAIN` trees to standard output.
+##### 2.1.1.2 `\timing on` (Line 8)
+- Enables client-side wall-clock execution timing (`Time: X.XXX ms`) after every SQL statement, allowing direct measurement of `INSERT`, `VACUUM`, `VACUUM FULL`, and `EXPLAIN ANALYZE` latency.
+##### 2.1.1.3 `SET timezone = 'UTC';` (Line 9)
+- Anchors session timestamp rendering and interval arithmetic to Coordinated Universal Time (Zulu time).
+##### 2.1.1.4 `CREATE EXTENSION IF NOT EXISTS pageinspect;` (Line 12)
+- Loads the official `contrib/pageinspect` C shared library (`pageinspect.so`) into the database catalog. `pageinspect` exposes low-level superuser functions (`get_raw_page()`, `page_header()`, `heap_page_items()`, `bt_page_items()`) that read raw 8,192-byte relation blocks from PostgreSQL's shared buffer pool and cast them directly into C structs (`PageHeaderData`, `ItemIdData`, `HeapTupleHeaderData`).
+##### 2.1.1.5 `CREATE EXTENSION IF NOT EXISTS pgstattuple;` (Line 13)
+- Loads the official `contrib/pgstattuple` C shared library (`pgstattuple.so`), which scans every 8 KB block of a relation and returns exact byte-level counts of live tuples, dead tuples (`dead_tuple_count`, `dead_tuple_percent`), and reusable unallocated space (`free_space`, `free_percent`).
 
 ---
 
@@ -137,7 +137,7 @@ UNION ALL
 );
 ```
 
-#### Deep-Dive Architectural Explanation: How PostgreSQL CPU Alignment (`typalign`) Works
+#### 2.2.1 Deep-Dive Architectural Explanation: How PostgreSQL CPU Alignment (`typalign`) Works
 
 Modern 64-bit CPUs (`x86_64` and `ARM64`) fetch primitives from memory in aligned words. A CPU cannot cleanly read an 8-byte `DOUBLE PRECISION` or `TIMESTAMPTZ` across an unaligned byte address (such as byte offset `1` or `18`) without suffering split-cache-line cycles or alignment faults. Therefore, every PostgreSQL data type in `pg_type` declares an alignment boundary (`typalign`):
 - **`'d'` (`double` / `MAXALIGN` = 8 bytes):** `BIGINT`, `BIGSERIAL`, `DOUBLE PRECISION`, `TIMESTAMPTZ`, `TIMESTAMP`. Must start at a byte offset divisible by **8** (`0, 8, 16, 24, 32, 40, ...`).
@@ -147,7 +147,7 @@ Modern 64-bit CPUs (`x86_64` and `ARM64`) fetch primitives from memory in aligne
 
 Furthermore, every physical heap tuple begins with a **23-byte `HeapTupleHeaderData` struct** (`t_xmin`, `t_xmax`, `t_cid`, `t_ctid`, `t_infomask2`, `t_infomask`, `t_hoff`). When no `NULL` bitmap is needed, PostgreSQL adds **1 byte of header padding** so that user column data starts at **`t_hoff = 24`** (which is divisible by 8).
 
-#### Complete Offset-by-Offset Byte Map Comparison (`telemetry_unaligned` vs. `telemetry_aligned`)
+#### 2.2.2 Complete Offset-by-Offset Byte Map Comparison (`telemetry_unaligned` vs. `telemetry_aligned`)
 
 Notice that both tables contain the **exact same 8 columns** (`36 bytes` of actual meteorological information). Yet their physical footprint differs by **16 bytes per row** (`80 bytes` vs. `64 bytes`):
 
@@ -164,13 +164,13 @@ Notice that both tables contain the **exact same 8 columns** (`36 bytes` of actu
 | **Col 8** | `temperature REAL` (`4B`) | `52..55` | `76..79` | **4 B** (`4B + 0B`) | `sensor_fault BOOLEAN` (`1B`) + *`4B tail`* | `35..39` | `59..63` | **5 B** (`1B + 4B`) |
 | **TOTAL** | **`20 Bytes` Internal Padding Wasted** | **`56 B`** | **`0..79`** | **`80 Bytes / Row`** | **`0 Bytes` Internal Padding (`4B` tail)** | **`40 B`** | **`0..63`** | **`64 Bytes / Row`** |
 
-#### Why `pg_column_size(t.*)` and `pg_relation_size()` Prove the Savings
+#### 2.2.3 Why `pg_column_size(t.*)` and `pg_relation_size()` Prove the Savings
 
 - **`pg_column_size(t.*)`:** Returns the exact number of bytes required to store the composite tuple `t.*` (including the 24-byte aligned `HeapTupleHeaderData` and internal alignment padding).
 - **`pg_relation_size('table_name')`:** Returns the physical disk footprint in bytes of the main data fork (`main`) of the table, which `pg_size_pretty()` formats into human-readable `kB` / `MB`.
 - Across $10,000$ rows, `telemetry_unaligned` consumes **`896 kB`** (`112` 8 KB pages), whereas `telemetry_aligned` consumes **`736 kB`** (`92` 8 KB pages) — an immediate **$18\%$ reduction in disk and RAM cache footprint** without changing a single data type! Across $1\text{ billion}$ synoptic rows, ordering columns `8B -> 4B -> 2B -> 1B` saves **$16\text{ GB}$ of NVMe storage and `shared_buffers` RAM**.
 
-#### Expected Terminal Output (Lines 59–75)
+#### 2.2.4 Expected Terminal Output (Lines 59–75)
 
 ```text
     table_design     | row_bytes_pg_column_size | table_heap_size 
@@ -245,7 +245,7 @@ FROM heap_page_items(get_raw_page('layout_packed', 0))
 LIMIT 3;
 ```
 
-#### Offset-by-Offset Byte Map: `layout_padded` (`lp_len = 56` / `24B` Payload + `8B` Pad) vs. `layout_packed` (`lp_len = 42` / `48B` Slot)
+#### 2.3.1 Offset-by-Offset Byte Map: `layout_padded` (`lp_len = 56` / `24B` Payload + `8B` Pad) vs. `layout_packed` (`lp_len = 42` / `48B` Slot)
 
  Let's trace the exact byte offsets inside `layout_padded` vs. `layout_packed` starting from byte 0 of the tuple:
 
@@ -258,11 +258,11 @@ LIMIT 3;
 | **Bytes `40..47` (8B)** | `flag_b` (`1B` at offset `40`) + **`7 Bytes Wasted Padding` (`41..47`)** | `flag_a` (`1B` at `40`) + `flag_b` (`1B` at `41`) $\rightarrow$ `lp_len = 42` (`+6B` page-slot alignment to `48`) |
 | **Bytes `48..55` (8B)** | `reading_val DOUBLE PRECISION` (**`8 Bytes Data`** at `48..55`) $\rightarrow$ `lp_len = 56` | *(Already complete! Saved 1 full 8-byte CPU word per tuple!)* |
 
-#### Deep-Dive Explanation of `get_raw_page()`, `page_header()`, and `heap_page_items()`
+#### 2.3.2 Deep-Dive Explanation of `get_raw_page()`, `page_header()`, and `heap_page_items()`
 
-1. **`get_raw_page(relname text, blkno int)`:**
-   - Reads the specified 0-indexed 8,192-byte block (`blkno = 0` is the very first 8 KB page of the relation) from shared buffers into a raw `bytea` binary array.
-2. **Every Column of `page_header(bytea)` (The 24-Byte `PageHeaderData` Struct at Bytes `0..23` of the 8 KB Page):**
+##### 2.3.2.1 `get_raw_page(relname text, blkno int)`
+- Reads the specified 0-indexed 8,192-byte block (`blkno = 0` is the very first 8 KB page of the relation) from shared buffers into a raw `bytea` binary array.
+##### 2.3.2.2 Every Column of `page_header(bytea)` (The 24-Byte `PageHeaderData` Struct at Bytes `0..23` of the 8 KB Page)
 
 | Column | C Struct Field (`PageHeaderData`) | Size | Architectural Meaning |
 | :--- | :--- | :--- | :--- |
@@ -274,7 +274,7 @@ LIMIT 3;
 | `special` | `pd_special` | 2 Bytes | Byte offset of the special space at the tail end of the page. For standard heap tables, `special = 8192` (0 bytes of special space); for B-Tree index pages, `special` points to `BTPageOpaqueData` sibling pointers. |
 | `pagesize` | `pd_pagesize_version` | 2 Bytes | Physical block size in bytes (`8192`). |
 
-3. **Every Column of `heap_page_items(bytea)` (Line Pointers + Tuple Headers):**
+##### 2.3.2.3 Every Column of `heap_page_items(bytea)` (Line Pointers + Tuple Headers)
 
 | Column | C Struct Source | Architectural Meaning |
 | :--- | :--- | :--- |
@@ -285,7 +285,7 @@ LIMIT 3;
 | `t_xmin` | `HeapTupleFields.t_xmin` (4B) | 32-bit Transaction ID (`xid`) of the `INSERT` (or `UPDATE`) transaction that created this tuple version. |
 | `t_ctid` | `HeapTupleHeaderData.t_ctid` (6B) | 6-byte physical pointer (`4B block + 2B offset`) pointing to this tuple itself if it is the newest version, or pointing to the next newer version `(block, lp)` if it has been updated. |
 
-#### Expected Terminal Output (Lines 102–134)
+#### 2.3.3 Expected Terminal Output (Lines 102–134)
 
 ```text
     lsn     | checksum | flags | free_space_start_byte | free_space_end_byte | special | pagesize 
@@ -359,7 +359,7 @@ SELECT
 FROM heap_page_items(get_raw_page('mvcc_demo', 0));
 ```
 
-#### Deep-Dive Architectural Explanation: How PostgreSQL Executes an `UPDATE` on Disk
+#### 2.4.1 Deep-Dive Architectural Explanation: How PostgreSQL Executes an `UPDATE` on Disk
 
 Unlike MySQL/InnoDB (which overwrites non-indexed columns in place inside a clustered B+Tree leaf and pushes the old version to a separate rollback undo log), **PostgreSQL never overwrites a live tuple in place on the heap page**. Every `UPDATE` is physically executed as an atomic **mark-old-tuple-expired + append-new-tuple** operation:
 
@@ -375,27 +375,27 @@ flowchart LR
     end
 ```
 
-1. **State 1 — Immediately After `INSERT INTO mvcc_demo VALUES (1, 19.5)` (Lines 148–160):**
-   - `lp = 1`, `lp_off = 8160`, `bytes = 32` (`24B` header + `4B` `id` + `4B` `reading` = `32B`).
-   - `t_xmin = 748`: Stamped with the XID of the inserting transaction.
-   - `t_xmax = 0`: Zero means no transaction has deleted or superseded this tuple version; it is the current live version.
-   - `t_ctid = (0,1)`: Points to itself `(Block 0, Item 1)`, indicating it is the tail of the version chain.
-   - `t_infomask = 2048` (`0x0800 = HEAP_XMAX_INVALID`): Bitmask confirming `t_xmax` is invalid (`0`) and the tuple is live (becomes `2304` = `0x0800 | 0x0100 HEAP_XMIN_COMMITTED` once the reader sets the commit hint bit).
-2. **State 2 — Immediately After `UPDATE mvcc_demo SET reading = 23.8 WHERE id = 1` (Lines 163–178):**
-   - **What Happens to Tuple 1 (`lp = 1` at `lp_off = 8160`):**
-     - `t_xmin` remains `748`.
-     - `t_xmax` is stamped with **`749`** (the XID of the `UPDATE` transaction), marking Tuple 1 as expired for any transaction snapshot taken after XID `749` commits.
-     - `t_ctid` is rewritten from `(0,1)` to **`(0,2)`** — creating a forward version pointer to the newly appended tuple!
-     - `t_infomask2 = 16386` (`0x4002`): Bit `0x4000` (`HEAP_HOT_UPDATED`) is set in the upper bits, and the lower 11 bits store the column count (`natts = 2`).
-   - **What Happens to Tuple 2 (`lp = 2` at `lp_off = 8128`):**
-     - Allocated at `8160 - 32 = 8128` (`lp = 2`).
-     - `t_xmin = 749` (created by Transaction `749`), `t_xmax = 0` (live), and `t_ctid = (0,2)` (points to itself as the newest version).
-     - `t_infomask2 = 32770` (`0x8002`): Bit `0x8000` (`HEAP_ONLY_TUPLE`) is set!
-3. **Why `HEAP_HOT_UPDATED` / `HEAP_ONLY_TUPLE` (HOT Update) Fired Here:**
-   - Because `mvcc_demo` only has an index on `id` (`mvcc_demo_pkey`) and the `UPDATE` modified **`reading`** (an unindexed column) while the new tuple fit on the **exact same 8 KB page (Block 0)**, PostgreSQL executed a **Heap-Only Tuple (HOT) optimization**.
-   - Instead of inserting a second duplicate index entry for `id = 1` into `mvcc_demo_pkey`, the B-Tree index keeps pointing solely to `(0,1)`. When an index scan looks up `id = 1` at `(0,1)`, it sees `HEAP_HOT_UPDATED` and follows the in-page `t_ctid -> (0,2)` chain in RAM—completely eliminating B-Tree index write amplification!
+##### 2.4.1.1 State 1 — Immediately After `INSERT INTO mvcc_demo VALUES (1, 19.5)` (Lines 148–160)
+- `lp = 1`, `lp_off = 8160`, `bytes = 32` (`24B` header + `4B` `id` + `4B` `reading` = `32B`).
+- `t_xmin = 748`: Stamped with the XID of the inserting transaction.
+- `t_xmax = 0`: Zero means no transaction has deleted or superseded this tuple version; it is the current live version.
+- `t_ctid = (0,1)`: Points to itself `(Block 0, Item 1)`, indicating it is the tail of the version chain.
+- `t_infomask = 2048` (`0x0800 = HEAP_XMAX_INVALID`): Bitmask confirming `t_xmax` is invalid (`0`) and the tuple is live (becomes `2304` = `0x0800 | 0x0100 HEAP_XMIN_COMMITTED` once the reader sets the commit hint bit).
+##### 2.4.1.2 State 2 — Immediately After `UPDATE mvcc_demo SET reading = 23.8 WHERE id = 1` (Lines 163–178)
+- **What Happens to Tuple 1 (`lp = 1` at `lp_off = 8160`):**
+  - `t_xmin` remains `748`.
+  - `t_xmax` is stamped with **`749`** (the XID of the `UPDATE` transaction), marking Tuple 1 as expired for any transaction snapshot taken after XID `749` commits.
+  - `t_ctid` is rewritten from `(0,1)` to **`(0,2)`** — creating a forward version pointer to the newly appended tuple!
+  - `t_infomask2 = 16386` (`0x4002`): Bit `0x4000` (`HEAP_HOT_UPDATED`) is set in the upper bits, and the lower 11 bits store the column count (`natts = 2`).
+- **What Happens to Tuple 2 (`lp = 2` at `lp_off = 8128`):**
+  - Allocated at `8160 - 32 = 8128` (`lp = 2`).
+  - `t_xmin = 749` (created by Transaction `749`), `t_xmax = 0` (live), and `t_ctid = (0,2)` (points to itself as the newest version).
+  - `t_infomask2 = 32770` (`0x8002`): Bit `0x8000` (`HEAP_ONLY_TUPLE`) is set!
+##### 2.4.1.3 Why `HEAP_HOT_UPDATED` / `HEAP_ONLY_TUPLE` (HOT Update) Fired Here
+- Because `mvcc_demo` only has an index on `id` (`mvcc_demo_pkey`) and the `UPDATE` modified **`reading`** (an unindexed column) while the new tuple fit on the **exact same 8 KB page (Block 0)**, PostgreSQL executed a **Heap-Only Tuple (HOT) optimization**.
+- Instead of inserting a second duplicate index entry for `id = 1` into `mvcc_demo_pkey`, the B-Tree index keeps pointing solely to `(0,1)`. When an index scan looks up `id = 1` at `(0,1)`, it sees `HEAP_HOT_UPDATED` and follows the in-page `t_ctid -> (0,2)` chain in RAM—completely eliminating B-Tree index write amplification!
 
-#### Expected Terminal Output (Lines 151–178)
+#### 2.4.2 Expected Terminal Output (Lines 151–178)
 
 ```text
  lp | lp_off | lp_flags | bytes | t_xmin | t_xmax | t_ctid | t_infomask 
@@ -477,15 +477,15 @@ SELECT
 FROM pgstattuple('bloat_lab');
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.5.1 Deep-Dive Architectural Explanation
 
-1. **Initial Bulk Load & Filepath (`Lines 196–205`):**
-   - Inserts $100,000$ rows where each row carries a 128-byte `padding` string (`repeat('X', 128)`), occupying **`21 MB`** total (`~19 MB` heap + `~2.1 MB` primary-key B-Tree index).
-   - `pg_relation_filepath('bloat_lab')` queries `pg_class.relfilenode` and returns the relative path under `$PGDATA` (e.g., `base/16384/24612`).
-2. **Generating $80,000$ Dead Tuples (`UPDATE bloat_lab SET reading = reading + 1.0 WHERE id > 20000;`):**
-   - Because PostgreSQL updates out-of-place, updating $80,000$ rows marks $80,000$ existing tuples as dead (`t_xmax` stamped) and allocates $80,000$ brand-new tuples at the end of the heap file.
-   - The physical table nearly doubles in size from `21 MB` to **`38 MB`** (`table_len = 34,373,632 bytes` for the heap alone).
-3. **Deconstructing Every Column of `pgstattuple('bloat_lab')` (Lines 211–217):**
+##### 2.5.1.1 Initial Bulk Load & Filepath (`Lines 196–205`)
+- Inserts $100,000$ rows where each row carries a 128-byte `padding` string (`repeat('X', 128)`), occupying **`21 MB`** total (`~19 MB` heap + `~2.1 MB` primary-key B-Tree index).
+- `pg_relation_filepath('bloat_lab')` queries `pg_class.relfilenode` and returns the relative path under `$PGDATA` (e.g., `base/16384/24612`).
+##### 2.5.1.2 Generating $80,000$ Dead Tuples (`UPDATE bloat_lab SET reading = reading + 1.0 WHERE id > 20000;`)
+- Because PostgreSQL updates out-of-place, updating $80,000$ rows marks $80,000$ existing tuples as dead (`t_xmax` stamped) and allocates $80,000$ brand-new tuples at the end of the heap file.
+- The physical table nearly doubles in size from `21 MB` to **`38 MB`** (`table_len = 34,373,632 bytes` for the heap alone).
+##### 2.5.1.3 Deconstructing Every Column of `pgstattuple('bloat_lab')` (Lines 211–217)
 
 | Column | Meaning & Measured Value Before `VACUUM` |
 | :--- | :--- |
@@ -495,16 +495,16 @@ FROM pgstattuple('bloat_lab');
 | `dead_tuple_percent` (`dead_pct`) | Percentage of total heap bytes occupied by dead tuples (**`41.43%`**). |
 | `free_percent` (`free_pct`) | Percentage of total heap bytes currently unallocated and available for new writes (**`2.61%`**). |
 
-4. **Standard Concurrent `VACUUM bloat_lab;` (Lines 220–228):**
-   - Acquires only a `ShareUpdateExclusiveLock`—meaning **concurrent `SELECT`, `INSERT`, `UPDATE`, and `DELETE` queries continue running without interruption**.
-   - Scans pages containing dead tuples, removes dead index pointers from `bloat_lab_pkey`, defragments each 8 KB page internally, resets `dead_tuple_count` from `80,000` to **`0`**, and transfers that `41.43%` space directly into `free_percent` (**`44.31%`**), recording the available space per block inside the **Free Space Map (`_fsm`)** fork (`base/16384/24612_fsm`).
-   - **Why `disk_size_unchanged` Remains `38 MB` and `filepath_unchanged` Remains `base/16384/24612`:** Standard `VACUUM` can only truncate empty 8 KB pages back to the OS if they reside at the **very tail end** of the file and carry zero live rows. Because our `UPDATE ... WHERE id > 20000` appended the $80,000$ new live tuples at the end of the file while leaving the first $20,000$ live tuples at the beginning of the file, the freed space sits in the middle of the file. PostgreSQL keeps the `38 MB` OS file allocated so that future `INSERT` and `UPDATE` operations immediately reuse the `44.31%` internal free space via the `_fsm` without asking the Linux kernel filesystem for new blocks!
-5. **Destructive `VACUUM FULL bloat_lab;` (Lines 231–239):**
-   - Acquires an **`AccessExclusiveLock`** on `bloat_lab`, **completely blocking all concurrent `SELECT` readers and `INSERT`/`UPDATE`/`DELETE` writers** for the duration of the table rewrite.
-   - Allocates a **brand-new `relfilenode` file on disk** (notice `new_relfilenode_filepath` changes from `base/16384/24612` to `base/16384/24617`!), copies only the $100,000$ live tuples sequentially into tightly packed 8 KB pages, rebuilds all indexes from scratch, updates `pg_class.relfilenode`, and unlinks the old bloated file from the OS filesystem.
-   - Total relation size shrinks back from `38 MB` to **`21 MB`**, with `dead_tuples = 0` and `free_pct = 1.66%`.
+##### 2.5.1.4 Standard Concurrent `VACUUM bloat_lab;` (Lines 220–228)
+- Acquires only a `ShareUpdateExclusiveLock`—meaning **concurrent `SELECT`, `INSERT`, `UPDATE`, and `DELETE` queries continue running without interruption**.
+- Scans pages containing dead tuples, removes dead index pointers from `bloat_lab_pkey`, defragments each 8 KB page internally, resets `dead_tuple_count` from `80,000` to **`0`**, and transfers that `41.43%` space directly into `free_percent` (**`44.31%`**), recording the available space per block inside the **Free Space Map (`_fsm`)** fork (`base/16384/24612_fsm`).
+- **Why `disk_size_unchanged` Remains `38 MB` and `filepath_unchanged` Remains `base/16384/24612`:** Standard `VACUUM` can only truncate empty 8 KB pages back to the OS if they reside at the **very tail end** of the file and carry zero live rows. Because our `UPDATE ... WHERE id > 20000` appended the $80,000$ new live tuples at the end of the file while leaving the first $20,000$ live tuples at the beginning of the file, the freed space sits in the middle of the file. PostgreSQL keeps the `38 MB` OS file allocated so that future `INSERT` and `UPDATE` operations immediately reuse the `44.31%` internal free space via the `_fsm` without asking the Linux kernel filesystem for new blocks!
+##### 2.5.1.5 Destructive `VACUUM FULL bloat_lab;` (Lines 231–239)
+- Acquires an **`AccessExclusiveLock`** on `bloat_lab`, **completely blocking all concurrent `SELECT` readers and `INSERT`/`UPDATE`/`DELETE` writers** for the duration of the table rewrite.
+- Allocates a **brand-new `relfilenode` file on disk** (notice `new_relfilenode_filepath` changes from `base/16384/24612` to `base/16384/24617`!), copies only the $100,000$ live tuples sequentially into tightly packed 8 KB pages, rebuilds all indexes from scratch, updates `pg_class.relfilenode`, and unlinks the old bloated file from the OS filesystem.
+- Total relation size shrinks back from `38 MB` to **`21 MB`**, with `dead_tuples = 0` and `free_pct = 1.66%`.
 
-#### Expected Terminal Output (Lines 203–239)
+#### 2.5.2 Expected Terminal Output (Lines 203–239)
 
 ```text
  initial_filepath | initial_size 
@@ -576,17 +576,17 @@ FROM generate_series(1, 1000000) AS g;
 ANALYZE plan_lab;
 ```
 
-#### Deep-Dive Architectural Explanation: Setup & `WITH (fillfactor = 100)` (Lines 249–279)
+#### 2.6.1 Deep-Dive Architectural Explanation: Setup & `WITH (fillfactor = 100)` (Lines 249–279)
 
-1. **Tuple Tetris Ordering in `plan_lab`:**
-   - The columns are ordered from largest alignment boundary to smallest: `recorded_at` (`8B`), `id` (`4B`), `temperature` (`4B`), `pressure` (`4B`), `wind_speed` (`4B`), `rain_accum_1m` (`4B`), `wind_direction` (`2B`), followed by variable-length `varlena` strings `station_id` (`'AWS-001'`, `8B` on disk with 1-byte short `varlena` header) and `payload` (`repeat('A', 32)`, `33B` on disk).
-   - Total physical tuple size is `88 bytes` (+ `4B` line pointer = `92 bytes/row`), packing **`89` rows per 8 KB page** across **`11,236` heap pages (`87.8 MB` / `92,045,312 bytes`)**.
-2. **`WITH (fillfactor = 100)` (Line 261):**
-   - Controls what percentage of each 8 KB heap page PostgreSQL fills during `INSERT` before allocating a new page. For heap tables, `fillfactor = 100` is the default (`100%` packed, leaving `0%` reserved for future updates), which is optimal for append-only immutable telemetry tables where historical sensor readings are never updated.
+##### 2.6.1.1 Tuple Tetris Ordering in `plan_lab`
+- The columns are ordered from largest alignment boundary to smallest: `recorded_at` (`8B`), `id` (`4B`), `temperature` (`4B`), `pressure` (`4B`), `wind_speed` (`4B`), `rain_accum_1m` (`4B`), `wind_direction` (`2B`), followed by variable-length `varlena` strings `station_id` (`'AWS-001'`, `8B` on disk with 1-byte short `varlena` header) and `payload` (`repeat('A', 32)`, `33B` on disk).
+- Total physical tuple size is `88 bytes` (+ `4B` line pointer = `92 bytes/row`), packing **`89` rows per 8 KB page** across **`11,236` heap pages (`87.8 MB` / `92,045,312 bytes`)**.
+##### 2.6.1.2 `WITH (fillfactor = 100)` (Line 261)
+- Controls what percentage of each 8 KB heap page PostgreSQL fills during `INSERT` before allocating a new page. For heap tables, `fillfactor = 100` is the default (`100%` packed, leaving `0%` reserved for future updates), which is optimal for append-only immutable telemetry tables where historical sensor readings are never updated.
 
 ---
 
-#### Phase 4A: Proving the $\approx 9.5\times$ Row-Store Analytical Scan I/O Amplification Penalty (Lines 281–290)
+#### 2.6.2 Phase 4A: Proving the $\approx 9.5\times$ Row-Store Analytical Scan I/O Amplification Penalty (Lines 281–290)
 
 ```sql
 -- 4A. Demonstrate the Row-Store Analytical Scan I/O Amplification Penalty
@@ -600,13 +600,13 @@ WHERE temperature > -900.0
 GROUP BY station_id;
 ```
 
-##### Architectural & Mathematical Analysis of Phase 4A
+##### 2.6.2.1 Architectural & Mathematical Analysis of Phase 4A
 
 - **What the Query Actually Needs:** Only two columns across $1,000,000$ rows: `station_id` (`8 bytes` on disk) and `temperature` (`4 bytes` `REAL`), totaling **$12\text{ bytes/row}$** ($\approx \mathbf{11.4\text{ MB}}$ of logical column data, or even less with dictionary/RLE compression in a columnar format like Parquet).
 - **What PostgreSQL's Row-Store Engine Must Physically Read:** Because all 9 columns (`recorded_at`, `id`, `temperature`, `pressure`, `wind_speed`, `rain_accum_1m`, `wind_direction`, `station_id`, `payload`) plus the 24-byte MVCC tuple header are interleaved contiguously inside every 88-byte row on the 8 KB heap pages, PostgreSQL **cannot read only `station_id` and `temperature` from the heap**. It must fetch all **`11,236` 8 KB pages (`92.05 MB`)** into `shared_buffers`:
   $$\text{Row-Store I/O Amplification Factor} = \frac{11,236\text{ pages} \times 8,192\text{ bytes/page}}{1,000,000\text{ rows} \times 9.6\text{ effective bytes}} \approx \mathbf{9.5\times}$$
 
-##### Expected Terminal Output (`EXPLAIN (ANALYZE, BUFFERS, TIMING)`)
+##### 2.6.2.2 Expected Terminal Output (`EXPLAIN (ANALYZE, BUFFERS, TIMING)`)
 
 ```text
                                                                 QUERY PLAN                                                                 
@@ -636,7 +636,7 @@ GROUP BY station_id;
 
 ---
 
-#### Phase 4B, 4C & 4D: From Catastrophic `Seq Scan` to Sub-Millisecond `Index Only Scan` (Lines 291–333)
+#### 2.6.3 Phase 4B, 4C & 4D: From Catastrophic `Seq Scan` to Sub-Millisecond `Index Only Scan` (Lines 291–333)
 
 ```sql
 -- 4B. Phase 0 (Unoptimized): Selective 3-Hour Station Query -> Catastrophic Seq Scan
@@ -683,7 +683,7 @@ WHERE station_id = 'AWS-042'
 GROUP BY station_id;
 ```
 
-##### Complete 3-Phase Execution Plan Comparison
+##### 2.6.3.1 Complete 3-Phase Execution Plan Comparison
 
 The target query retrieves a 3-hour window (`10,800 seconds` / `2 seconds` = $5,400$ total rows across all 50 stations $\rightarrow$ exactly **`108` matching rows** for `'AWS-042'`) out of $1,000,000$ rows ($0.0108\%$ selectivity):
 
@@ -695,7 +695,7 @@ The target query retrieves a 3-hour window (`10,800 seconds` / `2 seconds` = $5,
 | **Heap Fetches** | `1,000,000` heap tuples | `20,000` heap tuples | **`Heap Fetches: 0`** |
 | **Typical Execution Time** | `~45.0 ms` | `~14.2 ms` | **`~0.085 ms` (`< 0.1 ms`)** |
 
-##### Deep-Dive Architectural Mechanics of Phase 4D (`INCLUDE` + `VACUUM ANALYZE`)
+##### 2.6.3.2 Deep-Dive Architectural Mechanics of Phase 4D (`INCLUDE` + `VACUUM ANALYZE`)
 
 1. **How `ON plan_lab (station_id, recorded_at) INCLUDE (temperature)` Structures the B-Tree:**
    - **Key Columns (`station_id, recorded_at`):** Stored in both internal B-Tree branch nodes and leaf pages. First partitions the B-Tree by equality predicate (`station_id = 'AWS-042'`), and within `'AWS-042'` sorts entries chronologically by range predicate (`recorded_at BETWEEN ...`).
@@ -706,7 +706,7 @@ The target query retrieves a 3-hour window (`10,800 seconds` / `2 seconds` = $5,
    - To avoid visiting the heap page for every row, PostgreSQL consults the **Visibility Map (`_vm` fork)**—a compact bitmap tracking 2 bits per 8 KB heap page (`ALL_VISIBLE` and `ALL_FROZEN`). If bit 0 (`ALL_VISIBLE`) is set to `1` for heap block $B$, every tuple on block $B$ is guaranteed visible to all current and future transactions, so the `Index Only Scan` skips the heap page completely (`Heap Fetches: 0`).
    - Because `INSERT INTO plan_lab ...` just wrote $1,000,000$ new rows into `11,236` fresh pages, the `_vm` bits are initially `0`. Running `VACUUM ANALYZE plan_lab;` on Line 322 sets the `PD_ALL_VISIBLE` flag on all `11,236` pages and populates the `_vm` fork, dropping `Heap Fetches` from `108` to **`0`**!
 
-##### Expected Terminal Output for Phase 4D (Lines 324–332)
+##### 2.6.3.3 Expected Terminal Output for Phase 4D (Lines 324–332)
 
 ```text
                                                                       QUERY PLAN                                                                      

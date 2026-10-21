@@ -38,7 +38,9 @@
 
 ---
 
-## Course & Session Overview
+## 0. Course Overview & Module Outline
+
+### 0.1 Course & Session Overview
 
 In Days 1–3, we engineered relational databases from edge SQLite buffers to enterprise PostgreSQL clusters optimized with **Declarative Range Partitioning**, **BRIN indexes**, **PostGIS geodesy**, and **`JSONB`**. Today on **Day 4**, we cross the bridge into **native NoSQL & Polymorphic Telemetry Engineering with MongoDB** and answer:
 
@@ -53,7 +55,7 @@ By the end of Day 4, attendees will master:
 
 ---
 
-## Module Outline
+### 0.2 Module Outline
 
 ```text
 ┌─────────────────┬──────────────────────────────────────────────────────────────────────────┐
@@ -71,7 +73,7 @@ By the end of Day 4, attendees will master:
 
 ---
 
-## Module 1: The Schema-Rigidity Wall, Polymorphic Station Metadata (`$jsonSchema`) & BSON / WiredTiger Internals
+## 1. Module 1: The Schema-Rigidity Wall, Polymorphic Station Metadata (`$jsonSchema`) & BSON / WiredTiger Internals
 
 ### 1.1 The Schema-Rigidity Wall in Modern Meteorological Telemetry
 
@@ -103,16 +105,16 @@ Relational databases require a uniform, predefined tabular schema. In PostgreSQL
  └───────────────────────────────────┴───────────────────────────────────┘
 ```
 
-#### Why Relational Anti-Patterns Fail on Polymorphic Sensor Networks:
+#### 1.1.1 Why Relational Anti-Patterns Fail on Polymorphic Sensor Networks:
 1. **The Wide Table with 150 Nullable Columns:** Altering DDL (`ALTER TABLE ... ADD COLUMN`) for every new instrument type (buoys, soil probes, dust lasers, disdrometers). The table becomes sparse ($90\%\text{ NULL}$), wasting null-bitmap headers and degrading CPU cache efficiency.
 2. **Entity-Attribute-Value (EAV):** Storing `(station_id, timestamp, metric_name, metric_value)` generates billions of narrow rows, destroys tuple density (repeating the 23-byte PostgreSQL heap tuple header for every single scalar metric!), and requires 10-way self-joins to reconstruct a single timestamped observation.
 3. **Normalized Multi-Table Snowflakes for Upper-Air Profiles:** Splitting a single radiosonde weather balloon launch into `launches`, `launch_pressure_levels`, and `launch_qc_steps` forces a 3-table `JOIN` every time a forecaster pulls a Skew-T log-P vertical sounding.
 4. **Heavy Mutations on PostgreSQL `JSONB`:** While `JSONB` is awesome for optional attributes inside an otherwise relational table, updating a single nested attribute inside a large `JSONB` column rewrites the entire PostgreSQL tuple (and TOAST chunks), triggering MVCC dead-tuple bloat and WAL write amplification.
 
-#### The Document Paradigm: Data Accessed Together Is Stored Together
+#### 1.1.2 The Document Paradigm: Data Accessed Together Is Stored Together
 In MongoDB, a single self-contained **Document** encapsulates its own keys, data types, nested sub-documents, and bounded arrays in one contiguous binary block. Reading an entire radiosonde balloon launch with all 50 vertical pressure levels—or storing a marine buoy alongside an agro-soil station—is a single key lookup with zero `JOIN`s.
 
-#### Terminology Bridge for SQL Engineers:
+#### 1.1.3 Terminology Bridge for SQL Engineers:
 
 | PostgreSQL (Days 2–3) | MongoDB (Day 4) |
 | :--- | :--- |
@@ -144,15 +146,16 @@ While developers write queries in JSON syntax, `mongod` compiles, stores, and in
  └──────────────────────────────┴──────────────────────────────────────────────┘
 ```
 
-1. **$O(1)$ Field Skipping via Length Prefixes:** Plain text JSON must be parsed character-by-character from the start of the string. BSON embeds byte-length prefixes at the start of every document, sub-document, and array, allowing MongoDB to jump directly to the 10th field without parsing the first 9.
-2. **Rich Native Meteorological Types:**
-   - `ISODate("2026-10-06T00:00:00Z")` — 64-bit UTC millisecond integer (always UTC!).
-   - `Int32`, `Int64 (Long)`, `Double` (8-byte IEEE 754 float), `Decimal128`, and `BinData`.
-3. **The 16 MB Document Limit & Field Name Duplication Tax:**
-   - Every BSON document has a hard physical ceiling of **16 MB** to protect RAM and network buffers.
-   - Because every BSON document stores its own field names on disk, repeating `"temperature_celsius"` 100 million times would waste space without block compression or bucketing.
+#### 1.2.1 $O(1)$ Field Skipping via Length Prefixes
+Plain text JSON must be parsed character-by-character from the start of the string. BSON embeds byte-length prefixes at the start of every document, sub-document, and array, allowing MongoDB to jump directly to the 10th field without parsing the first 9.
+#### 1.2.2 Rich Native Meteorological Types
+- `ISODate("2026-10-06T00:00:00Z")` — 64-bit UTC millisecond integer (always UTC!).
+- `Int32`, `Int64 (Long)`, `Double` (8-byte IEEE 754 float), `Decimal128`, and `BinData`.
+#### 1.2.3 The 16 MB Document Limit & Field Name Duplication Tax
+- Every BSON document has a hard physical ceiling of **16 MB** to protect RAM and network buffers.
+- Because every BSON document stores its own field names on disk, repeating `"temperature_celsius"` 100 million times would waste space without block compression or bucketing.
 
-#### WiredTiger Memory Hierarchy, Compression & Checkpoints
+#### 1.2.4 WiredTiger Memory Hierarchy, Compression & Checkpoints
 
 ```text
                          WiredTiger Memory & Storage Architecture
@@ -193,13 +196,13 @@ While developers write queries in JSON syntax, `mongod` compiles, stores, and in
 > In everyday conversation, meteorologists say *"Latitude, Longitude"* (`36.69, 3.21`).  
 > In **GeoJSON (both MongoDB `2dsphere` and PostGIS `ST_MakePoint`)**, coordinates are **ALWAYS `[X, Y]` = `[longitude, latitude]`** (`[3.2154, 36.6910]`)! Reversing them places Algiers in the Indian Ocean.
 
-#### Black Box 4A Demystified: MongoDB `$jsonSchema` (`required` vs. `bsonType`) & The `{ field: null }` Query Trap
+#### 1.3.1 Black Box 4A Demystified: MongoDB `$jsonSchema` (`required` vs. `bsonType`) & The `{ field: null }` Query Trap
 
 On Day 1, we saw how SQL separates **Presence (`NOT NULL`)** from **Domain Validation (`CHECK`)**. MongoDB has the exact same orthogonal separation inside `$jsonSchema`—plus a famous query trap around `null` vs. missing fields!
 
-1. **The Two Orthogonal Validation Keys in `$jsonSchema`:**
-   - **`required: ["station_name", "location"]` enforces Key Existence Only:** It verifies that the field key is present in the BSON document—**but if you omit `bsonType` inside `properties`, `required` alone happily accepts `{ station_name: null }` or `{ station_name: 12345 }`!**
-   - **`properties: { temp_c: { bsonType: "double", minimum: -90 } }` enforces Type & Range Only When the Key Is Present:** Just like a SQL `CHECK` constraint without `NOT NULL`, if `"temp_c"` is **not** listed in the `required` array, MongoDB allows documents to **omit `temp_c` completely**—and if an offline sensor wants to explicitly send `{ temp_c: null }`, you must declare `bsonType: ["double", "null"]` because in BSON, `null` (`type 10`) is a distinct type from `"double"` (`type 1`)!
+##### 1.3.1.1 The Two Orthogonal Validation Keys in `$jsonSchema`
+- **`required: ["station_name", "location"]` enforces Key Existence Only:** It verifies that the field key is present in the BSON document—**but if you omit `bsonType` inside `properties`, `required` alone happily accepts `{ station_name: null }` or `{ station_name: 12345 }`!**
+- **`properties: { temp_c: { bsonType: "double", minimum: -90 } }` enforces Type & Range Only When the Key Is Present:** Just like a SQL `CHECK` constraint without `NOT NULL`, if `"temp_c"` is **not** listed in the `required` array, MongoDB allows documents to **omit `temp_c` completely**—and if an offline sensor wants to explicitly send `{ temp_c: null }`, you must declare `bsonType: ["double", "null"]` because in BSON, `null` (`type 10`) is a distinct type from `"double"` (`type 1`)!
 
 | `$jsonSchema` Pattern | Key in `required: [...]`? | `bsonType` in `properties` | Allows Missing Key? | Allows Explicit `null`? | SQL Equivalent (Day 1) |
 | :--- | :---: | :--- | :---: | :---: | :--- |
@@ -208,8 +211,8 @@ On Day 1, we saw how SQL separates **Presence (`NOT NULL`)** from **Domain Valid
 | **3. Optional Polymorphic Field** | **No** | `bsonType: "object"` (e.g., `buoy_specs`) | Yes (Omitted on land stations) | No (If key is sent, must be `"object"`) | Nullable + `CHECK` |
 | **4. Unconstrained Polymorphic Payload** | **No** | *(Not listed in `properties`)* | Yes | Yes | Raw unconstrained landing column |
 
-2. **The `{ temp_c: null }` Query Trap in MongoDB (`null` vs. Missing Key):**
-   Suppose Document A has `{ _id: 1, temp_c: null }` (thermometer offline) and Document B has `{ _id: 2 }` (`temp_c` key completely omitted). What does `db.obs.find({ temp_c: null })` return?
+##### 1.3.1.2 The `{ temp_c: null }` Query Trap in MongoDB (`null` vs. Missing Key)
+Suppose Document A has `{ _id: 1, temp_c: null }` (thermometer offline) and Document B has `{ _id: 2 }` (`temp_c` key completely omitted). What does `db.obs.find({ temp_c: null })` return?
 
 | MongoDB Query Filter | Matches `{ temp_c: 22.5 }`? | Matches `{ temp_c: null }` *(Explicit Null)*? | Matches `{ }` *(Key Missing)*? | Engineering Explanation |
 | :--- | :---: | :---: | :---: | :--- |
@@ -228,7 +231,7 @@ mongosh weather_nosql day4_weather_ops_mongo.js
 mongosh weather_nosql
 ```
 
-#### Lab 1 Walkthrough & Verification:
+#### 1.4.1 Lab 1 Walkthrough & Verification:
 1. **Inspect Collections & Storage Engine Statistics:** Run `show dbs`, `show collections`, and `db.stats()` to inspect the `weather_nosql` database and its 4 collections (`stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`).
 2. **Compare Polymorphic Documents & Measure BSON Binary Size:** Fetch station `60390` (Algiers Upper-Air), `60901` (Algiers Bay Marine Buoy #1), and `60419` (Constantine Agro-Soil). Compare their polymorphic fields (`buoy_specs` vs. `soil_depths_cm`) and verify the exact BSON binary size in bytes of a radiosonde launch document using `Object.bsonsize()`.
 3. **Inspect `$jsonSchema` Validation Rules:** Inspect the active `$jsonSchema` validator on `db.stations` using `db.getCollectionInfos({ name: "stations" })`.
@@ -285,11 +288,11 @@ db.stations.insertOne({
 
 ---
 
-## Module 2: Upper-Air Radiosonde Vertical Soundings, Atomic Updates & High-Frequency Time-Series Bucketing
+## 2. Module 2: Upper-Air Radiosonde Vertical Soundings, Atomic Updates & High-Frequency Time-Series Bucketing
 
 ### 2.1 Embedding (Denormalization) vs. Referencing (`3NF` Normalization): Modeling Radiosonde Vertical Soundings
 
-The #1 design question in MongoDB—directly extending our [Day 1 Normalization vs. Denormalization framework](../day1/day1_master_coursebook.md#72-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems)—is: **When do we denormalize by embedding an array of sub-documents inside a parent document, and when do we normalize by separating them into another collection?**
+The #1 design question in MongoDB—directly extending our [Day 1 Normalization vs. Denormalization framework](../day1/day1_master_coursebook.md#52-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems)—is: **When do we denormalize by embedding an array of sub-documents inside a parent document, and when do we normalize by separating them into another collection?**
 
 * **When to Embed / Denormalize (Bounded, Immutable 1-to-Many Relationships):**
   - *Meteorological Example:* `radiosonde_soundings`. An upper-air weather balloon launch takes ~90 minutes from surface release to stratosphere burst ($\approx 32\text{ km}$) and records 20–100 standard and significant pressure levels (`1000 hPa`, `850 hPa`, `700 hPa`, `500 hPa`, `300 hPa`).
@@ -301,27 +304,27 @@ The #1 design question in MongoDB—directly extending our [Day 1 Normalization 
 
 ### 2.2 Querying Nested Documents & The #1 Array Trap (`$elemMatch`)
 
-1. **Querying Polymorphic Fields with `$exists` & Dot Notation:**
-   - Because only marine buoys emit `marine_telemetry` and only agro stations emit `soil_profile`, filter sensor classes with `{ "marine_telemetry.sig_wave_height_m": { $exists: true, $gte: 3.0 } }`.
-   - Always enclose dotted nested paths in quotes: `db.synoptic_timeseries.find({ "diagnostics.door_open": true })`.
-2. **The #1 Array Query Trap in MongoDB: Why You Need `$elemMatch`!**
-   - Suppose a forecaster asks: *"Find all radiosonde launches where the **500 hPa level** had a wind speed **`>= 60 kt`**."*
-   - **WRONG Query (Cross-Element False Positive):**
-     ```javascript
-     db.radiosonde_soundings.find({
-       "vertical_levels.pressure_hpa": 500,
-       "vertical_levels.wind_speed_kt": { $gte: 60 }
-     })
-     ```
-     *Why does this fail?* Because it matches if **any** element in the array has `pressure_hpa == 500` AND **any other** element in the same balloon launch (such as the `300 hPa` upper-tropospheric jet stream!) has `wind_speed_kt >= 60`!
-   - **CORRECT Query (`$elemMatch`):** Forces **all** specified conditions to be satisfied by the **exact same array element**:
-     ```javascript
-     db.radiosonde_soundings.find({
-       vertical_levels: {
-         $elemMatch: { pressure_hpa: 500, wind_speed_kt: { $gte: 60 } }
-       }
-     })
-     ```
+#### 2.2.1 Querying Polymorphic Fields with `$exists` & Dot Notation
+- Because only marine buoys emit `marine_telemetry` and only agro stations emit `soil_profile`, filter sensor classes with `{ "marine_telemetry.sig_wave_height_m": { $exists: true, $gte: 3.0 } }`.
+- Always enclose dotted nested paths in quotes: `db.synoptic_timeseries.find({ "diagnostics.door_open": true })`.
+#### 2.2.2 The #1 Array Query Trap in MongoDB: Why You Need `$elemMatch`!
+- Suppose a forecaster asks: *"Find all radiosonde launches where the **500 hPa level** had a wind speed **`>= 60 kt`**."*
+- **WRONG Query (Cross-Element False Positive):**
+  ```javascript
+  db.radiosonde_soundings.find({
+    "vertical_levels.pressure_hpa": 500,
+    "vertical_levels.wind_speed_kt": { $gte: 60 }
+  })
+  ```
+  *Why does this fail?* Because it matches if **any** element in the array has `pressure_hpa == 500` AND **any other** element in the same balloon launch (such as the `300 hPa` upper-tropospheric jet stream!) has `wind_speed_kt >= 60`!
+- **CORRECT Query (`$elemMatch`):** Forces **all** specified conditions to be satisfied by the **exact same array element**:
+  ```javascript
+  db.radiosonde_soundings.find({
+    vertical_levels: {
+      $elemMatch: { pressure_hpa: 500, wind_speed_kt: { $gte: 60 } }
+    }
+  })
+  ```
 
 > [!WARNING]
 > **Production Pitfall (Cross-Element Array False Positives):**  
@@ -349,7 +352,7 @@ In high-frequency meteorological ingestion (e.g., $10\text{ Hz}$ ultrasonic anem
 
 MongoDB provides two powerful architectural patterns to solve this:
 
-#### Pattern A: The Manual Bucket Pattern (Pre-Aggregated Array Buckets)
+#### 2.4.1 Pattern A: The Manual Bucket Pattern (Pre-Aggregated Array Buckets)
 Using atomic upserts (`$push`, `$inc`, `$min`, `$max`, `$setOnInsert`), we group 1 hour of readings (up to 3,600 1-second samples) for a given station into a single document containing pre-computed `summary` statistics:
 
 ```json
@@ -368,7 +371,7 @@ Using atomic upserts (`$push`, `$inc`, `$min`, `$max`, `$setOnInsert`), we group
 ```
 * **Advantage:** Reduces document and `_id` index count by **$3,600\times$**, while `summary.min_w` and `summary.max_w` allow instant hourly extremum checks without scanning the array!
 
-#### Pattern B: Native Time-Series Collections (`system.buckets.*` + Automated TTL)
+#### 2.4.2 Pattern B: Native Time-Series Collections (`system.buckets.*` + Automated TTL)
 Introduced in MongoDB 5.0+, Native Time-Series Collections automate columnar bucketing transparently under the hood:
 
 ```javascript
@@ -390,23 +393,23 @@ db.createCollection("synoptic_timeseries", {
 
 > [!TIP]
 > **Architectural Verification Tip (Peeking Inside `system.buckets.*` & Comparing to PostgreSQL Partitioning):**  
-> Run `db.system.buckets.synoptic_timeseries.findOne()` in `mongosh` to inspect the raw physical storage layout (`control.min` and `control.max` zone-map headers). For the complete side-by-side comparison of **PostgreSQL `PARTITION BY RANGE` vs. MongoDB's 4 Partitioning Equivalents (`Native Time-Series`, `Manual Bucketing`, `Bucket TTL`, and `Range/Zone Sharding`)**, open **[POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md (Part II)](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md#part-ii-table-partitioning-in-postgresql-partition-by-range-vs-mongodbs-4-partitioning-equivalents)**.
+> Run `db.system.buckets.synoptic_timeseries.findOne()` in `mongosh` to inspect the raw physical storage layout (`control.min` and `control.max` zone-map headers). For the complete side-by-side comparison of **PostgreSQL `PARTITION BY RANGE` vs. MongoDB's 4 Partitioning Equivalents (`Native Time-Series`, `Manual Bucketing`, `Bucket TTL`, and `Range/Zone Sharding`)**, open **[POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md (Part II)](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md#2-part-ii-table-partitioning-in-postgresql-partition-by-range-vs-mongodbs-4-partitioning-equivalents)**.
 
 ---
 
 ### 2.5 Lab 2: `$elemMatch` Upper-Air Queries, Live CAP Storm Updates & Peeking Inside `system.buckets`
-#### Lab 2 Walkthrough & Verification:
-1. **Polymorphic & Diagnostic Queries:**
-   - Query `db.synoptic_timeseries` to find any observation containing either `soil_profile` OR `marine_telemetry` (`$or` + `$exists: true`).
-   - Query `db.synoptic_timeseries` using dot notation to find stations where `diagnostics.battery_v < 12.5` OR `diagnostics.door_open == true`.
-2. **The Upper-Air `$elemMatch` Trap vs. Fix:**
-   - Run the naive query on `db.radiosonde_soundings` looking for `"vertical_levels.pressure_hpa": 500` and `"vertical_levels.wind_speed_kt": { $gte: 60 }`. Observe how it returns **2 soundings** (including the 12Z sounding where 500 hPa only had 42 kt winds, because its 300 hPa level had 68 kt winds!).
-   - Fix the query using **`$elemMatch`** and positional projection (`"vertical_levels.$": 1`) so it returns **only** the `2026-10-06T00:00:00Z` Algiers sounding where the `500 hPa` level itself had `64 kt` winds!
-3. **Atomic CAP Storm Alert Update & Positional Array Fix:**
-   - In a single atomic `updateOne` on `db.cap_alerts` (`_id: "DZ-ONM-2026-10-05-001"`), use **`$max`** to raise `max_observed_gust_kt` to `43.5`, **`$addToSet`** to add Bejaia (`60402`) to `affected_stations`, and **`$push`** to append an audit note to `updates`.
-   - Use the positional `$` operator (`"vertical_levels.$.dewpoint_c"`) on Tamanrasset's `12Z` sounding (`station_id: 60680`) to correct the `700 hPa` dewpoint from `-8.4` to `-7.9`.
-4. **Peek Inside `system.buckets.synoptic_timeseries`:**
-   - Compare `db.synoptic_timeseries.find({ "station_meta.station_id": 60390 })` (3 logical documents) against `db.system.buckets.synoptic_timeseries.findOne({ "meta.station_id": 60390 })` (1 physical columnar bucket with `control.min` and `control.max` headers!).
+#### 2.5.1 Lab 2 Walkthrough & Verification:
+##### 2.5.1.1 Polymorphic & Diagnostic Queries
+- Query `db.synoptic_timeseries` to find any observation containing either `soil_profile` OR `marine_telemetry` (`$or` + `$exists: true`).
+- Query `db.synoptic_timeseries` using dot notation to find stations where `diagnostics.battery_v < 12.5` OR `diagnostics.door_open == true`.
+##### 2.5.1.2 The Upper-Air `$elemMatch` Trap vs. Fix
+- Run the naive query on `db.radiosonde_soundings` looking for `"vertical_levels.pressure_hpa": 500` and `"vertical_levels.wind_speed_kt": { $gte: 60 }`. Observe how it returns **2 soundings** (including the 12Z sounding where 500 hPa only had 42 kt winds, because its 300 hPa level had 68 kt winds!).
+- Fix the query using **`$elemMatch`** and positional projection (`"vertical_levels.$": 1`) so it returns **only** the `2026-10-06T00:00:00Z` Algiers sounding where the `500 hPa` level itself had `64 kt` winds!
+##### 2.5.1.3 Atomic CAP Storm Alert Update & Positional Array Fix
+- In a single atomic `updateOne` on `db.cap_alerts` (`_id: "DZ-ONM-2026-10-05-001"`), use **`$max`** to raise `max_observed_gust_kt` to `43.5`, **`$addToSet`** to add Bejaia (`60402`) to `affected_stations`, and **`$push`** to append an audit note to `updates`.
+- Use the positional `$` operator (`"vertical_levels.$.dewpoint_c"`) on Tamanrasset's `12Z` sounding (`station_id: 60680`) to correct the `700 hPa` dewpoint from `-8.4` to `-7.9`.
+##### 2.5.1.4 Peek Inside `system.buckets.synoptic_timeseries`
+- Compare `db.synoptic_timeseries.find({ "station_meta.station_id": 60390 })` (3 logical documents) against `db.system.buckets.synoptic_timeseries.findOne({ "meta.station_id": 60390 })` (1 physical columnar bucket with `control.min` and `control.max` headers!).
 
 ```javascript
 // 1a. Find specialized Agro-Soil or Marine Buoy observations using $or and $exists
@@ -503,7 +506,7 @@ print("Physical Columnar Buckets on Disk:", db.system.buckets.synoptic_timeserie
 
 ---
 
-## Module 3: Multi-Stage Aggregation Pipelines, Upper-Air Climatology & 50,000-Document Fault Diagnostics
+## 3. Module 3: Multi-Stage Aggregation Pipelines, Upper-Air Climatology & 50,000-Document Fault Diagnostics
 
 ### 3.1 How the MongoDB Aggregation Framework Works (Unix Pipe Mental Model)
 
@@ -563,7 +566,7 @@ flowchart LR
 > **Production Pitfall (Placing `$unwind` Before `$match`):**  
 > If you place `$unwind: "$vertical_levels"` *before* `$match: { station_id: 60390 }`, MongoDB cannot use the `idx_sonde_esr` B-Tree index! Instead, it performs a full `COLLSCAN`, explodes 50,000 radiosonde documents into 2,500,000 in-memory level documents, and only filters them afterward. Always filter with `$match` (or `$geoNear`) at Stage 1!
 
-#### Black Box 4B Demystified: Why `$unwind` Silently Drops Documents With Empty `[]` or Missing Arrays (`preserveNullAndEmptyArrays`)
+#### 3.1.1 Black Box 4B Demystified: Why `$unwind` Silently Drops Documents With Empty `[]` or Missing Arrays (`preserveNullAndEmptyArrays`)
 
 When engineers run `{ $unwind: "$hardware_faults" }` (or `{ $unwind: "$station_details" }` after a `$lookup`), what happens to healthy weather stations where `hardware_faults: []` (an empty array) or where the `hardware_faults` field is missing?
 - **By default, `{ $unwind: "$field" }` acts like an SQL `INNER JOIN`:** Any document whose array is empty (`[]`), `null`, or missing emits **0 output documents** and is silently dropped from the pipeline!
@@ -584,12 +587,12 @@ mongosh weather_nosql day4_weather_ops_mongo_advanced.js
 mongosh weather_nosql
 ```
 
-#### Lab 3 Walkthrough & Verification:
-1. **Unwind Radiosonde Vertical Levels (`$unwind` + `$addFields` + `$group` + `$merge`):**
-   - Build an aggregation pipeline on `db.radiosonde_soundings` that unwinds `$vertical_levels`, calculates the **dewpoint spread (`temp_c - dewpoint_c`)** at each pressure level (a critical indicator of cloud base saturation vs. dry Saharan air layers!), groups by isobaric surface (`$vertical_levels.pressure_hpa`), and computes `avg_height_m`, `avg_temp_c`, `avg_dewpoint_spread_c`, and `max_wind_kt`.
-   - Materialize the output into a collection named `upper_air_climatology` using **`$merge`**.
-2. **Enrich Time-Series Telemetry with Station Coordinates (`$lookup`):**
-   - Run an aggregation on `db.synoptic_timeseries` that filters for wind speeds `>= 25 kt` (`$match`), joins with `db.stations` (`$lookup` on `localField: "station_meta.station_id"`, `foreignField: "_id"`), and outputs the station's full name, elevation, and GeoJSON coordinates alongside the wind observation.
+#### 3.2.1 Lab 3 Walkthrough & Verification:
+##### 3.2.1.1 Unwind Radiosonde Vertical Levels (`$unwind` + `$addFields` + `$group` + `$merge`)
+- Build an aggregation pipeline on `db.radiosonde_soundings` that unwinds `$vertical_levels`, calculates the **dewpoint spread (`temp_c - dewpoint_c`)** at each pressure level (a critical indicator of cloud base saturation vs. dry Saharan air layers!), groups by isobaric surface (`$vertical_levels.pressure_hpa`), and computes `avg_height_m`, `avg_temp_c`, `avg_dewpoint_spread_c`, and `max_wind_kt`.
+- Materialize the output into a collection named `upper_air_climatology` using **`$merge`**.
+##### 3.2.1.2 Enrich Time-Series Telemetry with Station Coordinates (`$lookup`)
+- Run an aggregation on `db.synoptic_timeseries` that filters for wind speeds `>= 25 kt` (`$match`), joins with `db.stations` (`$lookup` on `localField: "station_meta.station_id"`, `foreignField: "_id"`), and outputs the station's full name, elevation, and GeoJSON coordinates alongside the wind observation.
 
 ```javascript
 // 1. Unwind upper-air soundings, compute isobaric stats, and materialize via $merge
@@ -675,7 +678,7 @@ mongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorp
 mongosh "mongodb://localhost:27017/weather_telemetry_db"
 ```
 
-#### Lab 4 Walkthrough & Verification:
+#### 3.3.1 Lab 4 Walkthrough & Verification:
 1. **Cross-Instrument Anomaly Query:** Query `db.sensor_payloads` to find observations where optical disdrometers report reduced visibility (`visibility_meters < 1000`) OR 3D ultrasonic anemometers report severe boundary-layer turbulence (`turbulent_kinetic_energy > 0.35`).
 2. **Wet-Road Grip Safety Aggregation:** Aggregate all `ROAD_SURFACE_RADAR` payloads where `water_film_height_mm > 0.5`, grouped by `metadata.region`, calculating the number of distinct reporting stations (`$addToSet` + `$size`), `avg_grip_factor`, and `min_road_temp`.
 3. **Fleet-Wide `$unwind` Hardware Fault Diagnostics:** Using `$match` $\rightarrow$ `$unwind: "$hardware_faults"` $\rightarrow$ `$group`, rank the top hardware fault codes (`ERR_BATTERY_UNDERVOLT`, `WARN_OPTICAL_LENS_DUST`, etc.) by region and count how many unique stations are affected.
@@ -766,29 +769,32 @@ print(`Columnar Compression Ratio       : ${(stdStats.storageSize / tsStats.stor
 
 ---
 
-## Module 4: Geospatial Meteorology in MongoDB (`2dsphere` Indexes) & The `ESR` Compound Indexing Rule
+## 4. Module 4: Geospatial Meteorology in MongoDB (`2dsphere` Indexes) & The `ESR` Compound Indexing Rule
 
 ### 4.1 Spherical Earth Geometry Out-of-the-Box (`2dsphere` Indexes & GeoJSON)
 
 Whereas PostgreSQL requires installing the external `PostGIS` extension (`CREATE EXTENSION postgis;`), MongoDB ships natively with spherical Earth geometry (**WGS84 datum**) and **`2dsphere` indexes** (backed by Google S2 spherical geometry cells).
 
-#### Three Core GeoJSON Shapes Used in Meteorology:
-1. **`Point`**: Weather station or marine buoy location `{ type: "Point", coordinates: [lon, lat] }`.
-2. **`LineString`**: Tropical cyclone track, squall line front, or radiosonde GPS drift trajectory.
-3. **`Polygon`**: Radar storm cell footprint (`db.storm_polygons`), hydrological catchment basin, or CAP warning zone.
-   - *Crucial Rule:* The first and last `[lon, lat]` coordinate pair in a GeoJSON `Polygon` ring **must be identical** to close the polygon loop!
+#### 4.1.1 Three Core GeoJSON Shapes Used in Meteorology:
+##### 4.1.1.1 `Point`
+Weather station or marine buoy location `{ type: "Point", coordinates: [lon, lat] }`.
+##### 4.1.1.2 `LineString`
+Tropical cyclone track, squall line front, or radiosonde GPS drift trajectory.
+##### 4.1.1.3 `Polygon`
+Radar storm cell footprint (`db.storm_polygons`), hydrological catchment basin, or CAP warning zone.
+- *Crucial Rule:* The first and last `[lon, lat]` coordinate pair in a GeoJSON `Polygon` ring **must be identical** to close the polygon loop!
 
-#### The Top 3 Geospatial Operators in MongoDB:
+#### 4.1.2 The Top 3 Geospatial Operators in MongoDB:
 - **`$geoNear` (Aggregation Stage) / `$nearSphere` (Query):** Finds all stations within `maxDistance` meters of a point on Earth's sphere, sorted automatically from nearest to farthest, and computes exact geodetic distance in meters or kilometers (`distanceMultiplier: 0.001`).
 - **`$geoWithin`:** Finds all `Point` stations located inside a severe weather `Polygon` (`$geometry`).
 - **`$geoIntersects`:** Finds all active storm polygons or warning zones that intersect a given airport point, highway, or flight corridor.
-- **Side-by-Side `PostGIS` vs. MongoDB `2dsphere` Rosetta Stone:** Open **[POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md (Part I)](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md#part-i-spatial-meteorology--postgresql-postgis-day-3-vs-mongodb-2dsphere-day-4)** for the 1-to-1 spatial operator translator (`ST_DWithin` vs. `$geoNear`, `ST_Covers` vs. `$geoWithin`, `ST_Intersects` vs. `$geoIntersects`).
+- **Side-by-Side `PostGIS` vs. MongoDB `2dsphere` Rosetta Stone:** Open **[POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md (Part I)](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md#1-part-i-spatial-meteorology--postgresql-postgis-day-3-vs-mongodb-2dsphere-day-4)** for the 1-to-1 spatial operator translator (`ST_DWithin` vs. `$geoNear`, `ST_Covers` vs. `$geoWithin`, `ST_Intersects` vs. `$geoIntersects`).
 
 ---
 
 ### 4.2 Indexing Strategy: The `ESR` (Equality, Sort, Range) Rule & `explain("executionStats")`
 
-#### Reading `explain("executionStats")` (MongoDB's Equivalent of `EXPLAIN ANALYZE`)
+#### 4.2.1 Reading `explain("executionStats")` (MongoDB's Equivalent of `EXPLAIN ANALYZE`)
 Compare key execution plan metrics directly with PostgreSQL:
 
 | Metric / Stage | PostgreSQL (`EXPLAIN ANALYZE`) | MongoDB (`explain("executionStats")`) |
@@ -802,7 +808,7 @@ Compare key execution plan metrics directly with PostgreSQL:
   - Ideal query: `nReturned == totalKeysExamined == totalDocsExamined` (or `totalDocsExamined == 0` for a Covered Query!).
   - Unindexed / poorly indexed query: `totalDocsExamined: 50000`, `nReturned: 5`!
 
-#### How to Order Fields in a Compound Index: The `ESR` Rule!
+#### 4.2.2 How to Order Fields in a Compound Index: The `ESR` Rule!
 When creating a multi-field B-Tree index in MongoDB, the order of keys in `createIndex({ ... })` determines whether MongoDB can satisfy both the sort order and the range filter without a blocking in-memory `SORT` stage. Always order keys by **E $\rightarrow$ S $\rightarrow$ R**:
 
 ```text
@@ -821,7 +827,7 @@ When creating a multi-field B-Tree index in MongoDB, the order of keys in `creat
  └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
-#### Multikey Indexes (Indexing Arrays)
+#### 4.2.3 Multikey Indexes (Indexing Arrays)
 When you create an index on an array field like `db.radiosonde_soundings.createIndex({ "vertical_levels.pressure_hpa": 1 })` or `db.cap_alerts.createIndex({ affected_stations: 1 })`, MongoDB automatically creates a **Multikey Index** with an index entry for every element of the array (analogous to PostgreSQL's `GIN` index).
 
 ---
@@ -829,16 +835,19 @@ When you create an index on an array field like `db.radiosonde_soundings.createI
 ### 4.3 Lab 5: Radar Storm Polygon Containment (`2dsphere`) & Diagnosing `ESR` Execution Plans
 Switch back to the `weather_nosql` database (`use weather_nosql;`):
 
-#### Lab 5 Walkthrough & Verification:
-1. **Proximity Search (`$geoNear`):** A Mediterranean waterspout/mesocyclone is spotted offshore near Algiers at `[3.30, 36.80]`. Use the **`$geoNear`** aggregation stage on `db.stations` to find all active stations/buoys within **250 km** (`250000` meters), returning each station's name, type, and exact distance in **kilometers** (`distanceMultiplier: 0.001`).
-2. **Radar Polygon Containment (`$geoWithin`):**
-   - Fetch the GeoJSON `footprint` polygon of `"CELL-MED-20261006-A"` (`Mediterranean Convective System Alpha`) from `db.storm_polygons`.
-   - Query `db.stations` using **`$geoWithin`** (`location: { $geoWithin: { $geometry: medStorm.footprint } }`) to list every weather station currently underneath that severe convective storm cell!
-3. **Reverse Lookup (`$geoIntersects`):** Given the coordinate of Constantine Airport (`[6.6203, 36.2760]`), query `db.storm_polygons` using **`$geoIntersects`** to check which active storm cell polygon currently covers that coordinate!
-4. **Verify the `ESR` Compound Index Plan:**
-   - Run `.explain("executionStats")` on `db.radiosonde_soundings.find({ station_id: 60390, cape_j_kg: { $gte: 200 } }).sort({ launch_time: -1 })`.
-   - Verify that `winningPlan` uses `IXSCAN` on `idx_sonde_esr` with **zero `SORT` stage**.
-5. **Before vs. After Multikey Index:** Run `.explain("executionStats")` on `db.cap_alerts.find({ affected_stations: 60419 })` before and after creating `db.cap_alerts.createIndex({ affected_stations: 1 })`.
+#### 4.3.1 Lab 5 Walkthrough & Verification:
+##### 4.3.1.1 Proximity Search (`$geoNear`)
+A Mediterranean waterspout/mesocyclone is spotted offshore near Algiers at `[3.30, 36.80]`. Use the **`$geoNear`** aggregation stage on `db.stations` to find all active stations/buoys within **250 km** (`250000` meters), returning each station's name, type, and exact distance in **kilometers** (`distanceMultiplier: 0.001`).
+##### 4.3.1.2 Radar Polygon Containment (`$geoWithin`)
+- Fetch the GeoJSON `footprint` polygon of `"CELL-MED-20261006-A"` (`Mediterranean Convective System Alpha`) from `db.storm_polygons`.
+- Query `db.stations` using **`$geoWithin`** (`location: { $geoWithin: { $geometry: medStorm.footprint } }`) to list every weather station currently underneath that severe convective storm cell!
+##### 4.3.1.3 Reverse Lookup (`$geoIntersects`)
+Given the coordinate of Constantine Airport (`[6.6203, 36.2760]`), query `db.storm_polygons` using **`$geoIntersects`** to check which active storm cell polygon currently covers that coordinate!
+##### 4.3.1.4 Verify the `ESR` Compound Index Plan
+- Run `.explain("executionStats")` on `db.radiosonde_soundings.find({ station_id: 60390, cape_j_kg: { $gte: 200 } }).sort({ launch_time: -1 })`.
+- Verify that `winningPlan` uses `IXSCAN` on `idx_sonde_esr` with **zero `SORT` stage**.
+##### 4.3.1.5 Before vs. After Multikey Index
+Run `.explain("executionStats")` on `db.cap_alerts.find({ affected_stations: 60419 })` before and after creating `db.cap_alerts.createIndex({ affected_stations: 1 })`.
 
 ```javascript
 use weather_nosql;
@@ -913,7 +922,7 @@ printjson(db.cap_alerts.find({ affected_stations: 60419 }).explain("executionSta
 
 ---
 
-## Module 5: Distributed MongoDB in Production — Replica Sets, Tunable CAP/PACELC, GridFS & Horizontal Sharding
+## 5. Module 5: Distributed MongoDB in Production — Replica Sets, Tunable CAP/PACELC, GridFS & Horizontal Sharding
 
 ### 5.1 High Availability via 3-Node Replica Sets & The Oplog (`local.oplog.rs`)
 
@@ -1010,11 +1019,11 @@ Unlike PostgreSQL (where synchronous replication is typically configured globall
   1. **Life-Safety CAP Storm Alerts (`cap_alerts`) & Station Registry (`stations`) [CP]:** Mandatory `{ w: "majority", j: true }` + `readConcern: "linearizable"`. Guarantees zero rollbacks on failover.
   2. **High-Frequency $1\text{ Hz}$ Sonic Wind / Disdrometer Stream (`weather_stream`) [AP]:** `{ w: 1, j: false }` + `readConcern: "local"`. Maximizes ingestion throughput.
 
-#### Black Box 4C Demystified: PostgreSQL (`Patroni`) vs. MongoDB (`Replica Set`) Failover & Why `w: 1` Triggers Silent Post-Failover Rollbacks
+#### 5.2.1 Black Box 4C Demystified: PostgreSQL (`Patroni`) vs. MongoDB (`Replica Set`) Failover & Why `w: 1` Triggers Silent Post-Failover Rollbacks
 
 Why does PostgreSQL require an external stack (`Patroni` + 3-node `etcd` + `HAProxy`) for automatic failover while MongoDB handles failover natively out of the box—and how can a "succeeded" MongoDB write silently vanish after a failover if you use the wrong Write Concern?
 
-##### 1. Head-to-Head Failover Architecture: PostgreSQL 16 vs. MongoDB 7.0
+##### 5.2.1.1 Head-to-Head Failover Architecture: PostgreSQL 16 vs. MongoDB 7.0
 | Architectural Dimension | PostgreSQL 16 HA (`Streaming Replication` + `Patroni`) | MongoDB 7.0 HA (`3-Node Replica Set`) |
 | :--- | :--- | :--- |
 | **Replication Log Payload** | **Physical Byte-Level WAL (`pg_wal`):** Exact 8 KB page images & byte offsets (`XLogRecord`). Standbys are byte-for-byte clones. | **Logical Idempotent Oplog (`local.oplog.rs`):** Capped collection of BSON operations (e.g., `{$inc: {n: 1}}` converted to `{$set: {n: 5}}`). |
@@ -1023,7 +1032,7 @@ Why does PostgreSQL require an external stack (`Patroni` + 3-node `etcd` + `HAPr
 | **Split-Brain Defense** | Primary loses `etcd` quorum $\rightarrow$ Patroni demotes Primary to read-only (or `/dev/watchdog` resets host). | Isolated Primary cannot reach a majority ($\ge 2/3$) of nodes $\rightarrow$ **automatically steps down to `SECONDARY`** within 10s. |
 | **Zero-Data-Loss Setting (`RPO = 0`)** | `synchronous_commit = on` + `synchronous_standby_names` | `{ writeConcern: { w: "majority", j: true } }` |
 
-##### 2. Anatomy of a Silent `w: 1` Failover Rollback vs. `w: "majority"` Quorum Safety
+##### 5.2.1.2 Anatomy of a Silent `w: 1` Failover Rollback vs. `w: "majority"` Quorum Safety
 Suppose `mongo-node1` (Primary) receives a Flash Flood alert at `12:00:00.050` and suffers a power outage at `12:00:00.080` (30 ms later, before `mongo-node2` or `mongo-node3` have pulled that Oplog entry):
 
 | Timeline Step | With `{ w: 1 }` (Primary-Only Ack) | With `{ w: "majority", j: true }` (Quorum Ack) |
@@ -1076,18 +1085,18 @@ flowchart TB
     end
 ```
 
-#### 1. The 3 Physical Forces Governing Every MongoDB Shard Key
+#### 5.4.1 The 3 Physical Forces Governing Every MongoDB Shard Key
 Once a collection is sharded, **your Shard Key choice dictates both write distribution and query routing**:
 1. **Cardinality (Number of Distinct Values):** Determines the maximum number of chunks MongoDB can split the collection into. If you shard on `{ climate_zone: 1 }` (which has only 5 distinct values), MongoDB can create **at most 5 chunks**—even if your collection grows to 50 TB!
 2. **Frequency (Skew per Value):** If 60% of sensors belong to one region or category, that chunk grows past 64 MB and cannot be split across keys, becoming an immovable **Jumbo Chunk**.
 3. **Monotonicity (Strictly Increasing Values like `obs_time` or `ObjectId`):** In range-based sharding, the highest chunk always holds the open-ended upper bound `[T_latest, MaxKey)`. If your shard key is `{ obs_time: 1 }` (or `_id: ObjectId()`), **every new observation has $T_{\text{now}} > T_{\text{latest}}$**—routing **100.0% of live cluster writes to the single shard holding `MaxKey`** while all other shards sit completely idle on writes!
 
-#### 2. Targeted Single-Shard Query vs. Scatter-Gather Broadcast Query
+#### 5.4.2 Targeted Single-Shard Query vs. Scatter-Gather Broadcast Query
 When `mongos` receives a `find()` or `aggregate()` query:
 * **Targeted Query ($O(1)$ Shard Routing):** If the query filter includes the **Shard Key prefix** (e.g., `station_id: 60390`), `mongos` looks up the chunk map in RAM and routes the query **only to the 1 shard** that owns `60390`.
 * **Scatter-Gather Query ($O(N)$ All-Shard Broadcast):** If the query filter omits the Shard Key prefix—or if the Shard Key is `{ obs_time: "hashed" }` and the query asks for a time range (`obs_time: { $gte: T1, $lt: T2 }`)—`mongos` must broadcast the query to **every shard in the cluster**, wait for the slowest shard, and merge-sort the results!
 
-#### 3. The 4-Pattern MongoDB Shard Key Decision Matrix for Weather Databases
+#### 5.4.3 The 4-Pattern MongoDB Shard Key Decision Matrix for Weather Databases
 | Pattern | Shard Key Declaration | Live Write Distribution | Station + Time Range Query (`station_id = X AND obs_time BETWEEN ...`) | Risk of Jumbo Chunks? | Engineering Verdict |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | **1. Monotonic Timestamp** *(Anti-Pattern)* | `{ obs_time: 1 }` *(or default `_id` `ObjectId`)* | ** 100% on 1 Shard (`MaxKey` Hotspot!)** — Adding more shards gives **0% extra write throughput**. | Broadcasts across all stations in that time chunk. | Low | **NEVER USE for live telemetry.** Turns a 10-shard cluster into a 1-shard bottleneck. |
@@ -1100,11 +1109,13 @@ When `mongos` receives a `find()` or `aggregate()` query:
 ---
 
 ### 5.5 Lab 6: Tunable CAP Write Concerns, WiredTiger Cache Forensics & Sharded Cluster Design
-#### Lab 6 Walkthrough & Architectural Reference:
-1. **Enforce CP Durability on a Life-Safety Alert:** Insert a Red Severe Weather Alert (`_id: "DZ-ONM-2026-10-06-003"`) into `db.cap_alerts` using explicit journaled majority Write Concern (`{ writeConcern: { w: "majority", j: true, wtimeout: 5000 } }`).
-2. **Inspect WiredTiger Cache & Concurrency Tickets:** Query `db.serverStatus().wiredTiger.cache` and `db.serverStatus().wiredTiger.concurrentTransactions` in `mongosh` to inspect maximum cache bytes, dirty bytes currently in RAM, and available read/write tickets.
-3. **Production Shard Key Patterns (`sh.shardCollection`):**
-   Compare the optimal compound shard keys for three meteorological workloads (`synoptic_timeseries`, `radiosonde_soundings`, and `radar_volumetric_scans` with only 8 Doppler radar sites nationwide) so that every collection avoids both **monotonic write hotspots** and **Jumbo Chunks** while supporting targeted station + time-window queries:
+#### 5.5.1 Lab 6 Walkthrough & Architectural Reference:
+##### 5.5.1.1 Enforce CP Durability on a Life-Safety Alert
+Insert a Red Severe Weather Alert (`_id: "DZ-ONM-2026-10-06-003"`) into `db.cap_alerts` using explicit journaled majority Write Concern (`{ writeConcern: { w: "majority", j: true, wtimeout: 5000 } }`).
+##### 5.5.1.2 Inspect WiredTiger Cache & Concurrency Tickets
+Query `db.serverStatus().wiredTiger.cache` and `db.serverStatus().wiredTiger.concurrentTransactions` in `mongosh` to inspect maximum cache bytes, dirty bytes currently in RAM, and available read/write tickets.
+##### 5.5.1.3 Production Shard Key Patterns (`sh.shardCollection`)
+Compare the optimal compound shard keys for three meteorological workloads (`synoptic_timeseries`, `radiosonde_soundings`, and `radar_volumetric_scans` with only 8 Doppler radar sites nationwide) so that every collection avoids both **monotonic write hotspots** and **Jumbo Chunks** while supporting targeted station + time-window queries:
 
 ```javascript
 use weather_nosql;

@@ -32,11 +32,11 @@
   - [6.1 RGW Architecture & Internal Pools](#61-rgw-architecture--internal-pools)
   - [6.2 S3 High-Availability Load Balancing (Keepalived + HAProxy)](#62-s3-high-availability-load-balancing-keepalived--haproxy)
 - [7. Complete Step-by-Step Deployment Runbook on Proxmox VE](#7-complete-step-by-step-deployment-runbook-on-proxmox-ve)
-  - [Step 1: Install Ceph on Proxmox VE Cluster](#step-1-install-ceph-on-proxmox-ve-cluster)
-  - [Step 2: Create CRUSH Device Classes & OSDs](#step-2-create-crush-device-classes--osds)
-  - [Step 3: Configure Erasure Coding & Storage Pools for Meteorological Binaries](#step-3-configure-erasure-coding--storage-pools-for-meteorological-binaries)
-  - [Step 4: Provision Ceph Object Gateways (RGW)](#step-4-provision-ceph-object-gateways-rgw)
-  - [Step 5: Provision Meteorological S3 Credentials & Storage Buckets](#step-5-provision-meteorological-s3-credentials--storage-buckets)
+  - [Step 1: Install Ceph on Proxmox VE Cluster](#71-step-1-install-ceph-on-proxmox-ve-cluster)
+  - [Step 2: Create CRUSH Device Classes & OSDs](#72-step-2-create-crush-device-classes--osds)
+  - [Step 3: Configure Erasure Coding & Storage Pools for Meteorological Binaries](#73-step-3-configure-erasure-coding--storage-pools-for-meteorological-binaries)
+  - [Step 4: Provision Ceph Object Gateways (RGW)](#74-step-4-provision-ceph-object-gateways-rgw)
+  - [Step 5: Provision Meteorological S3 Credentials & Storage Buckets](#75-step-5-provision-meteorological-s3-credentials--storage-buckets)
 - [8. Integrating On-Premise Ceph S3 with Cloud-Native Geospatial Tooling](#8-integrating-on-premise-ceph-s3-with-cloud-native-geospatial-tooling)
   - [8.1 DuckDB Vectorized Queries Over On-Premise Ceph](#81-duckdb-vectorized-queries-over-on-premise-ceph)
   - [8.2 GDAL / Rasterio Configuration for Streaming Cloud-Optimized GeoTIFFs (COG)](#82-gdal--rasterio-configuration-for-streaming-cloud-optimized-geotiffs-cog)
@@ -141,10 +141,13 @@ In a hyperconverged meteorological deployment, physical host servers act simulta
 
 Ceph performance and cluster stability depend entirely on low-latency network plumbing:
 
-1. **Corosync & Management Network (1 GbE or Dedicated VLAN):** Handles Proxmox cluster heartbeat consensus. High-volume storage traffic must **never** traverse this network; if high-throughput backfilling saturates the physical link, Corosync heartbeats will drop, causing Proxmox to trigger hardware fencing (`watchdog` kernel reboots).
-2. **Ceph Public Network (`10.10.20.0/24`):** Carries client traffic between applications (DuckDB, Python, GIS clients), Ceph MONs, and RADOS Gateways (RGW).
-3. **Ceph Cluster Network (`10.10.30.0/24`):** Dedicated to OSD data replication, erasure coding reconstruction, and recovery backfills.
-   * **Jumbo Frames (MTU 9000):** Must be configured across the entire physical data path: OSD network interfaces, switch trunk ports, and storage VLANs. MTU mismatches cause silent packet dropouts during multi-gigabit radar/satellite bursts, triggering TCP retransmission stalls.
+#### 1.3.1 Corosync & Management Network (1 GbE or Dedicated VLAN)
+Handles Proxmox cluster heartbeat consensus. High-volume storage traffic must **never** traverse this network; if high-throughput backfilling saturates the physical link, Corosync heartbeats will drop, causing Proxmox to trigger hardware fencing (`watchdog` kernel reboots).
+#### 1.3.2 Ceph Public Network (`10.10.20.0/24`)
+Carries client traffic between applications (DuckDB, Python, GIS clients), Ceph MONs, and RADOS Gateways (RGW).
+#### 1.3.3 Ceph Cluster Network (`10.10.30.0/24`)
+Dedicated to OSD data replication, erasure coding reconstruction, and recovery backfills.
+* **Jumbo Frames (MTU 9000):** Must be configured across the entire physical data path: OSD network interfaces, switch trunk ports, and storage VLANs. MTU mismatches cause silent packet dropouts during multi-gigabit radar/satellite bursts, triggering TCP retransmission stalls.
 
 ---
 
@@ -373,18 +376,20 @@ The **Ceph Object Gateway (RADOS Gateway / RGW)** is an active-active HTTP servi
  └─────────────────────────────────────────┘   └─────────────────────────────────────────┘
 ```
 
-1. **`default.rgw.control` & `default.rgw.meta`:** Manages internal gateway synchronization, users, access keys, and zone configurations. Must always reside on low-latency NVMe SSD pools.
-2. **`default.rgw.buckets.index` (The OMAP Pool):**
-   * Holds the directory index of every object stored within a bucket.
-   * Uses RocksDB **OMAP** (Object Map) key-value records inside BlueStore.
-   * **The Bucket Index Bottleneck:** If a single bucket holds $> 100,000$ objects without sharding, the OMAP b-tree becomes a serialization bottleneck.
-   * **Dynamic Bucket Sharding:** Modern Ceph clusters automatically shard bucket indexes as object counts grow:
-     
-     $$
-     \text{Target Objects Per Shard} \approx 100,000 \implies \mathbf{\text{Num Shards} = \left\lceil \frac{\text{Objects in Bucket}}{100,000} \right\rceil}
-     $$
+#### 6.1.1 `default.rgw.control` & `default.rgw.meta`
+Manages internal gateway synchronization, users, access keys, and zone configurations. Must always reside on low-latency NVMe SSD pools.
+#### 6.1.2 `default.rgw.buckets.index` (The OMAP Pool)
+* Holds the directory index of every object stored within a bucket.
+* Uses RocksDB **OMAP** (Object Map) key-value records inside BlueStore.
+* **The Bucket Index Bottleneck:** If a single bucket holds $> 100,000$ objects without sharding, the OMAP b-tree becomes a serialization bottleneck.
+* **Dynamic Bucket Sharding:** Modern Ceph clusters automatically shard bucket indexes as object counts grow:
+  
+  $$
+  \text{Target Objects Per Shard} \approx 100,000 \implies \mathbf{\text{Num Shards} = \left\lceil \frac{\text{Objects in Bucket}}{100,000} \right\rceil}
+  $$
 
-3. **`default.rgw.buckets.data`:** The storage pool holding physical binary byte extents. This pool should use Erasure Coding on enterprise HDDs to maximize capacity.
+#### 6.1.3 `default.rgw.buckets.data`
+The storage pool holding physical binary byte extents. This pool should use Erasure Coding on enterprise HDDs to maximize capacity.
 
 ### 6.2 S3 High-Availability Load Balancing (Keepalived + HAProxy)
 
@@ -417,7 +422,7 @@ Applications running on the network must never connect directly to low-level Cep
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Production HAProxy Configuration (`haproxy.cfg`)
+#### 6.2.1 Production HAProxy Configuration (`haproxy.cfg`)
 
 Deploy this configuration across your gateway VMs or directly on Proxmox nodes to distribute S3 traffic and automate health failover across all RGW instances:
 
@@ -465,7 +470,7 @@ backend rgw_cluster_back
 
 Follow this step-by-step terminal execution guide directly on your Proxmox VE nodes.
 
-### Step 1: Install Ceph on Proxmox VE Cluster
+### 7.1 Step 1: Install Ceph on Proxmox VE Cluster
 
 Run these commands on your master node (`pve-01`):
 
@@ -486,7 +491,7 @@ ssh root@pve-02 "pveceph mgr create"
 ceph -s
 ```
 
-### Step 2: Create CRUSH Device Classes & OSDs
+### 7.2 Step 2: Create CRUSH Device Classes & OSDs
 
 Identify your enterprise NVMe drives and high-capacity HDDs:
 
@@ -500,7 +505,7 @@ pveceph osd create /dev/sda --db_dev /dev/nvme0n1 --crush-device-class hdd
 pveceph osd create /dev/sdb --db_dev /dev/nvme0n1 --crush-device-class hdd
 ```
 
-### Step 3: Configure Erasure Coding & Storage Pools for Meteorological Binaries
+### 7.3 Step 3: Configure Erasure Coding & Storage Pools for Meteorological Binaries
 
 ```bash
 # 1. Define an Erasure Coding profile (k=4 data chunks, m=2 parity chunks)
@@ -521,7 +526,7 @@ ceph osd pool create meteo-rgw-index 64 64 replicated
 ceph osd pool set-quota meteo-rgw-index max_objects 50000000
 ```
 
-### Step 4: Provision Ceph Object Gateways (RGW)
+### 7.4 Step 4: Provision Ceph Object Gateways (RGW)
 
 Deploy RGW instances across nodes to ensure high availability:
 
@@ -535,7 +540,7 @@ ssh root@pve-03 "pveceph rgw create --name rgw03"
 netstat -tulpn | grep 7480
 ```
 
-### Step 5: Provision Meteorological S3 Credentials & Storage Buckets
+### 7.5 Step 5: Provision Meteorological S3 Credentials & Storage Buckets
 
 Use `radosgw-admin` to provision system tenants and access keys:
 
@@ -944,7 +949,7 @@ ceph osd set-full-ratio 0.95
 
 ---
 
-### Reference Library Navigation
+### 11.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | **Card 05 of 14** | [Next Card](./06_dbt_for_meteorological_telemetry_engineering.md) | [⬆ Back to Top](#sovereign-on-premises-ceph-distributed-storage--proxmox-ve-hyperconverged-architecture-reference-card)

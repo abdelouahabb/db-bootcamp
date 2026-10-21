@@ -4,7 +4,7 @@
 
 ---
 
-## Architectural Overview
+## 1. Architectural Overview
 
 [`day4_weather_ops_mongo.js`](./day4_weather_ops_mongo.js) is the foundational MongoDB operational seed script (`mongosh`) for the **`weather_nosql`** database. In national meteorological centers, observation networks are inherently heterogeneous: surface synoptic stations, coastal marine buoys, agricultural soil-profile probes, arid dust monitors, and upper-air radiosonde balloon sites all emit distinct telemetry structures that evolve rapidly as new sensor hardware is deployed.
 
@@ -35,9 +35,9 @@ flowchart TD
 
 ---
 
-## Header, Database Initialization & Idempotent Teardown (Lines 1–14)
+## 2. Header, Database Initialization & Idempotent Teardown (Lines 1–14)
 
-### Code Block
+### 2.1 Code Block
 
 ```javascript
 // ============================================================================
@@ -55,7 +55,7 @@ db.cap_alerts.drop();
 db.synoptic_timeseries.drop();
 ```
 
-### Line-by-Line Technical Breakdown
+### 2.2 Line-by-Line Technical Breakdown
 
 * **Lines 1–5 (Header & CLI Invocation Contract):**
   * Documents the execution command: `mongosh weather_nosql day4_weather_ops_mongo.js`.
@@ -70,9 +70,9 @@ db.synoptic_timeseries.drop();
 
 ---
 
-## Section 1: `stations` Collection with `$jsonSchema` Physical Validation (Lines 15–111)
+## 3. Section 1: `stations` Collection with `$jsonSchema` Physical Validation (Lines 15–111)
 
-### 1.1 Creating the Collection and Enforcing the `$jsonSchema` Validator (Lines 15–42)
+### 3.1 Creating the Collection and Enforcing the `$jsonSchema` Validator (Lines 15–42)
 
 ```javascript
 print("=== 1. Creating 'stations' Collection with $jsonSchema Physical Validation ===");
@@ -105,7 +105,7 @@ db.createCollection("stations", {
 });
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 3.1.1 Deep-Dive Architectural Explanation
 
 * **Line 15 (`print(...)`):** Outputs a section banner to standard output so pipeline logs clearly demarcate collection creation.
 * **Lines 16–18 (`db.createCollection("stations", { validator: { $jsonSchema: { ... } } })`):**
@@ -135,7 +135,7 @@ db.createCollection("stations", {
 
 ---
 
-### 1.2 Seeding the 6 Polymorphic Weather Station Documents (Lines 44–111)
+### 3.2 Seeding the 6 Polymorphic Weather Station Documents (Lines 44–111)
 
 ```javascript
 // Seed Polymorphic Weather Stations (AWS, Coastal Buoy, Agro Station, Upper-Air Station)
@@ -208,7 +208,7 @@ db.stations.insertMany([
 ]);
 ```
 
-#### Polymorphic Station Architecture Comparison
+#### 3.2.1 Polymorphic Station Architecture Comparison
 
 All 6 documents satisfy the 5-field `$jsonSchema` contract (`_id`, `station_name`, `station_type`, `location`, `is_active`) plus `climate_zone` and `elevation_m`, while tailoring their remaining fields to the physical reality of each site:
 
@@ -226,9 +226,9 @@ All 6 documents satisfy the 5-field `$jsonSchema` contract (`_id`, `station_name
 
 ---
 
-## Section 2: `radiosonde_soundings` — Bounded Embedded Document Arrays (Lines 113–170)
+## 4. Section 2: `radiosonde_soundings` — Bounded Embedded Document Arrays (Lines 113–170)
 
-### Code Block
+### 4.1 Code Block
 
 ```javascript
 print("=== 2. Creating 'radiosonde_soundings' (Nested Vertical Atmospheric Profiles) ===");
@@ -291,9 +291,9 @@ db.radiosonde_soundings.insertMany([
 ]);
 ```
 
-### Deep-Dive Architectural Explanation
+### 4.2 Deep-Dive Architectural Explanation
 
-#### 1. Why Radiosonde Soundings Are the Textbook Use Case for Embedded Document Arrays
+#### 4.2.1 Why Radiosonde Soundings Are the Textbook Use Case for Embedded Document Arrays
 In a relational database (3NF), modeling an upper-air weather balloon flight requires three separate tables:
 1. `soundings` (flight header: `sounding_id`, `station_id`, `launch_time`, `sonde_serial`, `burst_altitude_m`, `cape_j_kg`, `k_index`)
 2. `sounding_levels` (1-to-many child rows: `sounding_id`, `pressure_hpa`, `height_m`, `temp_c`, `dewpoint_c`, `wind_dir_deg`, `wind_speed_kt`)
@@ -305,7 +305,7 @@ In MongoDB, **"Data that is accessed together should be stored together."** Beca
 * **Single-Seek Physical Locality:** The entire atmospheric profile from surface (`1000 hPa`) to the upper-tropospheric jet stream (`300 hPa`) resides in a single contiguous BSON byte buffer on disk.
 * **Atomic Document Ingestion:** The flight header, all vertical pressure levels, and initial QC results are written atomically in a single document write without multi-table transaction lock overhead.
 
-#### 2. Meteorological & Physical Field Breakdown across the 3 Seeded Soundings
+#### 4.2.2 Meteorological & Physical Field Breakdown across the 3 Seeded Soundings
 * **Flight Header & Thermodynamic Instability Metrics:**
   * `station_id` & `station_name`: Denormalizes `station_name` alongside `station_id` (`60390` Algiers and `60680` Tamanrasset) so forecast displays do not need a `$lookup` join against `stations` just to render the station title.
   * `launch_time`: Synoptic upper-air release times (`00:00 UTC` and `12:00 UTC` on `2026-10-06`).
@@ -322,9 +322,9 @@ In MongoDB, **"Data that is accessed together should be stored together."** Beca
 
 ---
 
-## Section 3: `synoptic_timeseries` — Native MongoDB 5.0+ Time-Series Collection (Lines 172–228)
+## 5. Section 3: `synoptic_timeseries` — Native MongoDB 5.0+ Time-Series Collection (Lines 172–228)
 
-### 3.1 Creating the Time-Series Collection with Columnar Bucketing & TTL (Lines 172–181)
+### 5.1 Creating the Time-Series Collection with Columnar Bucketing & TTL (Lines 172–181)
 
 ```javascript
 print("=== 3. Creating Native MongoDB Time-Series Collection ('synoptic_timeseries') ===");
@@ -339,7 +339,7 @@ db.createCollection("synoptic_timeseries", {
 });
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 5.1.1 Deep-Dive Architectural Explanation
 
 * **Why Native Time-Series Collections Exist:**
   * In a standard BSON collection, inserting 100 million weather observations stores 100 million independent BSON documents, repeating field names (`temp_c`, `pressure_hpa`, `wind_speed_kt`) in every record and adding 100 million entries to every B-Tree index.
@@ -359,7 +359,7 @@ db.createCollection("synoptic_timeseries", {
      * $7,776,000\text{ seconds} = 90\text{ days} \times 86,400\text{ seconds/day}$.
      * Configures automated Time-To-Live (TTL) expiration. Once a bucket's maximum timestamp (`control.max.obs_time`) is older than 90 days, MongoDB's background TTL monitor drops the entire expired bucket atomically without expensive per-document random B-Tree deletions.
 
-#### How WiredTiger Packs `system.buckets.synoptic_timeseries` Under the Hood
+#### 5.1.2 How WiredTiger Packs `system.buckets.synoptic_timeseries` Under the Hood
 
 When the 3 observations for **Algiers AWS (`60390`)** are inserted, WiredTiger packs them into a single internal columnar bucket document structured conceptually like this:
 
@@ -396,7 +396,7 @@ When the 3 observations for **Algiers AWS (`60390`)** are inserted, WiredTiger p
 
 ---
 
-### 3.2 Seeding 6 Polymorphic Synoptic Observations (Lines 183–228)
+### 5.2 Seeding 6 Polymorphic Synoptic Observations (Lines 183–228)
 
 ```javascript
 // Seed Polymorphic Synoptic & Buoy & Agro Telemetry into Time-Series Collection
@@ -447,26 +447,26 @@ db.synoptic_timeseries.insertMany([
 ]);
 ```
 
-#### Polymorphic Time-Series Payload Breakdown
+#### 5.2.1 Polymorphic Time-Series Payload Breakdown
 
 Because Time-Series buckets are partitioned by `station_meta`, each station class only creates columnar streams inside its own bucket for the fields it actually emits:
 
-1. **Algiers AWS (`station_id: 60390`, Lines 185–203):**
-   * 3 consecutive 6-hourly observations (`18:00Z`, `00:00Z`, `06:00Z`) share the exact same `station_meta` and therefore pack into **1 single bucket** in `system.buckets.synoptic_timeseries`.
-   * Captures a frontal passage: pressure falls from `1013.8 hPa` to `1011.5 hPa` at `00:00Z` with heavy convective rainfall (`precip_1h_mm: 18.6`, `wind_speed_kt: 28.0`), while `diagnostics.battery_v` drains overnight from `13.2 V` to `12.4 V` and a technician opens the logger enclosure door at `06:00Z` (`door_open: true`).
-2. **Constantine Agro-Soil Station (`station_id: 60419`, Lines 204–211):**
-   * Adds the `soil_profile` sub-document (`{ temp_10cm_c: 16.4, moisture_10cm_pct: 38.5, moisture_30cm_pct: 29.0, leaf_wetness_idx: 9.2 }`) alongside intense rainfall (`precip_1h_mm: 24.0`, `wind_speed_kt: 34.0`).
-3. **Algiers Bay Marine Buoy (`station_id: 60901`, Lines 212–219):**
-   * Omits `dewpoint_c` and `precip_1h_mm` (wave buoys rarely carry optical rain gauges due to sea spray contamination) and embeds `marine_telemetry: { sea_surface_temp_c: 22.8, sig_wave_height_m: 3.4, peak_wave_period_s: 8.5, salinity_psu: 37.6 }`.
-   * Also customizes `diagnostics: { battery_v: 11.7, solar_charging: false }` (replacing `door_open` and `firmware` with marine solar charging telemetry).
-4. **Bechar Arid Dust Station (`station_id: 60571`, Lines 220–227):**
-   * Embeds `aerosol_telemetry: { pm10_ug_m3: 840, pm25_ug_m3: 195, visibility_m: 400 }`, capturing a severe Saharan dust event where coarse particulate matter (`pm10_ug_m3: 840`) exceeds the station's `dust_storm_threshold_ug_m3: 500` threshold and drops horizontal visibility to `400 m` under `38.0 kt` winds.
+##### 5.2.1.1 Algiers AWS (`station_id: 60390`, Lines 185–203)
+* 3 consecutive 6-hourly observations (`18:00Z`, `00:00Z`, `06:00Z`) share the exact same `station_meta` and therefore pack into **1 single bucket** in `system.buckets.synoptic_timeseries`.
+* Captures a frontal passage: pressure falls from `1013.8 hPa` to `1011.5 hPa` at `00:00Z` with heavy convective rainfall (`precip_1h_mm: 18.6`, `wind_speed_kt: 28.0`), while `diagnostics.battery_v` drains overnight from `13.2 V` to `12.4 V` and a technician opens the logger enclosure door at `06:00Z` (`door_open: true`).
+##### 5.2.1.2 Constantine Agro-Soil Station (`station_id: 60419`, Lines 204–211)
+* Adds the `soil_profile` sub-document (`{ temp_10cm_c: 16.4, moisture_10cm_pct: 38.5, moisture_30cm_pct: 29.0, leaf_wetness_idx: 9.2 }`) alongside intense rainfall (`precip_1h_mm: 24.0`, `wind_speed_kt: 34.0`).
+##### 5.2.1.3 Algiers Bay Marine Buoy (`station_id: 60901`, Lines 212–219)
+* Omits `dewpoint_c` and `precip_1h_mm` (wave buoys rarely carry optical rain gauges due to sea spray contamination) and embeds `marine_telemetry: { sea_surface_temp_c: 22.8, sig_wave_height_m: 3.4, peak_wave_period_s: 8.5, salinity_psu: 37.6 }`.
+* Also customizes `diagnostics: { battery_v: 11.7, solar_charging: false }` (replacing `door_open` and `firmware` with marine solar charging telemetry).
+##### 5.2.1.4 Bechar Arid Dust Station (`station_id: 60571`, Lines 220–227)
+* Embeds `aerosol_telemetry: { pm10_ug_m3: 840, pm25_ug_m3: 195, visibility_m: 400 }`, capturing a severe Saharan dust event where coarse particulate matter (`pm10_ug_m3: 840`) exceeds the station's `dust_storm_threshold_ug_m3: 500` threshold and drops horizontal visibility to `400 m` under `38.0 kt` winds.
 
 ---
 
-## Section 4: `cap_alerts` — Common Alerting Protocol Bulletins (Lines 230–258)
+## 6. Section 4: `cap_alerts` — Common Alerting Protocol Bulletins (Lines 230–258)
 
-### Code Block
+### 6.1 Code Block
 
 ```javascript
 print("=== 4. Creating 'cap_alerts' (Common Alerting Protocol Nested Bulletins) ===");
@@ -500,7 +500,7 @@ db.cap_alerts.insertMany([
 print("=== Day 4 MongoDB 'weather_nosql' Seed Complete! ===");
 ```
 
-### Deep-Dive Architectural Explanation
+### 6.2 Deep-Dive Architectural Explanation
 
 * **Natural String Primary Key (`_id: "DZ-ONM-2026-10-05-001"`):**
   * Follows WMO / ITU-T X.1303 Common Alerting Protocol (CAP) bulletin numbering conventions (`<ISO-Country>-<Issuing-Authority>-<Date>-<Sequence>`, here Algeria's *Office National de la Météorologie* `DZ-ONM`). Storing this immutable identifier in `_id` guarantees idempotency across message-broker retries.
@@ -516,7 +516,7 @@ print("=== Day 4 MongoDB 'weather_nosql' Seed Complete! ===");
 
 ---
 
-## Expected Terminal Output & Verification
+## 7. Expected Terminal Output & Verification
 
 Running the script via `mongosh weather_nosql day4_weather_ops_mongo.js` produces the following console output:
 
@@ -528,7 +528,7 @@ Running the script via `mongosh weather_nosql day4_weather_ops_mongo.js` produce
 === Day 4 MongoDB 'weather_nosql' Seed Complete! ===
 ```
 
-### Post-Seed Verification Queries (`mongosh`)
+### 7.1 Post-Seed Verification Queries (`mongosh`)
 
 ```javascript
 // Verify collection counts and internal Time-Series bucket compression

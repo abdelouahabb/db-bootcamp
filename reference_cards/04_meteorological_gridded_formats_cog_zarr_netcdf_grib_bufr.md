@@ -186,17 +186,17 @@ A **Cloud Optimized GeoTIFF (COG)** is a backwards-compatible TIFF file structur
  EOF      └───────────────────────────────────────────────────────────────────┘
 ```
 
-#### The Mechanical Innovations of COG:
-1. **Internal Tiling (Not Striping):**
-   * Standard GeoTIFFs organize pixels in horizontal *strips* across the entire image width. Fetching a $100 \times 100$ pixel window at the center of a $10,000 \times 10,000$ image requires reading 100 complete full-width strips.
-   * COGs break pixels into independent square **Tiles** (typically $256 \times 256$ or $512 \times 512$ pixels). Fetching a sub-window requires fetching only the 4 to 9 tiles covering that exact spatial bounding box.
-2. **Internal Decimated Overviews (Mipmaps):**
-   * Pre-calculated, downsampled representations ($2\times, 4\times, 8\times, 16\times$) are embedded directly within the file.
-   * When an interactive forecast map renders a low-zoom view of an entire continent, it reads only the small Overview tiles ($\approx 1\text{ MB}$) rather than the massive 200 MB full-resolution grid.
-3. **HTTP Range GET Mechanics:**
-   * Step 1: Client issues an HTTP `Range: bytes=0-16384` request to fetch the TIFF header and IFDs.
-   * Step 2: Client calculates the exact byte offsets of the target tiles.
-   * Step 3: Client issues targeted HTTP Range GETs for those exact byte positions, rendering the target region in under **10 milliseconds** over a local network.
+#### 3.1.1 The Mechanical Innovations of COG:
+##### 3.1.1.1 Internal Tiling (Not Striping)
+* Standard GeoTIFFs organize pixels in horizontal *strips* across the entire image width. Fetching a $100 \times 100$ pixel window at the center of a $10,000 \times 10,000$ image requires reading 100 complete full-width strips.
+* COGs break pixels into independent square **Tiles** (typically $256 \times 256$ or $512 \times 512$ pixels). Fetching a sub-window requires fetching only the 4 to 9 tiles covering that exact spatial bounding box.
+##### 3.1.1.2 Internal Decimated Overviews (Mipmaps)
+* Pre-calculated, downsampled representations ($2\times, 4\times, 8\times, 16\times$) are embedded directly within the file.
+* When an interactive forecast map renders a low-zoom view of an entire continent, it reads only the small Overview tiles ($\approx 1\text{ MB}$) rather than the massive 200 MB full-resolution grid.
+##### 3.1.1.3 HTTP Range GET Mechanics
+* Step 1: Client issues an HTTP `Range: bytes=0-16384` request to fetch the TIFF header and IFDs.
+* Step 2: Client calculates the exact byte offsets of the target tiles.
+* Step 3: Client issues targeted HTTP Range GETs for those exact byte positions, rendering the target region in under **10 milliseconds** over a local network.
 
 ### 3.2 Zarr: The Cloud-Native Multidimensional Array Architecture
 
@@ -218,7 +218,7 @@ For multi-dimensional, multi-parameter continua (e.g., 4D NWP models, Doppler ra
      └── 0.0.0.0                 (Binary chunk for Doppler Radial Velocity)
 ```
 
-#### Why Zarr Outperforms HDF5 and NetCDF4 in Object Storage:
+#### 3.2.1 Why Zarr Outperforms HDF5 and NetCDF4 in Object Storage:
 * **True Object Decoupling:** In monolithic NetCDF4/HDF5, all data and metadata reside in a single file. Parallel access over HTTP requires complex file locks or multi-range requests.
 * In Zarr, every single multidimensional chunk is an **individual, independent object key in S3** (`reflectivity/0.0.0.0`).
 * **Zero Locking:** Hundreds of parallel worker threads (e.g., via Dask or Celery) can download and process hundreds of distinct spatial/temporal chunks concurrently with zero race conditions or file-system locking bottlenecks.
@@ -609,7 +609,7 @@ Most raw satellite radiometers and numerical forecast models output floating-poi
 
 However, physical atmospheric instruments cannot measure with 23 bits of mantissa precision. The least significant bits are pure stochastic instrument noise that resists compression codecs (entropy remains high).
 
-#### 1. Scaled 16-Bit Integer Quantization (Direct 50% Byte Reduction)
+#### 6.2.1 Scaled 16-Bit Integer Quantization (Direct 50% Byte Reduction)
 Convert floating-point temperatures to scaled 16-bit integers with a fixed physical offset:
 
 ```python
@@ -621,7 +621,7 @@ uint16_data = np.round((float32_kelvin - 150.0) * 100.0).astype(np.uint16)
 * Software like GDAL, QGIS, and Xarray restores the physical value transparently on-the-fly via metadata tags:
   $$\text{Kelvin} = (\text{Pixel} \times 0.01) + 150.0$$
 
-#### 2. Floating-Point Horizontal Differencing (TIFF Predictor 3)
+#### 6.2.2 Floating-Point Horizontal Differencing (TIFF Predictor 3)
 If 32-bit floats must be preserved, use **Predictor 3** in your Cloud-Optimized GeoTIFF profile:
 * IEEE 754 floats transpose sign, exponent, and mantissa bytes across separate contiguous arrays.
 * Because adjacent pixels share identical exponents and signs, Deflate/Zstandard compresses the stream by an additional **$40\%\text{ to } 60\%$** compared to standard GeoTIFF compression.
@@ -649,7 +649,7 @@ Combine hot NVMe storage for real-time ingest with cold Erasure-Coded HDDs for m
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Configuring Ceph S3 Bucket Lifecycle Rules (`lifecycle.xml`)
+#### 6.3.1 Configuring Ceph S3 Bucket Lifecycle Rules (`lifecycle.xml`)
 Apply this policy to automatically transition satellite rasters from fast NVMe storage classes to Cold Erasure-Coded HDD pools after 14 days:
 
 ```xml
@@ -673,7 +673,7 @@ Apply this policy to automatically transition satellite rasters from fast NVMe s
 </LifecycleConfiguration>
 ```
 
-#### Applying the Rule via AWS CLI against Ceph RGW:
+#### 6.3.2 Applying the Rule via AWS CLI against Ceph RGW:
 ```bash
 aws --endpoint-url http://10.10.20.100:80 s3api put-bucket-lifecycle-configuration \
     --bucket satellite-archive \
@@ -902,7 +902,7 @@ print("\n[+] Verification Complete. COGs allow direct random seek access to sate
 
 ---
 
-### Reference Library Navigation
+### 9.3 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./03_hive_partitioning_and_lakehouse_compaction.md) | **Card 04 of 14** | [Next Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | [⬆ Back to Top](#meteorological-binary-storage-gridded-formats-cog-zarr-netcdf4-grib2-bufr--raster-lakehouse-architecture-reference-card)

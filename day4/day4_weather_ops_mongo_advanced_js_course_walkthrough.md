@@ -4,7 +4,7 @@
 
 ---
 
-## Architectural Overview
+## 1. Architectural Overview
 
 [`day4_weather_ops_mongo_advanced.js`](./day4_weather_ops_mongo_advanced.js) builds directly upon the `weather_nosql` database seeded by [`day4_weather_ops_mongo.js`](./day4_weather_ops_mongo.js). Once polymorphic station documents, upper-air radiosonde soundings, and time-series observations are ingested, an operational weather forecasting platform must answer three classes of low-latency analytical queries:
 
@@ -31,9 +31,9 @@ flowchart LR
 
 ---
 
-## Header, Database Context & Idempotent Teardown (Lines 1–12)
+## 2. Header, Database Context & Idempotent Teardown (Lines 1–12)
 
-### Code Block
+### 2.1 Code Block
 
 ```javascript
 // ============================================================================
@@ -49,7 +49,7 @@ db.storm_polygons.drop();
 db.upper_air_climatology.drop();
 ```
 
-### Line-by-Line Technical Breakdown
+### 2.2 Line-by-Line Technical Breakdown
 
 * **Lines 1–6 (Header & Prerequisite Contract):**
   * Specifies that [`day4_weather_ops_mongo.js`](./day4_weather_ops_mongo.js) must be executed first so that `db.stations` (6 documents) and `db.radiosonde_soundings` (3 documents) exist in `weather_nosql`.
@@ -60,16 +60,16 @@ db.upper_air_climatology.drop();
 
 ---
 
-## Section 1: `2dsphere` Geospatial Index on `stations.location` (Lines 13–15)
+## 3. Section 1: `2dsphere` Geospatial Index on `stations.location` (Lines 13–15)
 
-### Code Block
+### 3.1 Code Block
 
 ```javascript
 print("=== 1. Creating 2dsphere Geospatial Index on stations.location ===");
 db.stations.createIndex({ location: "2dsphere" });
 ```
 
-### Deep-Dive Architectural Explanation
+### 3.2 Deep-Dive Architectural Explanation
 
 * **What `db.stations.createIndex({ location: "2dsphere" })` Builds:**
   * Unlike a legacy `2d` planar index (which assumes a flat Euclidean grid and introduces severe distance distortion as latitude increases away from the equator), a **`2dsphere`** index models the Earth as an **oblate spheroid** using the **WGS-84** datum (equatorial radius $\approx 6,378.137\text{ km}$).
@@ -83,9 +83,9 @@ db.stations.createIndex({ location: "2dsphere" });
 
 ---
 
-## Section 2: `storm_polygons` Collection & GeoJSON Closed-Ring Rules (Lines 16–58)
+## 4. Section 2: `storm_polygons` Collection & GeoJSON Closed-Ring Rules (Lines 16–58)
 
-### Code Block
+### 4.1 Code Block
 
 ```javascript
 print("=== 2. Creating 'storm_polygons' Collection with GeoJSON Warning Polygons ===");
@@ -132,9 +132,9 @@ db.storm_polygons.insertMany([
 db.storm_polygons.createIndex({ footprint: "2dsphere" });
 ```
 
-### Deep-Dive Architectural Explanation
+### 4.2 Deep-Dive Architectural Explanation
 
-#### 1. Meteorological & Physical Telemetry of the Two Storm Cells
+#### 4.2.1 Meteorological & Physical Telemetry of the Two Storm Cells
 The `storm_polygons` collection models radar- and satellite-tracked mesoscale weather hazards whose physical attributes differ by phenomenon (polymorphism):
 
 | Storm `_id` | `storm_name` | `detected_at` | Specialized Physical Attributes | Motion Vector | Enclosed WMO Stations |
@@ -142,7 +142,7 @@ The `storm_polygons` collection models radar- and satellite-tracked mesoscale we
 | **`CELL-MED-20261006-A`** | Mediterranean Convective System Alpha | `2026-10-06T00:00:00Z` | `max_reflectivity_dbz: 58.5` (intense radar echo $>55\text{ dBZ}$ indicating heavy rain/hail core) and **`vil_kg_m2: 42.0`** (*Vertically Integrated Liquid* in $\text{kg/m}^2$—values $>35\text{ kg/m}^2$ in Mediterranean storms indicate severe hail core aloft). | `{ direction_deg: 245, speed_kt: 22 }` (WSW flow at $22\text{ kt}$) | **Algiers (`60390`)**, **Constantine (`60419`)**, and **Algiers Bay Buoy (`60901`)** all fall inside `[2.50..7.20°E, 35.80..37.10°N]`. |
 | **`CELL-SAH-20261005-B`** | Western Erg Haboob Dust Front | `2026-10-05T18:00:00Z` | Moderate radar echo (`max_reflectivity_dbz: 32.0` from airborne sand grains) paired with **`aerosol_optical_depth: 2.8`** (satellite $550\text{ nm}$ AOD; values $>2.0$ indicate an opaque dust wall obscuring solar radiation). | `{ direction_deg: 210, speed_kt: 35 }` (fast SSW outflow boundary at $35\text{ kt}$) | **Bechar (`60571`)** at `[-2.2699, 31.6457]` falls directly inside `[-3.50..-1.00°W, 30.50..32.50°N]`. |
 
-#### 2. The GeoJSON Polygon Ring Closure Rule & Triple-Bracket Array Nesting (Lines 26–35 & 44–53)
+#### 4.2.2 The GeoJSON Polygon Ring Closure Rule & Triple-Bracket Array Nesting (Lines 26–35 & 44–53)
 Look closely at the structure of `footprint.coordinates`:
 
 ```javascript
@@ -172,9 +172,9 @@ footprint: {
 
 ---
 
-## Section 3: `idx_sonde_esr` — The ESR Compound Indexing Rule (Lines 59–63)
+## 5. Section 3: `idx_sonde_esr` — The ESR Compound Indexing Rule (Lines 59–63)
 
-### Code Block
+### 5.1 Code Block
 
 ```javascript
 print("=== 3. Creating Compound Index Following the ESR (Equality, Sort, Range) Rule ===");
@@ -184,7 +184,7 @@ db.radiosonde_soundings.createIndex(
 );
 ```
 
-### Deep-Dive Architectural Explanation: Why Key Order in a Compound B-Tree Index Matters
+### 5.2 Deep-Dive Architectural Explanation: Why Key Order in a Compound B-Tree Index Matters
 
 Consider a severe-weather forecasting query that asks:
 > *"Find all radiosonde launches for Algiers (`station_id: 60390`) where convective energy exceeds `cape_j_kg >= 300`, sorted from newest to oldest (`launch_time: -1`)."*
@@ -211,24 +211,24 @@ flowchart TD
     end
 ```
 
-1. **First Key — Equality (`station_id: 1`):**
-   * An exact equality match (`station_id: 60390`) narrows the B-Tree search space to a single contiguous prefix of index entries for station `60390`.
-2. **Second Key — Sort (`launch_time: -1`):**
-   * Within the `station_id: 60390` subtree, all index entries are physically ordered by `launch_time` descending (`2026-10-06T12:00:00Z` followed by `2026-10-06T00:00:00Z`).
-   * Because the B-Tree traversal visits keys in the exact order requested by `.sort({ launch_time: -1 })`, the MongoDB query planner satisfies the sort directly from the index (`IXSCAN` without a blocking `SORT` stage).
-   * In MongoDB, a blocking in-memory `SORT` stage is capped at **100 MB of RAM** (`QueryExceededMemoryLimitNoDiskUseAllowed`) unless `allowDiskUse: true` spills temporary sort files to disk. Putting the **Sort** key before the **Range** key eliminates the in-memory sort entirely!
-3. **Third Key — Range (`cape_j_kg: 1`):**
-   * As the index scan walks `station_id: 60390` in descending `launch_time` order, it evaluates `cape_j_kg >= 300` directly against the index key (`cape_j_kg: 1`) before fetching the full BSON document from WiredTiger storage (`FETCH`).
+#### 5.2.1 First Key — Equality (`station_id: 1`)
+* An exact equality match (`station_id: 60390`) narrows the B-Tree search space to a single contiguous prefix of index entries for station `60390`.
+#### 5.2.2 Second Key — Sort (`launch_time: -1`)
+* Within the `station_id: 60390` subtree, all index entries are physically ordered by `launch_time` descending (`2026-10-06T12:00:00Z` followed by `2026-10-06T00:00:00Z`).
+* Because the B-Tree traversal visits keys in the exact order requested by `.sort({ launch_time: -1 })`, the MongoDB query planner satisfies the sort directly from the index (`IXSCAN` without a blocking `SORT` stage).
+* In MongoDB, a blocking in-memory `SORT` stage is capped at **100 MB of RAM** (`QueryExceededMemoryLimitNoDiskUseAllowed`) unless `allowDiskUse: true` spills temporary sort files to disk. Putting the **Sort** key before the **Range** key eliminates the in-memory sort entirely!
+#### 5.2.3 Third Key — Range (`cape_j_kg: 1`)
+ * As the index scan walks `station_id: 60390` in descending `launch_time` order, it evaluates `cape_j_kg >= 300` directly against the index key (`cape_j_kg: 1`) before fetching the full BSON document from WiredTiger storage (`FETCH`).
 * **Index Prefix Bonus:**
-  * Because B-Tree compound indexes support **left-prefix queries**, `idx_sonde_esr` also accelerates:
-    * `{ station_id: 60390 }` (Prefix `{ station_id: 1 }`)
-    * `{ station_id: 60390 }` sorted or filtered by `launch_time` (Prefix `{ station_id: 1, launch_time: -1 }`)
+* Because B-Tree compound indexes support **left-prefix queries**, `idx_sonde_esr` also accelerates:
+  * `{ station_id: 60390 }` (Prefix `{ station_id: 1 }`)
+  * `{ station_id: 60390 }` sorted or filtered by `launch_time` (Prefix `{ station_id: 1, launch_time: -1 }`)
 
 ---
 
-## Section 4: Isobaric Pressure Surface Aggregation Pipeline (Lines 65–91)
+## 6. Section 4: Isobaric Pressure Surface Aggregation Pipeline (Lines 65–91)
 
-### Code Block
+### 6.1 Code Block
 
 ```javascript
 print("=== 4. Running Sample Aggregation Pipeline: Isobaric Pressure Surface Summary ===");
@@ -260,13 +260,13 @@ printjson(levelSummary);
 print("=== Day 4 Advanced MongoDB Setup Complete! ===");
 ```
 
-### Stage-by-Stage Aggregation Pipeline Breakdown
+### 6.2 Stage-by-Stage Aggregation Pipeline Breakdown
 
-#### Stage 1: `{ $unwind: "$vertical_levels" }` (Line 67)
+#### 6.2.1 Stage 1: `{ $unwind: "$vertical_levels" }` (Line 67)
 * **Input:** 3 parent sounding documents in `db.radiosonde_soundings` (Algiers `00Z` with 5 levels, Algiers `12Z` with 5 levels, and Tamanrasset `12Z` with 4 levels).
 * **Transformation:** Deconstructs the embedded `vertical_levels` array in each document, emitting a separate stream document for every array element (`5 + 5 + 4 = 14` intermediate documents). In each emitted document, the array `vertical_levels: [...]` is replaced by a single sub-document `vertical_levels: { pressure_hpa: 850, height_m: 1480, temp_c: 11.2, ... }`.
 
-#### Stage 2: `{ $group: { ... } }` (Lines 68–75)
+#### 6.2.2 Stage 2: `{ $group: { ... } }` (Lines 68–75)
 * **Input:** 14 unwound level documents.
 * **Grouping Key (`_id: "$vertical_levels.pressure_hpa"`):** Partitions the 14 documents into 5 distinct mandatory isobaric surface buckets (`1000`, `850`, `700`, `500`, and `300` hPa).
 * **Accumulator Operators:**
@@ -275,20 +275,20 @@ print("=== Day 4 Advanced MongoDB Setup Complete! ===");
   * `avg_temp_c: { $avg: "$vertical_levels.temp_c" }`: Computes the mean ambient temperature (in °C) at each pressure surface, illustrating the environmental lapse rate from $+21.5^\circ\text{C}$ at `1000 hPa` down to $-38.4^\circ\text{C}$ at `300 hPa`.
   * `max_wind_kt: { $max: "$vertical_levels.wind_speed_kt" }`: Extracts the peak wind speed (in knots) observed at each altitude, peaking at `95 kt` at the `300 hPa` jet stream core.
 
-#### Stage 3: `{ $project: { ... } }` (Lines 77–85)
+#### 6.2.3 Stage 3: `{ $project: { ... } }` (Lines 77–85)
 * **Reshaping & Precision Formatting:**
   * `_id: 0` & `pressure_hpa: "$_id"`: Suppresses the default `_id` key and aliases it to the self-documenting field name `pressure_hpa`.
   * `soundings_count: 1` & `max_wind_kt: 1`: Passes these integer/numeric fields through unchanged.
   * `avg_height_m: { $round: ["$avg_height_m", 0] }`: Rounds the floating-point mean geopotential height (e.g., `1511.6666...` at `850 hPa`) to the nearest whole meter (`1512`).
   * `avg_temp_c: { $round: ["$avg_temp_c", 1] }`: Rounds the mean temperature (e.g., `19.5666...` at `850 hPa`) to 1 decimal place (`19.6`), matching WMO meteorological reporting precision ($0.1^\circ\text{C}$).
 
-#### Stage 4: `{ $sort: { pressure_hpa: -1 } }` & `.toArray()` (Lines 87–90)
+#### 6.2.4 Stage 4: `{ $sort: { pressure_hpa: -1 } }` & `.toArray()` (Lines 87–90)
 * **`{ $sort: { pressure_hpa: -1 } }`:** Orders the 5 output documents in descending pressure order (`1000 hPa` $\rightarrow$ `850 hPa` $\rightarrow$ `700 hPa` $\rightarrow$ `500 hPa` $\rightarrow$ `300 hPa`), which corresponds physically to **ascending altitude** from sea level (`123 m`) up to the tropopause (`9533 m`).
 * **`.toArray()` & `printjson(levelSummary)`:** Drains the server-side aggregation cursor into a JavaScript array in `mongosh` and formats the resulting BSON documents to stdout.
 
 ---
 
-## Expected Terminal Output
+## 7. Expected Terminal Output
 
 Executing `mongosh weather_nosql day4_weather_ops_mongo_advanced.js` produces the following exact terminal output:
 
@@ -337,7 +337,7 @@ Executing `mongosh weather_nosql day4_weather_ops_mongo_advanced.js` produces th
 === Day 4 Advanced MongoDB Setup Complete! ===
 ```
 
-### Mathematical Verification of the Aggregated Output
+### 7.1 Mathematical Verification of the Aggregated Output
 
 | `pressure_hpa` | `soundings_count` | Raw Heights ($\text{m}$) $\rightarrow$ `avg_height_m` | Raw Temps ($^\circ\text{C}$) $\rightarrow$ `avg_temp_c` | Raw Wind Speeds ($\text{kt}$) $\rightarrow$ `max_wind_kt` |
 | :--- | :--- | :--- | :--- | :--- |

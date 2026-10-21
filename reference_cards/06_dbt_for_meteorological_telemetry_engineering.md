@@ -11,7 +11,7 @@
 
 - [Executive Summary for Weather & Systems Engineers](#executive-summary-for-weather--systems-engineers)
 - [1. Where dbt Fits in the National Meteorological Architecture](#1-where-dbt-fits-in-the-national-meteorological-architecture)
-  - [The Medallion Tier Progression in Meteorology](#the-medallion-tier-progression-in-meteorology)
+  - [The Medallion Tier Progression in Meteorology](#11-the-medallion-tier-progression-in-meteorology)
 - [2. Setting Up `dbt-duckdb` for Sovereign On-Premises Lakes](#2-setting-up-dbt-duckdb-for-sovereign-on-premises-lakes)
   - [2.1 Installation](#21-installation)
   - [2.2 Profile Configuration (`~/.dbt/profiles.yml`)](#22-profile-configuration-dbtprofilesyml)
@@ -81,7 +81,7 @@ However, in production meteorological agencies, raw sensor streams are messy, in
                                                    └──────────────────────────────────────┘
 ```
 
-### The Medallion Tier Progression in Meteorology
+### 1.1 The Medallion Tier Progression in Meteorology
 
 | Layer | dbt Model Prefix | Materialization Strategy | Primary Meteorological Function |
 | :--- | :--- | :--- | :--- |
@@ -303,7 +303,7 @@ Instead of repeating complex unit conversions or psychrometric formulas across S
 {% endmacro %}
 ```
 
-#### Utilizing Macros inside Models:
+### 4.1 Utilizing Macros inside Models:
 ```sql
 SELECT
     station_id,
@@ -438,7 +438,7 @@ dbt docs serve --port 8080
 ```
 ---
 
-### Reference Library Navigation
+### 8.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./05_ceph_distributed_storage_and_proxmox_ve_architecture.md) | **Card 06 of 14** | [Next Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | [⬆ Back to Top](#dbt-data-build-tool--modern-telemetry-lakehouse-architecture-reference-card)

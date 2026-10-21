@@ -86,15 +86,15 @@ python start_bootcamp.py
 
 ### 1.1 VMware Hardware Sizing for 4 GB RAM Efficiency
 
-1. **Choose Your Ubuntu 24.04 LTS ISO:**
-   - **Option A — Ubuntu 24.04 LTS Server ISO (`ubuntu-24.04.1-live-server-amd64.iso`, ~2.6 GB, Recommended for 4 GB RAM):** Boots straight to a fast Linux terminal using only **~220 MB of RAM at idle**, leaving **3.75 GB of RAM** free for PostgreSQL, MongoDB, DuckDB, and Docker!
-   - **Option B — Ubuntu 24.04 LTS Desktop ISO (`ubuntu-24.04.1-desktop-amd64.iso`, ~5.8 GB):** Also works great! *(Pro-Tip: On a 4 GB Desktop VM, you can disable the GNOME desktop anytime with `sudo systemctl set-default multi-user.target && sudo reboot` to reclaim 1 GB of RAM, and re-enable it anytime with `sudo systemctl set-default graphical.target`).*
-2. **VMware New Virtual Machine Wizard (`Ctrl+N`):**
-   - Select **Typical (recommended)** $\rightarrow$ **"I will install the operating system later"** *(skips VMware Easy Install so `subiquity` runs cleanly)*.
-   - **Guest OS:** `Linux` $\rightarrow$ **`Ubuntu 64-bit`**.
-   - **Virtual Machine Name:** `Weather-DB-Bootcamp-Ubuntu2404`
-   - **Maximum Disk Size:** **`60.0 GB`** (*Store virtual disk as a single file* — thin-provisioned).
-3. **Customize Hardware Settings:**
+#### 1.1.1 Choose Your Ubuntu 24.04 LTS ISO
+- **Option A — Ubuntu 24.04 LTS Server ISO (`ubuntu-24.04.1-live-server-amd64.iso`, ~2.6 GB, Recommended for 4 GB RAM):** Boots straight to a fast Linux terminal using only **~220 MB of RAM at idle**, leaving **3.75 GB of RAM** free for PostgreSQL, MongoDB, DuckDB, and Docker!
+- **Option B — Ubuntu 24.04 LTS Desktop ISO (`ubuntu-24.04.1-desktop-amd64.iso`, ~5.8 GB):** Also works great! *(Pro-Tip: On a 4 GB Desktop VM, you can disable the GNOME desktop anytime with `sudo systemctl set-default multi-user.target && sudo reboot` to reclaim 1 GB of RAM, and re-enable it anytime with `sudo systemctl set-default graphical.target`).*
+#### 1.1.2 VMware New Virtual Machine Wizard (`Ctrl+N`)
+- Select **Typical (recommended)** $\rightarrow$ **"I will install the operating system later"** *(skips VMware Easy Install so `subiquity` runs cleanly)*.
+- **Guest OS:** `Linux` $\rightarrow$ **`Ubuntu 64-bit`**.
+- **Virtual Machine Name:** `Weather-DB-Bootcamp-Ubuntu2404`
+- **Maximum Disk Size:** **`60.0 GB`** (*Store virtual disk as a single file* — thin-provisioned).
+#### 1.1.3 Customize Hardware Settings
 
 | Component | Setting for 4 GB Lab | Why |
 | :--- | :--- | :--- |
@@ -142,13 +142,13 @@ hostname -I | awk '{print $1}'
 
 You can now minimize the VMware window (let it run quietly in the background) and do all your work from **Windows**:
 
-1. **From Windows PowerShell / Windows Terminal:**
-   ```powershell
-   ssh meteo@<VM_IP>
-   ```
-   *(Replace `<VM_IP>` with the IP printed by `hostname -I`, e.g., `ssh meteo@192.168.159.128`).*
-2. **Or From VS Code on Windows (`Remote - SSH`):**
-   - Press `F1` or `Ctrl+Shift+P` in VS Code on Windows $\rightarrow$ select **Remote-SSH: Connect to Host...** $\rightarrow$ enter `meteo@<VM_IP>` $\rightarrow$ open folder `/home/meteo/db-bootcamp`.
+#### 1.3.1 From Windows PowerShell / Windows Terminal
+```powershell
+ssh meteo@<VM_IP>
+```
+*(Replace `<VM_IP>` with the IP printed by `hostname -I`, e.g., `ssh meteo@192.168.159.128`).*
+#### 1.3.2 Or From VS Code on Windows (`Remote - SSH`)
+- Press `F1` or `Ctrl+Shift+P` in VS Code on Windows $\rightarrow$ select **Remote-SSH: Connect to Host...** $\rightarrow$ enter `meteo@<VM_IP>` $\rightarrow$ open folder `/home/meteo/db-bootcamp`.
 
 ---
 

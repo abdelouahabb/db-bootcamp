@@ -95,7 +95,7 @@ FROM station_calibration
 ORDER BY station_id;
 ```
 
-#### Deep-Dive Architectural Explanation: Hidden System Columns (`ctid`, `xmin`, `xmax`)
+#### 2.1.1 Deep-Dive Architectural Explanation: Hidden System Columns (`ctid`, `xmin`, `xmax`)
 
 Every PostgreSQL heap table automatically exposes internal tuple header fields (`HeapTupleHeaderData`) as queryable **hidden system columns** whenever they are explicitly named in a `SELECT` list:
 
@@ -105,7 +105,7 @@ Every PostgreSQL heap table automatically exposes internal tuple header fields (
 | **`xmin`** | `t_xmin` | `xid` (`4 bytes`) | The 32-bit Transaction ID (`XID`) of the `INSERT` or `UPDATE` statement that physically created this tuple version. Because all 3 rows were inserted in a single multi-row `INSERT` statement, all 3 rows share the exact same `xmin` (e.g., `750`). |
 | **`xmax`** | `t_xmax` | `xid` (`4 bytes`) | `0` when the tuple is untouched and live. When a transaction updates or deletes the tuple—or acquires a row-level lock on it—PostgreSQL stamps the modifying/locking transaction's XID into `xmax`. |
 
-#### Expected Terminal Output (Lines 39–41)
+#### 2.1.2 Expected Terminal Output (Lines 39–41)
 
 ```text
  ctid  | xmin | xmax | station_id |    station_name     | temp_offset | calibrated_by 
@@ -166,27 +166,27 @@ WHERE station_id = 'AWS-001';
 -- XID as ABORTED. The dead tuple left at (0,4) will be reclaimed later by VACUUM.
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.2.1 Deep-Dive Architectural Explanation
 
-1. **`pg_backend_pid()` and `pg_current_xact_id()` (Line 54):**
-   - `pg_backend_pid()` returns the operating-system Process ID (`PID`) of the dedicated `postgres` worker process serving Terminal A's TCP/Unix socket connection.
-   - `pg_current_xact_id()` forces PostgreSQL to assign a permanent 64-bit Transaction ID (`xid8`, e.g., `751`) to the current `BEGIN` block and returns it. (Note: In PostgreSQL, `BEGIN;` starts a transaction with a lightweight *Virtual Transaction ID* (`virtualxid`) and lazily allocates a real 32/64-bit `XID` only when the first write statement or `pg_current_xact_id()` is called, conserving XID space on read-only transactions!)
-2. **What Happens Physically on Block 0 During Step 1.1 (`UPDATE ... WHERE station_id = 'AWS-001'`):**
-   - PostgreSQL does **not** overwrite tuple `(0,1)`. Instead:
-     1. On Tuple `(0,1)` (`temp_offset = 0.15`, `calibrated_by = 'TECH_ALICE'`), PostgreSQL stamps `xmax = 751` (Terminal A's uncommitted XID) and points `t_ctid` to `(0,4)`.
-     2. At slot **`(0,4)`**, PostgreSQL appends a brand-new tuple (`temp_offset = 5.50`, `calibrated_by = 'TECH_DAVE_UNCOMMITTED'`) with `xmin = 751` and `xmax = 0`.
-   - When **Terminal A** queries `station_calibration` in Step 1.1, PostgreSQL's visibility engine (`HeapTupleSatisfiesMVCC`) checks `xmin = 751`, sees that `751` is Terminal A's *own* active transaction, and returns the new tuple at **`ctid = (0,4)`**.
-3. **Why Terminal B Does Not Block and Sees `(0,1)` in Step 1.2:**
-   - When **Terminal B** executes `SELECT ... WHERE station_id = 'AWS-001'`, it visits Block 0:
-     - Looking at Tuple `(0,1)`: `xmin = 750` is `COMMITTED` in `pg_xact`. Although `xmax = 751` is non-zero, Transaction `751` is still **in-progress** (`XID_IN_PROGRESS = 0x00` in `pg_xact`). Therefore, the deletion/update of `(0,1)` has **not committed**, so `(0,1)` remains **100% visible** to Terminal B!
-     - Looking at Tuple `(0,4)`: `xmin = 751` is still in-progress and belongs to another session, so `(0,4)` is **invisible** to Terminal B (preventing Dirty Reads).
-   - Notice that Terminal B returns `(0,1)` (`temp_offset = 0.15`, `calibrated_by = 'TECH_ALICE'`, with `xmax = 751` visible in the system column!) in `< 0.1 ms` without waiting on Terminal A's row lock.
-4. **Why `ROLLBACK;` (Step 1.3) Is an Instant $O(1)$ Operation in PostgreSQL:**
-   - In database engines that use Undo Logs (such as MySQL InnoDB or Oracle), a `ROLLBACK` must physically read undo records and overwrite the modified B-Tree pages back to their prior values ($O(N)$ work proportional to the number of rows modified).
-   - In PostgreSQL, `ROLLBACK;` does **not** touch the heap table at all! It simply writes an abort record to WAL and flips the 2-bit transaction status of XID `751` inside **`pg_xact`** (Commit Log, `2 bits per XID`) from `00` (`IN_PROGRESS`) to **`10` (`ABORTED`)** — an instant **$O(1)$ operation** whether the transaction updated 1 row or 10,000,000 rows!
-   - The aborted tuple at `(0,4)` remains physically on Block 0 as a harmless dead tuple; any future reader checking `xmin = 751` sees `ABORTED` (and sets the `HEAP_XMIN_INVALID` hint bit on `(0,4)`), while Tuple `(0,1)` (`xmax = 751` aborted) remains the live row!
+##### 2.2.1.1 `pg_backend_pid()` and `pg_current_xact_id()` (Line 54)
+- `pg_backend_pid()` returns the operating-system Process ID (`PID`) of the dedicated `postgres` worker process serving Terminal A's TCP/Unix socket connection.
+- `pg_current_xact_id()` forces PostgreSQL to assign a permanent 64-bit Transaction ID (`xid8`, e.g., `751`) to the current `BEGIN` block and returns it. (Note: In PostgreSQL, `BEGIN;` starts a transaction with a lightweight *Virtual Transaction ID* (`virtualxid`) and lazily allocates a real 32/64-bit `XID` only when the first write statement or `pg_current_xact_id()` is called, conserving XID space on read-only transactions!)
+##### 2.2.1.2 What Happens Physically on Block 0 During Step 1.1 (`UPDATE ... WHERE station_id = 'AWS-001'`)
+- PostgreSQL does **not** overwrite tuple `(0,1)`. Instead:
+  1. On Tuple `(0,1)` (`temp_offset = 0.15`, `calibrated_by = 'TECH_ALICE'`), PostgreSQL stamps `xmax = 751` (Terminal A's uncommitted XID) and points `t_ctid` to `(0,4)`.
+  2. At slot **`(0,4)`**, PostgreSQL appends a brand-new tuple (`temp_offset = 5.50`, `calibrated_by = 'TECH_DAVE_UNCOMMITTED'`) with `xmin = 751` and `xmax = 0`.
+- When **Terminal A** queries `station_calibration` in Step 1.1, PostgreSQL's visibility engine (`HeapTupleSatisfiesMVCC`) checks `xmin = 751`, sees that `751` is Terminal A's *own* active transaction, and returns the new tuple at **`ctid = (0,4)`**.
+##### 2.2.1.3 Why Terminal B Does Not Block and Sees `(0,1)` in Step 1.2
+- When **Terminal B** executes `SELECT ... WHERE station_id = 'AWS-001'`, it visits Block 0:
+  - Looking at Tuple `(0,1)`: `xmin = 750` is `COMMITTED` in `pg_xact`. Although `xmax = 751` is non-zero, Transaction `751` is still **in-progress** (`XID_IN_PROGRESS = 0x00` in `pg_xact`). Therefore, the deletion/update of `(0,1)` has **not committed**, so `(0,1)` remains **100% visible** to Terminal B!
+  - Looking at Tuple `(0,4)`: `xmin = 751` is still in-progress and belongs to another session, so `(0,4)` is **invisible** to Terminal B (preventing Dirty Reads).
+- Notice that Terminal B returns `(0,1)` (`temp_offset = 0.15`, `calibrated_by = 'TECH_ALICE'`, with `xmax = 751` visible in the system column!) in `< 0.1 ms` without waiting on Terminal A's row lock.
+##### 2.2.1.4 Why `ROLLBACK;` (Step 1.3) Is an Instant $O(1)$ Operation in PostgreSQL
+- In database engines that use Undo Logs (such as MySQL InnoDB or Oracle), a `ROLLBACK` must physically read undo records and overwrite the modified B-Tree pages back to their prior values ($O(N)$ work proportional to the number of rows modified).
+- In PostgreSQL, `ROLLBACK;` does **not** touch the heap table at all! It simply writes an abort record to WAL and flips the 2-bit transaction status of XID `751` inside **`pg_xact`** (Commit Log, `2 bits per XID`) from `00` (`IN_PROGRESS`) to **`10` (`ABORTED`)** — an instant **$O(1)$ operation** whether the transaction updated 1 row or 10,000,000 rows!
+- The aborted tuple at `(0,4)` remains physically on Block 0 as a harmless dead tuple; any future reader checking `xmin = 751` sees `ABORTED` (and sets the `HEAP_XMIN_INVALID` hint bit on `(0,4)`), while Tuple `(0,1)` (`xmax = 751` aborted) remains the live row!
 
-#### Expected Terminal Outputs Across Step 1.1 – Step 1.4
+#### 2.2.2 Expected Terminal Outputs Across Step 1.1 – Step 1.4
 
 ```text
 -- [Step 1.1 — TERMINAL A]
@@ -290,28 +290,28 @@ WHERE station_id = 'AWS-002';
 -- Expected: temp_offset = 2.40, calibrated_by = 'TERMINAL_B_WAITER'
 ```
 
-#### Deep-Dive Architectural Explanation: How PostgreSQL Row-Level Locks Work Under the Hood
+#### 2.3.1 Deep-Dive Architectural Explanation: How PostgreSQL Row-Level Locks Work Under the Hood
 
-1. **Where Are Row-Level Locks Stored? (On the Heap Tuple, NOT in RAM!):**
-   - Other relational databases store row-level locks in a finite shared-memory lock table, forcing them to escalate row locks into full-table locks when a transaction updates hundreds of thousands of rows.
-   - **PostgreSQL never performs lock escalation** because it stores row-level locks directly on the physical 8 KB heap tuple! When Terminal A updates `'AWS-002'` (`ctid = (0,2)`), it writes its own XID (`752`) into Tuple `(0,2)`'s **`t_xmax`** field and sets the `HEAP_XMAX_EXCL_LOCK` bits in `t_infomask`.
-   - At the same time, every active transaction holds an `ExclusiveLock` on its **own `transactionid` (`752`)** in the shared-memory lock table (`pg_locks`).
-2. **Why Terminal B Freezes in Step 2.2:**
-   - When Terminal B runs `UPDATE ... WHERE station_id = 'AWS-002'`, it reads Tuple `(0,2)`, inspects `t_xmax = 752`, and checks `pg_xact`. Seeing that XID `752` is still `IN_PROGRESS`, Terminal B requests a **`ShareLock` on `transactionid = 752`** (and briefly pins the `tuple (0,2)` lock if multiple waiters queue up) and puts its OS process to sleep!
-   - In `pg_stat_activity`, Terminal B's `state` is `'active'`, `wait_event_type = 'Lock'`, and `wait_event = 'transactionid'`.
-3. **Clause-by-Clause Breakdown of Lock Forensics Method A (`pg_blocking_pids()`, Lines 116–129):**
-   - `pg_blocking_pids(blocked.pid)`: A built-in C function (introduced in PostgreSQL 9.6) that inspects the shared-memory lock table and wait queues and returns an `INT[]` array of all backend PIDs currently blocking `blocked.pid`.
-   - `WHERE CARDINALITY(pg_blocking_pids(blocked.pid)) > 0`: Filters `pg_stat_activity` down to only those sessions whose `pg_blocking_pids()` array contains at least one element.
-   - `LEFT JOIN pg_stat_activity AS blocker ON blocker.pid = ANY(pg_blocking_pids(blocked.pid))`: Unnests the `INT[]` array using PostgreSQL's `= ANY(array)` operator to join the blocked session directly to the blocking session's `pg_stat_activity` row, exposing:
-     - `blocker.state = 'idle in transaction'` (proving Terminal A is sitting idle at a `psql` prompt holding an open transaction!).
-     - `blocker.query` (showing the exact `UPDATE` statement Terminal A ran before going idle).
-4. **Clause-by-Clause Breakdown of Lock Forensics Method B (4-Way `pg_locks` Join & Why `IS NOT DISTINCT FROM` Is Required, Lines 132–152):**
-   - `pg_locks` contains one row per lockable object held (`granted = true`) or requested (`granted = false`) by each backend PID.
-   - Because `pg_locks` tracks many different lock types (`relation`, `extend`, `page`, `tuple`, `transactionid`, `virtualxid`, `object`, `advisory`), a row in `pg_locks` leaves irrelevant identifier columns as **`NULL`**! For example, on a `transactionid` lock, `transactionid = 752`, while `database`, `relation`, `page`, `tuple`, and `virtualxid` are all **`NULL`**.
-   - If you joined `blocking_locks` to `blocked_locks` using standard equality (`AND blocking_locks.page = blocked_locks.page`), Three-Valued Logic would evaluate `NULL = NULL` as **`UNKNOWN`**, causing the join to return **0 rows**!
-   - Using `IS NOT DISTINCT FROM` treats `NULL IS NOT DISTINCT FROM NULL` as **`TRUE`**, accurately matching the ungranted lock row (`NOT blocked_locks.granted`) against the granted lock row (`blocking_locks.pid != blocked_locks.pid`) across all 6 lock target columns!
+##### 2.3.1.1 Where Are Row-Level Locks Stored? (On the Heap Tuple, NOT in RAM!)
+- Other relational databases store row-level locks in a finite shared-memory lock table, forcing them to escalate row locks into full-table locks when a transaction updates hundreds of thousands of rows.
+- **PostgreSQL never performs lock escalation** because it stores row-level locks directly on the physical 8 KB heap tuple! When Terminal A updates `'AWS-002'` (`ctid = (0,2)`), it writes its own XID (`752`) into Tuple `(0,2)`'s **`t_xmax`** field and sets the `HEAP_XMAX_EXCL_LOCK` bits in `t_infomask`.
+- At the same time, every active transaction holds an `ExclusiveLock` on its **own `transactionid` (`752`)** in the shared-memory lock table (`pg_locks`).
+##### 2.3.1.2 Why Terminal B Freezes in Step 2.2
+- When Terminal B runs `UPDATE ... WHERE station_id = 'AWS-002'`, it reads Tuple `(0,2)`, inspects `t_xmax = 752`, and checks `pg_xact`. Seeing that XID `752` is still `IN_PROGRESS`, Terminal B requests a **`ShareLock` on `transactionid = 752`** (and briefly pins the `tuple (0,2)` lock if multiple waiters queue up) and puts its OS process to sleep!
+- In `pg_stat_activity`, Terminal B's `state` is `'active'`, `wait_event_type = 'Lock'`, and `wait_event = 'transactionid'`.
+##### 2.3.1.3 Clause-by-Clause Breakdown of Lock Forensics Method A (`pg_blocking_pids()`, Lines 116–129)
+- `pg_blocking_pids(blocked.pid)`: A built-in C function (introduced in PostgreSQL 9.6) that inspects the shared-memory lock table and wait queues and returns an `INT[]` array of all backend PIDs currently blocking `blocked.pid`.
+- `WHERE CARDINALITY(pg_blocking_pids(blocked.pid)) > 0`: Filters `pg_stat_activity` down to only those sessions whose `pg_blocking_pids()` array contains at least one element.
+- `LEFT JOIN pg_stat_activity AS blocker ON blocker.pid = ANY(pg_blocking_pids(blocked.pid))`: Unnests the `INT[]` array using PostgreSQL's `= ANY(array)` operator to join the blocked session directly to the blocking session's `pg_stat_activity` row, exposing:
+  - `blocker.state = 'idle in transaction'` (proving Terminal A is sitting idle at a `psql` prompt holding an open transaction!).
+  - `blocker.query` (showing the exact `UPDATE` statement Terminal A ran before going idle).
+##### 2.3.1.4 Clause-by-Clause Breakdown of Lock Forensics Method B (4-Way `pg_locks` Join & Why `IS NOT DISTINCT FROM` Is Required, Lines 132–152)
+- `pg_locks` contains one row per lockable object held (`granted = true`) or requested (`granted = false`) by each backend PID.
+- Because `pg_locks` tracks many different lock types (`relation`, `extend`, `page`, `tuple`, `transactionid`, `virtualxid`, `object`, `advisory`), a row in `pg_locks` leaves irrelevant identifier columns as **`NULL`**! For example, on a `transactionid` lock, `transactionid = 752`, while `database`, `relation`, `page`, `tuple`, and `virtualxid` are all **`NULL`**.
+- If you joined `blocking_locks` to `blocked_locks` using standard equality (`AND blocking_locks.page = blocked_locks.page`), Three-Valued Logic would evaluate `NULL = NULL` as **`UNKNOWN`**, causing the join to return **0 rows**!
+- Using `IS NOT DISTINCT FROM` treats `NULL IS NOT DISTINCT FROM NULL` as **`TRUE`**, accurately matching the ungranted lock row (`NOT blocked_locks.granted`) against the granted lock row (`blocking_locks.pid != blocked_locks.pid`) across all 6 lock target columns!
 
-#### Expected Terminal Output for Step 2.3 (Method A)
+#### 2.3.2 Expected Terminal Output for Step 2.3 (Method A)
 
 ```text
  blocked_pid | blocked_user | blocked_state |     wait_event     | waiting_duration |               blocked_query                | blocking_pids |              blocker_last_query               |    blocker_state    
@@ -370,7 +370,7 @@ ROLLBACK;
 -- 2. Always wrap database transactions in application retry loops catching SQLSTATE '40P01'.
 ```
 
-#### Deep-Dive Architectural Explanation: Wait-For Graph Cycle Detection & Prevention
+#### 2.4.1 Deep-Dive Architectural Explanation: Wait-For Graph Cycle Detection & Prevention
 
 ```mermaid
 flowchart LR
@@ -378,20 +378,20 @@ flowchart LR
     TB -- "Step 3.4: Waits for Lock on AWS-001<br/>(Cycle Detected after deadlock_timeout = 1000ms!<br/>Aborts Terminal B with SQLSTATE 40P01)" --> TA
 ```
 
-1. **How the Circular Wait Forms (Steps 3.1 – 3.4):**
-   - **Step 3.1:** Terminal A acquires an Exclusive Row Lock on `'AWS-001'`.
-   - **Step 3.2:** Terminal B acquires an Exclusive Row Lock on `'AWS-002'`.
-   - **Step 3.3:** Terminal A requests an Exclusive Row Lock on `'AWS-002'` and goes to sleep waiting on Terminal B ($A \rightarrow B$).
-   - **Step 3.4:** Terminal B requests an Exclusive Row Lock on `'AWS-001'` and goes to sleep waiting on Terminal A ($B \rightarrow A$). Neither session can ever advance on its own.
-2. **How `deadlock_timeout = 1s` (`1000ms`) Works:**
-   - Traversing the global shared-memory Wait-For Graph (`DeadLockCheck()`) across all backend processes requires holding lock-partition spinlocks and is computationally expensive if run on every single microsecond lock wait.
-   - Instead, whenever a backend goes to sleep on a lock, it sets a kernel timer for **`deadlock_timeout`** (default `1s` / `1000ms`). Most normal lock waits resolve in a few milliseconds before the timer fires.
-   - In Step 3.4, once Terminal B has slept for `1000ms`, its timer fires `DeadLockCheck()`, which discovers the cycle $\text{PID } 48219 \rightarrow \text{PID } 48102 \rightarrow \text{PID } 48219$. PostgreSQL aborts Terminal B's transaction with **`SQLSTATE 40P01` (`deadlock_detected`)**, automatically releasing Terminal B's lock on `'AWS-002'` and allowing Terminal A's Step 3.3 `UPDATE 1` to succeed immediately!
-3. **Why Terminal B Still Needs `ROLLBACK;` in Step 3.5:**
-   - When an error (`40P01`) occurs inside an explicit `BEGIN;` block in PostgreSQL, the transaction enters the **`aborted` state** (in `psql`, the prompt changes from `weather_ops=*#` to `weather_ops=!#`). All subsequent SQL commands are rejected with `ERROR: current transaction is aborted, commands ignored until end of transaction block` until the client explicitly acknowledges the failure by issuing `ROLLBACK;` (or `COMMIT;`, which PostgreSQL silently translates into `ROLLBACK`).
-4. **How Deterministic Lock Ordering (`ORDER BY station_id`) Eliminates Deadlocks:**
-   - Deadlocks in Lab 3 occurred solely because Terminal A locked `AWS-001` then `AWS-002` (ascending), while Terminal B locked `AWS-002` then `AWS-001` (descending).
-   - If every ingestion worker and calibration job sorts its batch by `station_id ASC` before acquiring locks (e.g., `SELECT * FROM station_calibration WHERE station_id IN ('AWS-001', 'AWS-002') ORDER BY station_id FOR NO KEY UPDATE;`), both workers attempt to lock `'AWS-001'` first. Worker B simply queues behind Worker A on `'AWS-001'` (a linear wait, never a cycle), making deadlocks mathematically impossible!
+##### 2.4.1.1 How the Circular Wait Forms (Steps 3.1 – 3.4)
+- **Step 3.1:** Terminal A acquires an Exclusive Row Lock on `'AWS-001'`.
+- **Step 3.2:** Terminal B acquires an Exclusive Row Lock on `'AWS-002'`.
+- **Step 3.3:** Terminal A requests an Exclusive Row Lock on `'AWS-002'` and goes to sleep waiting on Terminal B ($A \rightarrow B$).
+- **Step 3.4:** Terminal B requests an Exclusive Row Lock on `'AWS-001'` and goes to sleep waiting on Terminal A ($B \rightarrow A$). Neither session can ever advance on its own.
+##### 2.4.1.2 How `deadlock_timeout = 1s` (`1000ms`) Works
+- Traversing the global shared-memory Wait-For Graph (`DeadLockCheck()`) across all backend processes requires holding lock-partition spinlocks and is computationally expensive if run on every single microsecond lock wait.
+- Instead, whenever a backend goes to sleep on a lock, it sets a kernel timer for **`deadlock_timeout`** (default `1s` / `1000ms`). Most normal lock waits resolve in a few milliseconds before the timer fires.
+- In Step 3.4, once Terminal B has slept for `1000ms`, its timer fires `DeadLockCheck()`, which discovers the cycle $\text{PID } 48219 \rightarrow \text{PID } 48102 \rightarrow \text{PID } 48219$. PostgreSQL aborts Terminal B's transaction with **`SQLSTATE 40P01` (`deadlock_detected`)**, automatically releasing Terminal B's lock on `'AWS-002'` and allowing Terminal A's Step 3.3 `UPDATE 1` to succeed immediately!
+##### 2.4.1.3 Why Terminal B Still Needs `ROLLBACK;` in Step 3.5
+- When an error (`40P01`) occurs inside an explicit `BEGIN;` block in PostgreSQL, the transaction enters the **`aborted` state** (in `psql`, the prompt changes from `weather_ops=*#` to `weather_ops=!#`). All subsequent SQL commands are rejected with `ERROR: current transaction is aborted, commands ignored until end of transaction block` until the client explicitly acknowledges the failure by issuing `ROLLBACK;` (or `COMMIT;`, which PostgreSQL silently translates into `ROLLBACK`).
+##### 2.4.1.4 How Deterministic Lock Ordering (`ORDER BY station_id`) Eliminates Deadlocks
+- Deadlocks in Lab 3 occurred solely because Terminal A locked `AWS-001` then `AWS-002` (ascending), while Terminal B locked `AWS-002` then `AWS-001` (descending).
+- If every ingestion worker and calibration job sorts its batch by `station_id ASC` before acquiring locks (e.g., `SELECT * FROM station_calibration WHERE station_id IN ('AWS-001', 'AWS-002') ORDER BY station_id FOR NO KEY UPDATE;`), both workers attempt to lock `'AWS-001'` first. Worker B simply queues behind Worker A on `'AWS-001'` (a linear wait, never a cycle), making deadlocks mathematically impossible!
 
 ---
 
@@ -460,7 +460,7 @@ ROLLBACK;
 SELECT station_id, temp_offset FROM station_calibration WHERE station_id = 'AWS-003';
 ```
 
-#### Deep-Dive Architectural Explanation: Snapshot Lifecycle & `SQLSTATE 40001`
+#### 2.5.1 Deep-Dive Architectural Explanation: Snapshot Lifecycle & `SQLSTATE 40001`
 
 | Isolation Aspect | Part 4A: `READ COMMITTED` (PostgreSQL Default) | Part 4B: `REPEATABLE READ` |
 | :--- | :--- | :--- |
@@ -492,7 +492,7 @@ SELECT ctid, xmin, xmax, station_id, station_name, elevation_m FROM synoptic.sta
 COMMIT;
 ```
 
-#### Deep-Dive Architectural Explanation: Decoding `pg_current_snapshot()` (`xmin:xmax:xip_list`)
+#### 2.6.1 Deep-Dive Architectural Explanation: Decoding `pg_current_snapshot()` (`xmin:xmax:xip_list`)
 
 When Terminal A executes `SELECT pg_current_xact_id(), pg_current_snapshot();` on Line 282, PostgreSQL returns a snapshot descriptor formatted as **`xmin:xmax:xip_list`** (for example, `758:758:` or `755:760:756,758`):
 - **`xmin` (`758`):** The lowest Transaction ID that is still active across the entire database cluster. Any tuple with an `xmin < 758` (that committed in `pg_xact`) is unconditionally visible to all running queries.
@@ -556,26 +556,26 @@ ORDER BY idle_duration DESC;
 --    ALTER DATABASE weather_ops SET statement_timeout = '30s';
 ```
 
-#### Deep-Dive Architectural Explanation of the 4 DBA Emergency Queries
+#### 2.7.1 Deep-Dive Architectural Explanation of the 4 DBA Emergency Queries
 
-1. **Query 1 — Auditing All Non-Idle Transactions by Transaction Age (Lines 298–311):**
-   - Filters `pg_stat_activity` by `WHERE state != 'idle'` (capturing `'active'`, `'idle in transaction'`, `'idle in transaction (aborted)'`, and `'fastpath function call'`).
-   - Distinguishes between **`NOW() - xact_start` (`txn_duration`)**—how long the enclosing `BEGIN;` transaction has been open—and **`NOW() - query_start` (`query_duration`)**—how long the most recent SQL statement has been running. Ordering by `txn_duration DESC NULLS LAST` immediately surfaces the oldest open transactions at the top of the output.
-2. **Query 2 — Why `'idle in transaction'` Is the #1 Cause of Catastrophic MVCC Table Bloat (Lines 316–326):**
-   - A session enters `state = 'idle in transaction'` when a client or Python script issues `BEGIN;` (or runs with `autocommit = False` in `psycopg2`/`SQLAlchemy`), executes a `SELECT` or `UPDATE`, and then sits idle waiting on user input, an external HTTP API call, or an unclosed Jupyter notebook cell without calling `COMMIT` or `ROLLBACK`.
-   - Why is this devastating? Because PostgreSQL must preserve every tuple version that *might* still be needed by the oldest open snapshot in the cluster, **an `'idle in transaction'` session with a pinned snapshot freezes the global `OldestXmin` horizon across the entire database!**
-   - Even if `autovacuum` wakes up every minute, `VACUUM` **cannot reclaim a single dead tuple created after that stuck session's `xmin`** in *any* table in the database, causing gigabytes of dead-tuple bloat and holding row/table locks until the stuck transaction ends.
-3. **Query 3 — `pg_cancel_backend(pid)` vs. `pg_terminate_backend(pid)` (Lines 328–335):**
+##### 2.7.1.1 Query 1 — Auditing All Non-Idle Transactions by Transaction Age (Lines 298–311)
+- Filters `pg_stat_activity` by `WHERE state != 'idle'` (capturing `'active'`, `'idle in transaction'`, `'idle in transaction (aborted)'`, and `'fastpath function call'`).
+- Distinguishes between **`NOW() - xact_start` (`txn_duration`)**—how long the enclosing `BEGIN;` transaction has been open—and **`NOW() - query_start` (`query_duration`)**—how long the most recent SQL statement has been running. Ordering by `txn_duration DESC NULLS LAST` immediately surfaces the oldest open transactions at the top of the output.
+##### 2.7.1.2 Query 2 — Why `'idle in transaction'` Is the #1 Cause of Catastrophic MVCC Table Bloat (Lines 316–326)
+- A session enters `state = 'idle in transaction'` when a client or Python script issues `BEGIN;` (or runs with `autocommit = False` in `psycopg2`/`SQLAlchemy`), executes a `SELECT` or `UPDATE`, and then sits idle waiting on user input, an external HTTP API call, or an unclosed Jupyter notebook cell without calling `COMMIT` or `ROLLBACK`.
+- Why is this devastating? Because PostgreSQL must preserve every tuple version that *might* still be needed by the oldest open snapshot in the cluster, **an `'idle in transaction'` session with a pinned snapshot freezes the global `OldestXmin` horizon across the entire database!**
+- Even if `autovacuum` wakes up every minute, `VACUUM` **cannot reclaim a single dead tuple created after that stuck session's `xmin`** in *any* table in the database, causing gigabytes of dead-tuple bloat and holding row/table locks until the stuck transaction ends.
+##### 2.7.1.3 Query 3 — `pg_cancel_backend(pid)` vs. `pg_terminate_backend(pid)` (Lines 328–335)
 
 | Function | OS Signal Sent | Effect on Running Query | Effect on Open `BEGIN` Transaction & TCP Socket | When to Use |
 | :--- | :--- | :--- | :--- | :--- |
 | **`pg_cancel_backend(pid)`** | `SIGINT` | Immediately cancels the currently executing SQL query (`ERROR: canceling statement due to user request`). | **Keeps the TCP connection open.** If the session was inside an explicit `BEGIN;` block, the transaction enters `idle in transaction (aborted)` and **continues holding its locks** until the client issues `ROLLBACK;`! | Canceling a slow ad-hoc `SELECT` query without kicking the user out of `psql` / DBeaver. |
 | **`pg_terminate_backend(pid)`** | `SIGTERM` | Immediately aborts any running query. | **Kills the backend process, closes the client TCP socket, rolls back the open transaction in `pg_xact`, and releases all held locks!** | Terminating a stuck `'idle in transaction'` blocker (`blocker_pid`) when the client application or developer terminal is unresponsive. |
 
-4. **Query 4 — Production Timeout Guard-Rails (`ALTER DATABASE weather_ops SET ...`, Lines 337–341):**
-   - **`idle_in_transaction_session_timeout = '60s'`:** Automatically terminates any session that sits in `'idle in transaction'` for more than 60 seconds, rolling back its open transaction and unpinning both its locks and the global `VACUUM` `xmin` horizon.
-   - **`lock_timeout = '5s'`:** Prevents cascading connection-pool pileups during `ALTER TABLE` or hot-row updates; if a statement cannot acquire a table or row lock within 5 seconds, it aborts fast (`ERROR: canceling statement due to lock timeout`, `SQLSTATE 55P03`) instead of hanging forever.
-   - **`statement_timeout = '30s'`:** Caps total single-query execution time at 30 seconds to stop runaway cartesian joins from saturating CPU and I/O.
+##### 2.7.1.4 Query 4 — Production Timeout Guard-Rails (`ALTER DATABASE weather_ops SET ...`, Lines 337–341)
+- **`idle_in_transaction_session_timeout = '60s'`:** Automatically terminates any session that sits in `'idle in transaction'` for more than 60 seconds, rolling back its open transaction and unpinning both its locks and the global `VACUUM` `xmin` horizon.
+- **`lock_timeout = '5s'`:** Prevents cascading connection-pool pileups during `ALTER TABLE` or hot-row updates; if a statement cannot acquire a table or row lock within 5 seconds, it aborts fast (`ERROR: canceling statement due to lock timeout`, `SQLSTATE 55P03`) instead of hanging forever.
+- **`statement_timeout = '30s'`:** Caps total single-query execution time at 30 seconds to stop runaway cartesian joins from saturating CPU and I/O.
 
 ---
 

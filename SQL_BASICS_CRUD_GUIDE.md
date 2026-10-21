@@ -4,7 +4,9 @@
 
 ---
 
-## 1. Purpose of This Dedicated SQL Basics Guide
+## 0. Orientation & Quick Reference
+
+### 0.1 Purpose of This Dedicated SQL Basics Guide
 
 Before diving into hardware sentinels (`-9999.0`), Three-Valued Logic (`3VL`), 8 KB PostgreSQL heap pages (`pageinspect`), or range partitioning, every attendee needs **100% fluency in the core daily SQL commands to view, filter, sort, aggregate, join, insert, update, and delete data (`CRUD`)** on the exact relational databases used in Days 1, 2, and 3 of this bootcamp.
 
@@ -14,7 +16,7 @@ Every single SQL block in this document is **copy-and-paste runnable** against t
 
 ---
 
-## 2. Master SQL Orientation Map: Which Database, File, Schema & Exact Column Names Am I Using?
+### 0.2 Master SQL Orientation Map: Which Database, File, Schema & Exact Column Names Am I Using?
 
 | Bootcamp Day & SQL Engine | How to Connect from Your Terminal | Database / File Name | Exact Tables & Column Names Inside | Seed Command (To Reset to Clean State) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -36,7 +38,7 @@ Every single SQL block in this document is **copy-and-paste runnable** against t
 
 ---
 
-## 3. SQLite vs. PostgreSQL Side-by-Side SQL Quick Reference
+### 0.3 SQLite vs. PostgreSQL Side-by-Side SQL Quick Reference
 
 | SQL Operation | Day 1: SQLite (`sqlite3`) | Days 2–3: PostgreSQL (`psql`) |
 | :--- | :--- | :--- |
@@ -56,9 +58,9 @@ Every single SQL block in this document is **copy-and-paste runnable** against t
 
 ---
 
-# PART I: Day 1 SQLite SQL Basics (`day1/weather_ops.db` & `day1/weather_telemetry.db`)
+## 1. Part I: Day 1 SQLite SQL Basics (`day1/weather_ops.db` & `day1/weather_telemetry.db`)
 
-## 1.1 Opening the Database & Inspecting Tables ("Show Me What Exists!")
+### 1.1 Opening the Database & Inspecting Tables ("Show Me What Exists!")
 
 Open your terminal, `cd` into the `day1/` folder, and launch `sqlite3` on `weather_ops.db`:
 
@@ -99,7 +101,7 @@ SELECT 'weather_alerts',               COUNT(*)              FROM weather_alerts
 
 ---
 
-## 1.2 Basic `SELECT` — Viewing Data, Choosing Columns, Aliases & Math Expressions
+### 1.2 Basic `SELECT` — Viewing Data, Choosing Columns, Aliases & Math Expressions
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db
@@ -154,7 +156,7 @@ SELECT DISTINCT model_name, lead_hours FROM forecasts;
 
 ---
 
-## 1.3 Filtering Rows with `WHERE` (`=`, `!=`, `>`, `<`, `BETWEEN`, `IN`, `LIKE`, `AND`/`OR`, `IS NULL`)
+### 1.3 Filtering Rows with `WHERE` (`=`, `!=`, `>`, `<`, `BETWEEN`, `IN`, `LIKE`, `AND`/`OR`, `IS NULL`)
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db
@@ -207,7 +209,7 @@ WHERE temp_c IS NULL
 
 ---
 
-## 1.4 Sorting & Pagination (`ORDER BY`, `ASC`, `DESC`, `LIMIT`, `OFFSET`)
+### 1.4 Sorting & Pagination (`ORDER BY`, `ASC`, `DESC`, `LIMIT`, `OFFSET`)
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db
@@ -239,7 +241,7 @@ SELECT obs_id, station_id, obs_time, temp_c FROM observations ORDER BY obs_id AS
 
 ---
 
-## 1.5 Basic Aggregations (`COUNT`, `MIN`, `MAX`, `AVG`, `SUM`), `GROUP BY` / `HAVING` & `JOIN`
+### 1.5 Basic Aggregations (`COUNT`, `MIN`, `MAX`, `AVG`, `SUM`), `GROUP BY` / `HAVING` & `JOIN`
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db
@@ -313,7 +315,7 @@ ORDER BY observation_count ASC;
 
 ---
 
-## 1.6 Basic `INSERT`, `UPDATE` & `DELETE` (DML) on `day1/weather_ops.db`
+### 1.6 Basic `INSERT`, `UPDATE` & `DELETE` (DML) on `day1/weather_ops.db`
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db
@@ -408,7 +410,7 @@ SELECT COUNT(*) AS obs_60580_count     FROM observations WHERE station_id = 6058
 
 ---
 
-## 1.7 Exploring the Second Day 1 Database: `day1/weather_telemetry.db` (`250,000` Rows)
+### 1.7 Exploring the Second Day 1 Database: `day1/weather_telemetry.db` (`250,000` Rows)
 
 When a Day 1 exercise queries `raw_telemetry`, switch to `weather_telemetry.db`:
 
@@ -455,14 +457,14 @@ LIMIT 5;
 
 ---
 
-# PART II: Days 2 & 3 PostgreSQL SQL Basics (`weather_ops` Database)
+## 2. Part II: Days 2 & 3 PostgreSQL SQL Basics (`weather_ops` Database)
 
 In Days 2 and 3, we move from SQLite to **PostgreSQL 16+**. When you load [`day2/weather_ops_pg.sql`](./day2/weather_ops_pg.sql), PostgreSQL organizes tables into **three operational schemas**:
 - **`synoptic.stations`** (`7` WMO stations) & **`synoptic.observations`** (`18,432` hourly observations)
 - **`nwp.forecasts`** (`4,608` NWP model rows with an automatically calculated `valid_time` column)
 - **`alerts.weather_alerts`** (`4` severe weather bulletins)
 
-## 2.1 Connecting & Exploring Schemas/Tables in `psql` ("Show Me the Data!")
+### 2.1 Connecting & Exploring Schemas/Tables in `psql` ("Show Me the Data!")
 
 ```bash
 cd day2
@@ -501,7 +503,7 @@ SELECT 'alerts.weather_alerts',               COUNT(*)              FROM alerts.
 
 ---
 
-## 2.2 Basic `SELECT`, `WHERE` (`ILIKE`, `TIMESTAMPTZ`, `INTERVAL`), `ORDER BY` & `GROUP BY` in PostgreSQL
+### 2.2 Basic `SELECT`, `WHERE` (`ILIKE`, `TIMESTAMPTZ`, `INTERVAL`), `ORDER BY` & `GROUP BY` in PostgreSQL
 
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -U postgres -d weather_ops)
@@ -581,7 +583,7 @@ ORDER BY mean_temp_c DESC NULLS LAST;
 
 ---
 
-## 2.3 Basic `INSERT`, `UPDATE`, `DELETE` & PostgreSQL's `RETURNING` Superpower
+### 2.3 Basic `INSERT`, `UPDATE`, `DELETE` & PostgreSQL's `RETURNING` Superpower
 
 Unlike older SQL engines where you have to run a second `SELECT` after an `INSERT`, `UPDATE`, or `DELETE` to see what changed or what `BIGSERIAL` ID was generated, PostgreSQL supports **`RETURNING`** on every DML statement!
 

@@ -51,7 +51,7 @@ The [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) script upgrad
 
 ## 2. Header Banner & Session Environment Configuration (Lines 1–11)
 
-### Exact SQL Code (`Lines 1–11`)
+### 2.1 Exact SQL Code (`Lines 1–11`)
 
 ```sql
 -- ============================================================================
@@ -66,7 +66,7 @@ SET datestyle = 'iso, ymd';
 SET search_path TO synoptic, nwp, alerts, public;
 ```
 
-### Line-by-Line Architectural Breakdown
+### 2.2 Line-by-Line Architectural Breakdown
 
 - **Header Comments (`Lines 1–6`):** Documents the prerequisite database state. The script expects the `weather_ops` database and its three operational schemas (`synoptic`, `nwp`, `alerts`) plus the base tables (`synoptic.stations`, `synoptic.observations`, `nwp.forecasts`, `alerts.cap_bulletins`) created by [../day2/weather_ops_pg.sql](../day2/weather_ops_pg.sql).
 - **`SET timezone = 'UTC';` (`Line 8`):**
@@ -83,7 +83,7 @@ SET search_path TO synoptic, nwp, alerts, public;
 
 ### 3.1 Partitioned Parent Table Declaration (`Lines 12–31`)
 
-#### Exact SQL Code (`Lines 12–31`)
+#### 3.1.1 Exact SQL Code (`Lines 12–31`)
 
 ```sql
 -- ============================================================================
@@ -107,7 +107,7 @@ CREATE TABLE synoptic.observations_part (
 ) PARTITION BY RANGE (obs_time);
 ```
 
-#### Line-by-Line Architectural Breakdown
+#### 3.1.2 Line-by-Line Architectural Breakdown
 
 - **`DROP TABLE IF EXISTS synoptic.observations_part CASCADE;` (`Line 16`):**
   - Makes the script 100% idempotent. Dropping the partitioned parent table with `CASCADE` automatically drops all attached child partitions (`obs_y2026m06` through `obs_y2026m10` and `obs_default`) and any dependent indexes.
@@ -129,7 +129,7 @@ CREATE TABLE synoptic.observations_part (
 
 ### 3.2 Monthly Child Partitions & Half-Open Range Bounds (`Lines 32–50`)
 
-#### Exact SQL Code (`Lines 32–50`)
+#### 3.2.1 Exact SQL Code (`Lines 32–50`)
 
 ```sql
 -- Create Monthly Partitions (June 2026 through October 2026)
@@ -152,7 +152,7 @@ CREATE TABLE synoptic.obs_y2026m10 PARTITION OF synoptic.observations_part
 CREATE TABLE synoptic.obs_default PARTITION OF synoptic.observations_part DEFAULT;
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 3.2.2 Deep-Dive Architectural Explanation
 
 - **Half-Open Interval Semantics ($[T_{\text{start}}, T_{\text{end}})$):**
   - Every PostgreSQL range partition bound `FOR VALUES FROM (lower_bound) TO (upper_bound)` is **inclusive at the lower bound** and **strictly exclusive at the upper bound**:
@@ -171,7 +171,7 @@ CREATE TABLE synoptic.obs_default PARTITION OF synoptic.observations_part DEFAUL
 
 ### 3.3 Populating the Partitioned Table & Synthesizing Binary `JSONB` Payloads (`Lines 51–80`)
 
-#### Exact SQL Code (`Lines 51–80`)
+#### 3.3.1 Exact SQL Code (`Lines 51–80`)
 
 ```sql
 -- Populate partitioned table from Day 2 observations + attach rich JSONB sensor telemetry
@@ -206,7 +206,7 @@ SELECT
 FROM synoptic.observations;
 ```
 
-#### Line-by-Line Architectural Breakdown
+#### 3.3.2 Line-by-Line Architectural Breakdown
 
 - **Bulk Tuple Routing (`INSERT INTO synoptic.observations_part ... SELECT ... FROM synoptic.observations`, `Lines 52–80`):**
   - Reads all 4,320 historical synoptic rows from the monolithic Day 2 table `synoptic.observations` (spanning `2026-08-17` to `2026-10-15` across 8 Algerian stations) and streams them into the partitioned parent table `synoptic.observations_part`.
@@ -226,7 +226,7 @@ FROM synoptic.observations;
       1. `'door_open', (RANDOM() > 0.995)`: Evaluates a boolean expression that is `true` for $\approx 0.5\%$ of observations (simulating a physical datalogger enclosure intrusion or maintenance visit).
       2. `'firmware', CASE WHEN station_id IN (60390, 60490) THEN 'v4.2.1' ELSE 'v3.9.0' END`: Assigns firmware `'v4.2.1'` to primary international airport stations (`60390` Algiers Dar El Beida and `60490` Oran Es Senia) and `'v3.9.0'` to regional stations.
 
-#### Sample Synthesized `sensor_payload` Document
+#### 3.3.3 Sample Synthesized `sensor_payload` Document
 
 ```json
 {
@@ -245,7 +245,7 @@ FROM synoptic.observations;
 
 ## 4. Module 2: Deep Walkthrough of the 5 Specialized Indexes (Lines 82–107)
 
-### Exact SQL Code (`Lines 82–107`)
+### 4.1 Exact SQL Code (`Lines 82–107`)
 
 ```sql
 -- ============================================================================
@@ -277,7 +277,7 @@ ON synoptic.observations_part USING GIN (sensor_payload);
 
 ---
 
-### Architectural Comparison of the 5 Specialized Indexes
+### 4.2 Architectural Comparison of the 5 Specialized Indexes
 
 | # | Index Name | Target Table | Access Method & Clause | What is Stored on Disk | Primary Meteorological Use Case | Relative Storage Footprint |
 | :- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -289,9 +289,9 @@ ON synoptic.observations_part USING GIN (sensor_payload);
 
 ---
 
-### Individual Deep-Dive Breakdown of Each Index
+### 4.3 Individual Deep-Dive Breakdown of Each Index
 
-#### 1. `idx_obs_brin_time` — Block Range Index (`Lines 86–88`)
+#### 4.3.1 `idx_obs_brin_time` — Block Range Index (`Lines 86–88`)
 
 ```sql
 CREATE INDEX idx_obs_brin_time
@@ -311,7 +311,7 @@ ON synoptic.observations USING BRIN (obs_time) WITH (pages_per_range = 8);
 
 ---
 
-#### 2. `idx_obs_btree_time` — Standard B-Tree Baseline (`Lines 90–92`)
+#### 4.3.2 `idx_obs_btree_time` — Standard B-Tree Baseline (`Lines 90–92`)
 
 ```sql
 CREATE INDEX idx_obs_btree_time
@@ -325,7 +325,7 @@ ON synoptic.observations USING BTREE (obs_time);
 
 ---
 
-#### 3. `idx_obs_suspect_only` — Partial (Filtered) B-Tree Index (`Lines 94–97`)
+#### 4.3.3 `idx_obs_suspect_only` — Partial (Filtered) B-Tree Index (`Lines 94–97`)
 
 ```sql
 CREATE INDEX idx_obs_suspect_only
@@ -341,7 +341,7 @@ WHERE qc_flag != 'VALID';
 
 ---
 
-#### 4. `idx_obs_station_time_covering` — Covering Index with `INCLUDE` Payload (`Lines 99–102`)
+#### 4.3.4 `idx_obs_station_time_covering` — Covering Index with `INCLUDE` Payload (`Lines 99–102`)
 
 ```sql
 CREATE INDEX idx_obs_station_time_covering
@@ -372,7 +372,7 @@ INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 
 ---
 
-#### 5. `idx_obs_part_sensor_gin` — Generalized Inverted Index on Partitioned `JSONB` (`Lines 104–106`)
+#### 4.3.5 `idx_obs_part_sensor_gin` — Generalized Inverted Index on Partitioned `JSONB` (`Lines 104–106`)
 
 ```sql
 CREATE INDEX idx_obs_part_sensor_gin
@@ -400,7 +400,7 @@ ON synoptic.observations_part USING GIN (sensor_payload);
 
 ### 5.1 Pre-Aggregated NWP Model Verification Materialized View (`Lines 108–130`)
 
-#### Exact SQL Code (`Lines 108–130`)
+#### 5.1.1 Exact SQL Code (`Lines 108–130`)
 
 ```sql
 -- ============================================================================
@@ -428,7 +428,7 @@ GROUP BY f.model_name, f.station_id, s.station_name, DATE_TRUNC('day', f.valid_t
 WITH DATA;
 ```
 
-#### Line-by-Line Architectural & Mathematical Breakdown
+#### 5.1.2 Line-by-Line Architectural & Mathematical Breakdown
 
 - **`DROP MATERIALIZED VIEW IF EXISTS nwp.mv_daily_model_verification;` (`Line 111`):**
   - Ensures idempotent re-execution by dropping any previously cached physical view relation.
@@ -459,7 +459,7 @@ WITH DATA;
 
 ### 5.2 Enabling Non-Blocking Concurrent Refresh (`Lines 132–135`)
 
-#### Exact SQL Code (`Lines 132–135`)
+#### 5.2.1 Exact SQL Code (`Lines 132–135`)
 
 ```sql
 -- Unique index required to enable REFRESH MATERIALIZED VIEW CONCURRENTLY!
@@ -467,7 +467,7 @@ CREATE UNIQUE INDEX idx_mv_daily_verif_unique
 ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 5.2.2 Deep-Dive Architectural Explanation
 
 - **Why a `UNIQUE INDEX` Is Mandatory for `REFRESH MATERIALIZED VIEW CONCURRENTLY`:**
   - A standard `REFRESH MATERIALIZED VIEW nwp.mv_daily_model_verification;` acquires an **`ACCESS EXCLUSIVE` lock** on the materialized view while recomputing the entire query from scratch. Any weather dashboard or API executing a `SELECT` against the view is completely blocked until the refresh finishes.
@@ -483,7 +483,7 @@ ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 
 ### 5.3 Dynamic PL/pgSQL PostGIS Enablement, `alerts.storm_polygons` & Geodesic Fallback (`Lines 136–229`)
 
-#### Exact SQL Code (`Lines 136–229`)
+#### 5.3.1 Exact SQL Code (`Lines 136–229`)
 
 ```sql
 -- Automatically enable PostGIS (or WGS-84 geodesic fallback) and populate synoptic.stations.geog, geom & alerts.storm_polygons
@@ -582,7 +582,7 @@ $$;
 VACUUM ANALYZE;
 ```
 
-#### Line-by-Line Architectural Breakdown
+#### 5.3.2 Line-by-Line Architectural Breakdown
 
 - **`DO $$ BEGIN ... END $$;` (`Lines 137–227`):**
   - Executes an anonymous PL/pgSQL procedural block inside the current transaction without persisting a named stored procedure. This allows conditional DDL execution (`IF EXISTS ... THEN ... ELSE ... END IF;`), which standard declarative SQL does not support natively.
@@ -606,7 +606,7 @@ VACUUM ANALYZE;
 
 ## 6. Expected Terminal Output & Post-Execution Verification
 
-### Expected `psql` Execution Output
+### 6.1 Expected `psql` Execution Output
 
 When running `psql -d weather_ops -f day3_weather_advanced_pg.sql`, PostgreSQL produces the following exact sequence of command tags and notices:
 
@@ -638,7 +638,7 @@ VACUUM
 
 *(Note: If the host OS does not yet have the `postgresql-16-postgis-3` package installed, Line 227 outputs `NOTICE: WGS-84 geodesic fallback enabled and synoptic.stations.geog + alerts.storm_polygons populated!`)*
 
-### Quick Verification Queries
+### 6.2 Quick Verification Queries
 
 You can immediately verify the physical sizes and row distributions created by `day3_weather_advanced_pg.sql` with the following diagnostic queries:
 

@@ -39,7 +39,9 @@
 
 ---
 
-## 1. Day 3 Objective & Core Philosophy
+## 0. Day 3 Overview, PostGIS Installation & 5,000,000-Row Seed
+
+### 0.1 Day 3 Objective & Module Outline
 
 On Day 2, we proved how PostgreSQL operates under the hood—processes, shared memory (`shared_buffers`), 8 KB heap pages, tuple alignment, MVCC/Vacuum bloat, WAL crash recovery, and cost-based query planning. We also saw that **monolithic relational row stores suffer severe I/O amplification on analytical scans and table bloat during continuous ingestion**.
 
@@ -54,7 +56,6 @@ Today on **Day 3**, we apply that architectural knowledge to solve the **6 bigge
 
 ---
 
-## 2. Module Outline
 
 ```
 ┌─────────────────┬───────────────────────────────────────────────────────────────────────┐
@@ -74,13 +75,12 @@ Today on **Day 3**, we apply that architectural knowledge to solve the **6 bigge
 
 ---
 
-## Module 0: Explicit PostGIS Installation, Enablement & 5,000,000-Row Seed Script
 
-### 0.1 Explicit OS Package Installation
+### 0.2 Explicit OS Package Installation
 
 PostGIS is not bundled in the core PostgreSQL server package; it must be installed as an operating system package matching the PostgreSQL major version.
 
-#### Option A: Ubuntu / Debian Host
+#### 0.2.1 Option A: Ubuntu / Debian Host
 ```bash
 # 1. Update APT repository index
 sudo apt-get update
@@ -92,7 +92,7 @@ sudo apt-get install -y postgresql-16-postgis-3 postgresql-16-postgis-3-scripts
 ls -la /usr/lib/postgresql/16/lib/postgis*
 ```
 
-#### Option B: Docker Container Deployment
+#### 0.2.2 Option B: Docker Container Deployment
 If running PostgreSQL via Docker, deploy the official PostGIS image or install it into an existing container:
 ```bash
 # Run container with PostGIS pre-compiled
@@ -105,13 +105,13 @@ docker exec -u 0 -it weather_pg apt-get install -y postgresql-16-postgis-3
 
 ---
 
-### 0.2 Two Complementary Datasets for Day 3 Labs
+### 0.3 Two Complementary Datasets for Day 3 Labs
 
 In Day 3, we use two SQL scripts that work together seamlessly:
 1. **`day3_weather_advanced_pg.sql`** (runs on `weather_ops` from Day 2): Builds `synoptic.observations_part` with `JSONB` `sensor_payload`, creates B-Tree, BRIN, Partial (`WHERE qc_flag != 'VALID'`), Covering (`INCLUDE`), and `GIN` indexes, builds the `nwp.mv_daily_model_verification` Materialized View, and adds a PostGIS `GEOGRAPHY(Point, 4326)` column to `synoptic.stations`.
 2. **`day3_postgis_5m_benchmark.sql`** (runs on `weather_ops_db` or `weather_ops`): Seeds 50 Algerian coastal & inland stations (`AWS-001` through `AWS-050`) with PostGIS geometries and generates **5,000,000 rows of realistic high-frequency telemetry** across monthly partitions (`telemetry_y2026m09` .. `telemetry_y2026m12`) in $\approx 5\text{--}8\text{ seconds}$ using `generate_series()`.
 
-### 0.3 Automated Database Initialization & 5,000,000-Row Telemetry Seed Script
+### 0.4 Automated Database Initialization & 5,000,000-Row Telemetry Seed Script
 
 Run both Day 3 seed scripts from your terminal inside `day3/`:
 
@@ -128,7 +128,7 @@ psql -d postgres -f day3_postgis_5m_benchmark.sql
 
 ---
 
-## Module 1: Declarative Time-Range Partitioning & Lifecycle Management
+## 1. Module 1: Declarative Time-Range Partitioning & Lifecycle Management
 
 ### 1.1 The Operational Failure Modes of Monolithic Tables
 
@@ -174,7 +174,7 @@ Before typing `PARTITION BY RANGE`, engineers must understand the concrete physi
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Declarative Time-Range Partition Pruning & Zero-Downtime Cold Tier Offload Lifecycle
+#### 1.2.1 Declarative Time-Range Partition Pruning & Zero-Downtime Cold Tier Offload Lifecycle
 
 ```mermaid
 flowchart TD
@@ -194,18 +194,18 @@ flowchart TD
     end
 ```
 
-#### 1. Keeping the Active Working Set in RAM (The Ingestion Cliff)
+#### 1.2.2 Keeping the Active Working Set in RAM (The Ingestion Cliff)
 In an unpartitioned table of 200 million rows, a composite B-Tree index on `(station_id, recorded_at)` easily reaches $10\text{--}15\text{ GB}$.
 - PostgreSQL's `shared_buffers` is typically sized to $25\%$ of system RAM (e.g., $8\text{ GB}$ on a $32\text{ GB}$ server).
 - When the index exceeds `shared_buffers`, the database can no longer cache all leaf pages. Every incoming insert must look up its place in the B-Tree via a **random read from NVMe/SSD**.
 - **With Monthly Partitions:** Only the current month's partition receives writes. Its index is only $\approx 350\text{ MB}$ and stays $100\%$ **pinned in RAM**, maintaining insert speeds of $50,000+\text{ inserts/sec}$ indefinitely without hitting an I/O cliff.
 
-#### 2. Autovacuum Isolation & Transaction ID (XID) Freeze Protection
+#### 1.2.3 Autovacuum Isolation & Transaction ID (XID) Freeze Protection
 In PostgreSQL's MVCC model, old rows must eventually be frozen to avoid Transaction ID Wraparound:
 - In a 500-million-row monolithic table, autovacuum must read the entire multi-gigabyte heap to vacuum and freeze tuples, competing directly with incoming weather telemetry.
 - With partitions, **closed historical months are completely cold**. Once autovacuum freezes a completed partition, PostgreSQL flags the entire child relation as clean (`relfrozenxid`). Autovacuum **never touches those historical disk blocks again**, concentrating maintenance strictly on the active month.
 
-#### 3. True $O(1)$ Space Reclamation vs. `DELETE` Bloat
+#### 1.2.4 True $O(1)$ Space Reclamation vs. `DELETE` Bloat
 - In a monolithic table, running `DELETE WHERE recorded_at < '2026-10-01'` marks tuples as dead, but **does not return disk space to the operating system** without an exclusive-lock `VACUUM FULL`.
 - In a partitioned table, retiring old data is executed via:
   ```sql
@@ -214,10 +214,10 @@ In PostgreSQL's MVCC model, old rows must eventually be frozen to avoid Transact
   ```
   This is a pure metadata unlink operation ($< 10\text{ ms}$) that immediately deletes the underlying files from the Linux filesystem, reclaiming physical gigabytes instantly with zero WAL churn and zero dead tuples.
 
-#### 4. Physical I/O Pruning (Partition Pruning)
+#### 1.2.5 Physical I/O Pruning (Partition Pruning)
 When a forecaster runs a query covering a 24-hour or 48-hour storm window, the query planner evaluates the `WHERE` clause against partition constraints and discards $99\%$ of child tables before touching a single 8 KB disk page.
 
-#### 5. Why a Master Partitioned Table? (The Abstraction Layer & Primary Key Rule)
+#### 1.2.6 Why a Master Partitioned Table? (The Abstraction Layer & Primary Key Rule)
 - **Zero Application Routing Logic:** The parent table (`synoptic.observations_part` or `raw_telemetry_partitioned`) holds **0 bytes of data** itself—it routes rows automatically to monthly child tables.
 - **Transparent Cross-Boundary Queries:** A 72-hour cyclone spanning October 30 through November 2 seamlessly queries the parent table across both child partitions.
 - **Rule #1 of PostgreSQL Partitioning:** Any `PRIMARY KEY` or `UNIQUE` constraint on a partitioned table **must include the partition key**, e.g. `PRIMARY KEY (obs_time, station_id)`.
@@ -245,7 +245,7 @@ WHERE parent.relname = 'raw_telemetry_partitioned'
 ORDER BY c.relname;
 ```
 
-#### Terminal Output:
+#### 1.3.1 Terminal Output:
 ```text
 ┌────────────────────┬───────────┬────────────┬────────────────┐
 │ partition_name     │ heap_size │ total_size │ estimated_rows │
@@ -257,7 +257,7 @@ ORDER BY c.relname;
 └────────────────────┴───────────┴────────────┴────────────────┘
 ```
 
-#### Partition Pruning in Action:
+#### 1.3.2 Partition Pruning in Action:
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops_db' (Switch in psql with: \c weather_ops_db)
 -- PREREQUISITE SCRIPT: day3/day3_postgis_5m_benchmark.sql
@@ -282,20 +282,20 @@ HashAggregate
 ```
 *Proof:* The query planner evaluated the timestamp constraint and completely pruned `telemetry_y2026m09`, `telemetry_y2026m11`, `telemetry_y2026m12`, and `telemetry_default`.
 
-#### Black Box 3A Demystified: Partitioned Table `PRIMARY KEY` Rules & Half-Open Bounds $[T_{\text{start}}, T_{\text{end}})$
+#### 1.3.3 Black Box 3A Demystified: Partitioned Table `PRIMARY KEY` Rules & Half-Open Bounds $[T_{\text{start}}, T_{\text{end}})$
 
 When engineers convert a normal PostgreSQL table (`synoptic.observations` with `obs_id BIGSERIAL PRIMARY KEY`) into a partitioned table (`synoptic.observations_part PARTITION BY RANGE (obs_time)`), two immediate black-box questions arise:
 
-1. **Why Does `PRIMARY KEY (obs_id)` Fail on a Partitioned Table (`ERROR: unique constraint on partitioned table must include all partitioning columns`)?**
-   - In PostgreSQL, the parent partitioned table (`observations_part`) stores **zero bytes of data and has no global B-Tree index across all partitions**. Each monthly child table (`obs_y2026m09`, `obs_y2026m10`) maintains its own independent local B-Tree index.
-   - If PostgreSQL allowed `PRIMARY KEY (obs_id)` without `obs_time`, checking whether `obs_id = 500` already exists during an `INSERT` would require locking and probing **every single historical child partition's B-Tree** (e.g., 120 monthly partitions!), destroying write throughput.
-   - By requiring the partition key (`obs_time`) to be included in every `PRIMARY KEY` or `UNIQUE` constraint (`PRIMARY KEY (obs_time, station_id)`), PostgreSQL knows that any duplicate `(obs_time, station_id)` can **only** live inside that single month's child partition—so uniqueness is verified with **1 local B-Tree lookup**!
+##### 1.3.3.1 Why Does `PRIMARY KEY (obs_id)` Fail on a Partitioned Table (`ERROR: unique constraint on partitioned table must include all partitioning columns`)?
+- In PostgreSQL, the parent partitioned table (`observations_part`) stores **zero bytes of data and has no global B-Tree index across all partitions**. Each monthly child table (`obs_y2026m09`, `obs_y2026m10`) maintains its own independent local B-Tree index.
+- If PostgreSQL allowed `PRIMARY KEY (obs_id)` without `obs_time`, checking whether `obs_id = 500` already exists during an `INSERT` would require locking and probing **every single historical child partition's B-Tree** (e.g., 120 monthly partitions!), destroying write throughput.
+- By requiring the partition key (`obs_time`) to be included in every `PRIMARY KEY` or `UNIQUE` constraint (`PRIMARY KEY (obs_time, station_id)`), PostgreSQL knows that any duplicate `(obs_time, station_id)` can **only** live inside that single month's child partition—so uniqueness is verified with **1 local B-Tree lookup**!
 
-2. **Why `FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00')` Uses Half-Open Interval $[A, B)$ Instead of `23:59:59`:**
-   - If you defined October's upper bound as `'2026-10-31 23:59:59+00'`, what happens when a high-frequency sensor reports at `'2026-10-31 23:59:59.500000+00'`? It falls into a **1-second gap** between October and November and crashes ingestion!
-   - Therefore, PostgreSQL `PARTITION BY RANGE` always evaluates **`FROM A TO B` as a mathematical half-open interval $[A, B)$**:
-     - **Lower Bound (`FROM A`):** **Inclusive ($\ge A$)** — `'2026-10-01 00:00:00.000000+00'` goes into **October**.
-     - **Upper Bound (`TO B`):** **Strictly Exclusive ($< B$)** — `'2026-11-01 00:00:00.000000+00'` goes into **November**, while `'2026-10-31 23:59:59.999999+00'` goes into **October** with zero microsecond gaps!
+##### 1.3.3.2 Why `FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00')` Uses Half-Open Interval $[A, B)$ Instead of `23:59:59`
+- If you defined October's upper bound as `'2026-10-31 23:59:59+00'`, what happens when a high-frequency sensor reports at `'2026-10-31 23:59:59.500000+00'`? It falls into a **1-second gap** between October and November and crashes ingestion!
+- Therefore, PostgreSQL `PARTITION BY RANGE` always evaluates **`FROM A TO B` as a mathematical half-open interval $[A, B)$**:
+  - **Lower Bound (`FROM A`):** **Inclusive ($\ge A$)** — `'2026-10-01 00:00:00.000000+00'` goes into **October**.
+  - **Upper Bound (`TO B`):** **Strictly Exclusive ($< B$)** — `'2026-11-01 00:00:00.000000+00'` goes into **November**, while `'2026-10-31 23:59:59.999999+00'` goes into **October** with zero microsecond gaps!
 
 | Partition DDL Feature | What Happens If Omitted / Misused | Production Engineering Rule |
 | :--- | :--- | :--- |
@@ -350,7 +350,7 @@ WHERE obs_time >= '2026-11-01 00:00:00+00';
 
 ---
 
-## Module 2: Advanced Indexing — B-Tree, BRIN, Partial, Covering (`INCLUDE`) & PostGIS Geodesy
+## 2. Module 2: Advanced Indexing — B-Tree, BRIN, Partial, Covering (`INCLUDE`) & PostGIS Geodesy
 
 ### 2.1 The Physical Failure of B-Trees on Append-Only Time Series vs. BRIN
 
@@ -374,7 +374,7 @@ A standard **B-Tree index** maintains a balanced hierarchy with pointers (`ctid`
                                                 └───────────────────────────────────────────┘
 ```
 
-#### How BRIN (Block Range Index) Exploits Chronological Weather Data
+#### 2.1.1 How BRIN (Block Range Index) Exploits Chronological Weather Data
 Weather observations arrive in temporal order. Because rows are appended sequentially to the newest 8 KB heap pages, **physical disk block position directly correlates with time**:
 1. A **BRIN index (`USING BRIN (recorded_at) WITH (pages_per_range = 64)`)** divides the table heap into contiguous block ranges ($64 \times 8\text{ KB} = 512\text{ KB}$ of physical data, or `pages_per_range = 8` for $64\text{ KB}$ ranges).
 2. It stores only two scalar values per range: **`MIN(obs_time)`** and **`MAX(obs_time)`**.
@@ -388,7 +388,7 @@ Weather observations arrive in temporal order. Because rows are appended sequent
 
 ### 2.2 Partial Indexes (`WHERE ...`) & Covering Indexes (`INCLUDE`)
 
-#### 1. Partial Indexes (`WHERE ...`)
+#### 2.2.1 Partial Indexes (`WHERE ...`)
 Suppose $96\%$ of your observations have `qc_flag = 'VALID'`, and your quality-control dashboard frequently queries `WHERE qc_flag != 'VALID'`. Why waste RAM indexing the $96\%$ valid rows?
 ```sql
 CREATE INDEX idx_obs_suspect_only ON synoptic.observations (station_id, obs_time)
@@ -396,7 +396,7 @@ WHERE qc_flag != 'VALID';
 ```
 Only rows matching the `WHERE` predicate are entered into the B-Tree—reducing index size by $96\%$!
 
-#### 2. Covering Indexes (`INCLUDE`) & Index-Only Scans
+#### 2.2.2 Covering Indexes (`INCLUDE`) & Index-Only Scans
 Recall from Day 2 that a normal `Index Scan` reads the B-Tree index and then jumps to the 8 KB Heap Page (`ctid`) to fetch non-key payload columns (`temp_c`, `pressure_hpa`, `precip_1h_mm`).
 By appending `INCLUDE (temp_c, pressure_hpa, precip_1h_mm)` to the index leaf pages (and keeping the table vacuumed so the **Visibility Map** is all-visible), PostgreSQL answers the entire query directly from the index via an **`Index Only Scan` with `Heap Fetches: 0`**!
 
@@ -406,17 +406,17 @@ ON synoptic.observations (station_id, obs_time)
 INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 ```
 
-#### Black Box 3B Demystified: Why `BRIN` Always Uses `Bitmap Heap Scan + Recheck Cond` & The 6-Index Decision Matrix
+#### 2.2.3 Black Box 3B Demystified: Why `BRIN` Always Uses `Bitmap Heap Scan + Recheck Cond` & The 6-Index Decision Matrix
 
 Why does `EXPLAIN` on a `BRIN` index **always** show `Bitmap Index Scan` $\rightarrow$ `Bitmap Heap Scan` with a `Recheck Cond`—and why can't a `BRIN` index ever enforce `UNIQUE` or perform an `Index Only Scan`?
 
-1. **Exact Row-Pointer Index (`B-Tree`) vs. Lossy Block-Summary Index (`BRIN`):**
-   - **B-Tree is Exact (Row-Level):** Every entry in a B-Tree leaf page stores an exact key value and its exact 6-byte `ctid = (block, offset)`.
-   - **BRIN is Lossy (Block-Range Level):** A BRIN index does **not** store individual row `ctid`s! It only knows that **Heap Blocks `64..127` contain timestamps somewhere between `00:00` and `04:12`**.
-   - Therefore, when you query `WHERE recorded_at BETWEEN '01:00' AND '02:00'`, the BRIN `Bitmap Index Scan` flags Blocks `64..127` as *candidate blocks* in a memory bitmap, and the **`Bitmap Heap Scan` must inspect every tuple inside Blocks `64..127` (`Recheck Cond`)** to discard rows from `00:15` or `03:45`!
-2. **Why Put Columns in `INCLUDE (temp_c, pressure_hpa)` Instead of Making a 4-Column Key `(station_id, obs_time, temp_c, pressure_hpa)`?**
-   - Putting `temp_c` and `pressure_hpa` into the main index key forces PostgreSQL to store and compare them inside **upper B-Tree branch/internal nodes** too, bloating the entire tree and breaking `UNIQUE (station_id, obs_time)` semantics.
-   - `INCLUDE (temp_c, pressure_hpa)` stores those payload columns **only in the bottom B-Tree leaf nodes**, keeping internal navigation branches tiny while still satisfying `Index Only Scan`!
+##### 2.2.3.1 Exact Row-Pointer Index (`B-Tree`) vs. Lossy Block-Summary Index (`BRIN`)
+- **B-Tree is Exact (Row-Level):** Every entry in a B-Tree leaf page stores an exact key value and its exact 6-byte `ctid = (block, offset)`.
+- **BRIN is Lossy (Block-Range Level):** A BRIN index does **not** store individual row `ctid`s! It only knows that **Heap Blocks `64..127` contain timestamps somewhere between `00:00` and `04:12`**.
+- Therefore, when you query `WHERE recorded_at BETWEEN '01:00' AND '02:00'`, the BRIN `Bitmap Index Scan` flags Blocks `64..127` as *candidate blocks* in a memory bitmap, and the **`Bitmap Heap Scan` must inspect every tuple inside Blocks `64..127` (`Recheck Cond`)** to discard rows from `00:15` or `03:45`!
+##### 2.2.3.2 Why Put Columns in `INCLUDE (temp_c, pressure_hpa)` Instead of Making a 4-Column Key `(station_id, obs_time, temp_c, pressure_hpa)`?
+- Putting `temp_c` and `pressure_hpa` into the main index key forces PostgreSQL to store and compare them inside **upper B-Tree branch/internal nodes** too, bloating the entire tree and breaking `UNIQUE (station_id, obs_time)` semantics.
+- `INCLUDE (temp_c, pressure_hpa)` stores those payload columns **only in the bottom B-Tree leaf nodes**, keeping internal navigation branches tiny while still satisfying `Index Only Scan`!
 
 | PostgreSQL Index Type | What It Stores Physically | Relative Size (per 1M rows) | Supports `UNIQUE`? | Supports `Index Only Scan`? | Ideal Meteorological Workload |
 | :--- | :--- | :---: | :---: | :---: | :--- |
@@ -452,7 +452,7 @@ Meteorological phenomena are spatial. Atmospheric fronts, convective cells, and 
 > **Production Engineering Pitfall — Swapping `(Latitude, Longitude)` in `ST_MakePoint()`:**  
 > Meteorologists conventionally state coordinates as *"36.75°N, 3.05°E"* (`lat, lon`), whereas GIS and Cartesian geometry always use **`(X, Y)` = `(longitude, latitude)`**! Writing `ST_MakePoint(36.7538, 3.0588)` for Algiers Port places the station in the **Indian Ocean off the coast of Somalia (`3.05°N, 36.75°E`)**, causing any `ST_DWithin` query for Algeria to return `0 rows`. Always enforce the convention **`X = Lon, Y = Lat`**.
 
-#### Real-World Operational Query: Stations Under Threat (`ST_DWithin`)
+#### 2.3.1 Real-World Operational Query: Stations Under Threat (`ST_DWithin`)
 Find all active meteorological stations within a $40\text{ km}$ ($40,000\text{ m}$) radius of an advancing squall line offshore from Dellys Cape at coordinates $(36.95^\circ\text{N}, 3.90^\circ\text{E})$:
 
 ```sql
@@ -478,7 +478,7 @@ WHERE is_active = TRUE
 ORDER BY distance_km ASC;
 ```
 
-#### Verified Terminal Output:
+#### 2.3.2 Verified Terminal Output:
 ```text
 ┌────────────┬─────────────────────────┬─────────────┬──────────┬───────────┬─────────────┐
 │ station_id │ station_name            │ elevation_m │ latitude │ longitude │ distance_km │
@@ -491,7 +491,7 @@ ORDER BY distance_km ASC;
 ---
 
 ### 2.4 Hands-On Lab 2A, 2B & 2C Walkthrough: Indexing & PostGIS Benchmarks
-#### Lab 2A: Partial Indexes & Covering Index-Only Scans (`weather_ops` database)
+#### 2.4.1 Lab 2A: Partial Indexes & Covering Index-Only Scans (`weather_ops` database)
 This walkthrough compares the physical disk footprint (`pg_relation_size`) across `idx_obs_btree_time` (B-Tree), `idx_obs_brin_time` (BRIN), `idx_obs_suspect_only` (Partial), and `idx_obs_station_time_covering` (Covering) on `synoptic.observations`, and verifies both Partial Index selection and Covering `Index Only Scan` (`Heap Fetches: 0`) via `EXPLAIN (ANALYZE, BUFFERS)`:
 
 ```sql
@@ -521,7 +521,7 @@ WHERE station_id = 60390
   AND obs_time BETWEEN '2026-10-01 00:00:00+00' AND '2026-10-06 23:00:00+00';
 ```
 
-#### Lab 2B: 5,000,000-Row B-Tree vs. BRIN Benchmark (`weather_ops_db` database)
+#### 2.4.2 Lab 2B: 5,000,000-Row B-Tree vs. BRIN Benchmark (`weather_ops_db` database)
 Empirically compare index creation time and physical disk footprint between a standard B-Tree and a BRIN index on the 1.27M-row October child partition (`telemetry_y2026m10`):
 
 ```sql
@@ -547,7 +547,7 @@ FROM pg_class c
 WHERE relname IN ('idx_oct_btree', 'idx_oct_brin');
 ```
 
-#### Verified Terminal Output:
+#### 2.4.3 Verified Terminal Output:
 ```text
 ┌───────────────┬────────────┐
 │ index_name    │ index_size │
@@ -558,7 +558,7 @@ WHERE relname IN ('idx_oct_btree', 'idx_oct_brin');
 ```
 *Key Takeaway:* The BRIN index is **$900\times$ smaller** than the B-Tree ($32\text{ KB}$ vs. $28\text{ MB}$) on a single month, staying pinned in CPU cache while skipping 64-page blocks!
 
-#### Lab 2C: PostGIS Radial Distance & Historical Temporal Joins (`weather_ops_db` database)
+#### 2.4.4 Lab 2C: PostGIS Radial Distance & Historical Temporal Joins (`weather_ops_db` database)
 Find all weather stations within $50\text{ km}$ of the Boumerdes coastal zone (`3.4772E, 36.7664N`) and join them with their October 2026 average temperature and peak wind gust from the 5M-row partitioned table:
 
 ```sql
@@ -594,7 +594,7 @@ GROUP BY ns.station_id, ns.station_name, ns.dist_km
 ORDER BY ns.dist_km ASC;
 ```
 
-#### Verified Terminal Output:
+#### 2.4.5 Verified Terminal Output:
 ```text
 ┌────────────┬─────────────────────────┬─────────┬───────────────┬───────────────┐
 │ station_id │ station_name            │ dist_km │ oct_mean_temp │ oct_peak_gust │
@@ -607,7 +607,7 @@ ORDER BY ns.dist_km ASC;
 
 ---
 
-## Module 3: Analytical Window Functions for Weather Forecasting
+## 3. Module 3: Analytical Window Functions for Weather Forecasting
 
 ### 3.1 Why `GROUP BY` Isn't Enough for Synoptic Meteorology
 
@@ -620,23 +620,23 @@ ORDER BY ns.dist_km ASC;
 
 ### 3.2 Core Window Function Patterns for Weather Engineers
 
-1. **Look-back / Look-ahead (`LAG` & `LEAD`):**
-   ```sql
-   pressure_hpa - LAG(pressure_hpa, 3) OVER (
-       PARTITION BY station_id ORDER BY obs_time
-   ) AS pressure_tendency_3h
-   ```
-2. **Sliding Time Windows (`RANGE` / `ROWS BETWEEN`):**
-   > **Why `RANGE BETWEEN INTERVAL '23 hours' PRECEDING` beats `ROWS BETWEEN 23 PRECEDING`:** If a sensor misses 2 hourly transmissions due to a telemetry dropout, `ROWS BETWEEN 23 PRECEDING` accidentally reaches back 26 hours in time! `RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW` inspects the exact `TIMESTAMPTZ` values so the window is strictly bounded to a true 24-hour clock window!
-   ```sql
-   SUM(precip_1h_mm) OVER (
-       PARTITION BY station_id
-       ORDER BY obs_time
-       RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW
-   ) AS rolling_24h_precip_mm
-   ```
-3. **Ranking Extremes (`RANK`, `DENSE_RANK`, `ROW_NUMBER`):**
-   - Finding the top 3 hottest or windiest observations inside each `station_id` or `climate_zone`.
+#### 3.2.1 Look-back / Look-ahead (`LAG` & `LEAD`)
+```sql
+pressure_hpa - LAG(pressure_hpa, 3) OVER (
+    PARTITION BY station_id ORDER BY obs_time
+) AS pressure_tendency_3h
+```
+#### 3.2.2 Sliding Time Windows (`RANGE` / `ROWS BETWEEN`)
+> **Why `RANGE BETWEEN INTERVAL '23 hours' PRECEDING` beats `ROWS BETWEEN 23 PRECEDING`:** If a sensor misses 2 hourly transmissions due to a telemetry dropout, `ROWS BETWEEN 23 PRECEDING` accidentally reaches back 26 hours in time! `RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW` inspects the exact `TIMESTAMPTZ` values so the window is strictly bounded to a true 24-hour clock window!
+```sql
+SUM(precip_1h_mm) OVER (
+    PARTITION BY station_id
+    ORDER BY obs_time
+    RANGE BETWEEN INTERVAL '23 hours' PRECEDING AND CURRENT ROW
+) AS rolling_24h_precip_mm
+```
+#### 3.2.3 Ranking Extremes (`RANK`, `DENSE_RANK`, `ROW_NUMBER`)
+- Finding the top 3 hottest or windiest observations inside each `station_id` or `climate_zone`.
 
 > [!IMPORTANT]
 > **Architectural Note — Why `RANGE BETWEEN INTERVAL '23 hours' PRECEDING` Beats `ROWS BETWEEN 23 PRECEDING`:**  
@@ -726,7 +726,7 @@ ORDER BY climate_zone, station_name, temp_rank;
 
 ---
 
-## Module 4: Idempotent Ingestion (`UPSERT`) & Concurrent Materialized Views
+## 4. Module 4: Idempotent Ingestion (`UPSERT`) & Concurrent Materialized Views
 
 ### 4.1 Real-World Telemetry Problem: Duplicate & Corrected Bulletins (`COR` / `AMD`)
 
@@ -740,7 +740,7 @@ ORDER BY climate_zone, station_name, temp_rank;
 
 ### 4.2 Pre-Computing Heavy Forecast Verification Dashboards (`MATERIALIZED VIEW`) — Controlled Denormalization on a `3NF` Core
 
-- **Connecting Back to Day 1 (`3NF` Normalization vs. Denormalization):** On [Day 1 (Section 7.2)](../day1/day1_master_coursebook.md#72-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems), we normalized `stations`, `observations`, and `forecasts` into strict Third Normal Form (`3NF`) to prevent insertion, update, and deletion anomalies. However, re-executing a 3-way `INNER JOIN` across 50 million `observations` and 150 million `forecasts` every time a forecaster opens a verification dashboard burns seconds of CPU.
+- **Connecting Back to Day 1 (`3NF` Normalization vs. Denormalization):** On [Day 1 (Section 5.2)](../day1/day1_master_coursebook.md#52-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems), we normalized `stations`, `observations`, and `forecasts` into strict Third Normal Form (`3NF`) to prevent insertion, update, and deletion anomalies. However, re-executing a 3-way `INNER JOIN` across 50 million `observations` and 150 million `forecasts` every time a forecaster opens a verification dashboard burns seconds of CPU.
 - Normal `VIEW`s re-execute the underlying multi-table `JOIN` every time a forecaster opens their dashboard.
 - A **`MATERIALIZED VIEW`** gives us **the best of both worlds (OLTP Normalization + OLAP Denormalization)**: our base tables remain in strict `3NF`, while `nwp.mv_daily_model_verification` stores the pre-joined, pre-aggregated result physically on 8 KB heap pages (just like a denormalized table) and can be indexed for `< 2 ms` dashboard reads.
 - **Critical Production Rule:** Always create a **`UNIQUE INDEX`** on a Materialized View and refresh it with **`REFRESH MATERIALIZED VIEW CONCURRENTLY`**. Without `CONCURRENTLY`, PostgreSQL acquires an `AccessExclusiveLock` and freezes all forecaster dashboards until the refresh finishes!
@@ -801,13 +801,13 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY nwp.mv_daily_model_verification;
 
 ---
 
-## Module 5: Semi-Structured Telemetry (`JSONB` + `GIN`) & Architectural Bridge to Day 4 MongoDB
+## 5. Module 5: Semi-Structured Telemetry (`JSONB` + `GIN`) & Architectural Bridge to Day 4 MongoDB
 
 ### 5.1 Why Strict Relational Columns Hit a Schema-Rigidity Wall in Modern Meteorology
 
 Core WMO parameters (`temp_c`, `pressure_hpa`, `wind_speed_kt`, `precip_1h_mm`) haven't changed in 100 years—they belong in strict relational columns. However, modern environmental monitoring networks also ingest **variable, hardware-specific telemetry** (such as 3D sonic anemometer vectors, road surface freezing-point sensors, or optical disdrometer drop-size bins; see **[Day 4 Master Coursebook — §1.1](../day4/day4_master_coursebook.md)** for the complete polymorphic payload taxonomy).
 
-#### The 2 Relational Anti-Patterns to Avoid:
+#### 5.1.1 The 2 Relational Anti-Patterns to Avoid:
 1. **The Wide Table with 150 Nullable Columns:** Running `ALTER TABLE ADD COLUMN` for every new sensor vendor creates a sparse table ($90\%\text{ NULL}$).
 2. **Entity-Attribute-Value (EAV):** `(station_id, timestamp, metric_name, metric_value)` explodes row counts by $20\times$, destroys tuple density, and requires dozens of self-joins to reconstruct a single timestamp.
 
@@ -913,22 +913,23 @@ flowchart LR
     PG3 <-->|"Watches Leader Key"| ETCD3
 ```
 
-#### 1. Why PostgreSQL Cannot Auto-Failover by Itself (The "Split-Brain" Catastrophe)
+#### 6.1.1 Why PostgreSQL Cannot Auto-Failover by Itself (The "Split-Brain" Catastrophe)
 Out of the box, PostgreSQL provides rock-solid **Physical Streaming Replication** (`walsender` on the Primary streams 16 MB `pg_wal` byte segments over TCP to `walreceiver` on Hot Standbys), **but PostgreSQL intentionally has no built-in automatic failover election daemon.** Why?
 * **The Split-Brain Trap:** Suppose a 2-node cluster (`pg-node-1` Primary, `pg-node-2` Standby) suffers a network switch glitch that cuts the cable between the two nodes while both servers remain powered on and reachable by different ingest workers.
 * If `pg-node-2` naively says *"I haven't heard from `pg-node-1` in 5 seconds, I will run `pg_promote()`!"*, you now have **two active Primaries (`Split-Brain`)** simultaneously accepting conflicting `INSERT`s into the same LSN byte offsets! Their WAL timelines diverge irreversibly, and one node's committed weather observations must be destroyed to reunite the cluster.
 
-#### 2. How `Patroni` + 3-Node `etcd` + `HAProxy` Solve Failover in $< 10\text{ Seconds}$
+#### 6.1.2 How `Patroni` + 3-Node `etcd` + `HAProxy` Solve Failover in $< 10\text{ Seconds}$
 To prevent Split-Brain mathematically, production PostgreSQL relies on three external components working in lockstep:
-1. **3-Node `etcd` Distributed Consensus Store (Raft Quorum):** A 3-node (or 5-node) Raft cluster holds a single key `/service/weather-pg/leader` with a strict **10-second Time-To-Live (`TTL`) lease**. To hold or win the leader key, a node must communicate with at least $\lfloor 3/2 \rfloor + 1 = 2$ `etcd` nodes.
-2. **`Patroni` Agent + Hardware Watchdog (`/dev/watchdog`) Fencing:**
-   - Every 3 seconds (`loop_wait`), the Primary's `Patroni` agent renews its 10s lease in `etcd`.
-   - If `pg-node-1` is isolated by a network partition, it **cannot reach 2 `etcd` nodes** to renew its lease. Before the 10-second TTL expires, Patroni immediately **demotes `pg-node-1` to read-only** (or if the OS freezes, the Linux kernel `/dev/watchdog` timer hard-resets the machine at $t = 5\text{s}$).
-   - At $t = 10\text{s}$, the leader key in `etcd` expires. `Patroni` on `pg-node-2` (the Standby with the highest received `pg_wal` LSN) acquires the `etcd` leader lock, executes `pg_promote()` (switching to Timeline 2), and becomes the sole Primary.
-3. **`HAProxy` REST Health-Check Routing (`Port 5000` R/W vs. `Port 5001` R/O):**
-   - Unlike MongoDB's topology-aware client drivers, standard `libpq`/`psycopg` clients connect to a single host/port. `HAProxy` polls each node's Patroni HTTP endpoint (`GET :8008/primary` returns `200 OK` only on the current leader; `GET :8008/replica` returns `200 OK` on healthy standbys) every 1 second and transparently switches port `5000` traffic to `pg-node-2` the instant promotion completes.
+##### 6.1.2.1 3-Node `etcd` Distributed Consensus Store (Raft Quorum)
+A 3-node (or 5-node) Raft cluster holds a single key `/service/weather-pg/leader` with a strict **10-second Time-To-Live (`TTL`) lease**. To hold or win the leader key, a node must communicate with at least $\lfloor 3/2 \rfloor + 1 = 2$ `etcd` nodes.
+##### 6.1.2.2 `Patroni` Agent + Hardware Watchdog (`/dev/watchdog`) Fencing
+- Every 3 seconds (`loop_wait`), the Primary's `Patroni` agent renews its 10s lease in `etcd`.
+- If `pg-node-1` is isolated by a network partition, it **cannot reach 2 `etcd` nodes** to renew its lease. Before the 10-second TTL expires, Patroni immediately **demotes `pg-node-1` to read-only** (or if the OS freezes, the Linux kernel `/dev/watchdog` timer hard-resets the machine at $t = 5\text{s}$).
+- At $t = 10\text{s}$, the leader key in `etcd` expires. `Patroni` on `pg-node-2` (the Standby with the highest received `pg_wal` LSN) acquires the `etcd` leader lock, executes `pg_promote()` (switching to Timeline 2), and becomes the sole Primary.
+##### 6.1.2.3 `HAProxy` REST Health-Check Routing (`Port 5000` R/W vs. `Port 5001` R/O)
+- Unlike MongoDB's topology-aware client drivers, standard `libpq`/`psycopg` clients connect to a single host/port. `HAProxy` polls each node's Patroni HTTP endpoint (`GET :8008/primary` returns `200 OK` only on the current leader; `GET :8008/replica` returns `200 OK` on healthy standbys) every 1 second and transparently switches port `5000` traffic to `pg-node-2` the instant promotion completes.
 
-#### 3. The 4-Pattern PostgreSQL `synchronous_commit` Durability & Failover Decision Matrix
+#### 6.1.3 The 4-Pattern PostgreSQL `synchronous_commit` Durability & Failover Decision Matrix
 Even with Patroni failover, **could the promoted Standby be missing the last few milliseconds of committed rows?** That depends entirely on `synchronous_commit` (which can be set globally OR per transaction via `SET LOCAL synchronous_commit = ...`):
 
 | Pattern | Setting (`synchronous_commit`) | When Primary Returns `COMMIT` to Client | Data Loss on Primary Crash (`RPO`) | Write Latency | Meteorological Use Case |

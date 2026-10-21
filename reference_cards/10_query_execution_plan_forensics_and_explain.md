@@ -36,10 +36,10 @@
   - [8.2 MySQL 8.0+: `EXPLAIN FORMAT=TREE` & `EXPLAIN ANALYZE`](#82-mysql-80-explain-formattree--explain-analyze)
   - [8.3 DuckDB: Vectorized SIMD Execution Plans](#83-duckdb-vectorized-simd-execution-plans)
 - [9. Hands-On Forensics Lab: Query Optimization in Action](#9-hands-on-forensics-lab-query-optimization-in-action)
-  - [Step 1: Synthesize a Diagnostic Table (1,000,000 Rows)](#step-1-synthesize-a-diagnostic-table-1000000-rows)
-  - [Step 2: The Unoptimized Query (The Catastrophic Plan)](#step-2-the-unoptimized-query-the-catastrophic-plan)
-  - [Step 3: Optimization Phase 1 — Naive Single-Column Indexing](#step-3-optimization-phase-1--naive-single-column-indexing)
-  - [Step 4: Optimization Phase 2 — Composite Covering Index (`INCLUDE`)](#step-4-optimization-phase-2--composite-covering-index-include)
+  - [Step 1: Synthesize a Diagnostic Table (1,000,000 Rows)](#91-step-1-synthesize-a-diagnostic-table-1000000-rows)
+  - [Step 2: The Unoptimized Query (The Catastrophic Plan)](#92-step-2-the-unoptimized-query-the-catastrophic-plan)
+  - [Step 3: Optimization Phase 1 — Naive Single-Column Indexing](#93-step-3-optimization-phase-1--naive-single-column-indexing)
+  - [Step 4: Optimization Phase 2 — Composite Covering Index (`INCLUDE`)](#94-step-4-optimization-phase-2--composite-covering-index-include)
 - [10. Summary Checklist: Production Plan Debugging Directives](#10-summary-checklist-production-plan-debugging-directives)
 
 ---
@@ -476,7 +476,7 @@ In meteorological databases, atmospheric attributes are physically coupled:
 
 * The optimizer multiplies the probability of Sahara by the probability of high temperature, calculating a tiny predicted row count (`rows=10`). In reality, high temperatures occur regularly in the Sahara (`actual rows=500000`).
 
-#### The Fix: Extended Statistics
+#### 6.3.1 The Fix: Extended Statistics
 
 ```
 -- Tell the optimizer that region and temperature are physically correlated!
@@ -529,7 +529,7 @@ GROUP BY station_id;
 
 ```
 
-#### Reading SQLite Output:
+#### 8.1.1 Reading SQLite Output:
 
 * **`SCAN TABLE raw_telemetry`:** Sequential scan across entire database file (Danger on large tables).
 
@@ -555,7 +555,7 @@ GROUP BY s.station_name;
 
 ```
 
-#### Reading MySQL Output:
+#### 8.2.1 Reading MySQL Output:
 
 ```
 -> Table scan on <temporary>  (actual time=48.2..49.1 rows=50 loops=1)
@@ -586,7 +586,7 @@ GROUP BY region;
 
 ```
 
-#### Reading DuckDB Output:
+#### 8.3.1 Reading DuckDB Output:
 
 * **`SEQ_SCAN (Parquet)`:** Inspect `Filters: [temperature > 35.0]`. If present under `SEQ_SCAN`, DuckDB successfully pushed the filter into Parquet metadata, pruning row groups before reading pixels from disk.
 
@@ -598,7 +598,7 @@ GROUP BY region;
 
 Run this reproducible laboratory in PostgreSQL (`psql`) to profile, diagnose, and optimize a failing query.
 
-### Step 1: Synthesize a Diagnostic Table (1,000,000 Rows)
+### 9.1 Step 1: Synthesize a Diagnostic Table (1,000,000 Rows)
 
 ```
 DROP TABLE IF EXISTS plan_lab CASCADE;
@@ -626,7 +626,7 @@ ANALYZE plan_lab;
 
 ```
 
-### Step 2: The Unoptimized Query (The Catastrophic Plan)
+### 9.2 Step 2: The Unoptimized Query (The Catastrophic Plan)
 
 Execute an operational storm query searching for extreme temperatures within a 3-hour window at station `AWS-042`:
 
@@ -643,7 +643,7 @@ GROUP BY station_id;
 
 ```
 
-#### Unoptimized Output Analysis:
+#### 9.2.1 Unoptimized Output Analysis:
 
 ```
 HashAggregate  (cost=25412.00..25412.01 rows=1 width=42) (actual time=142.180..142.182 rows=1 loops=1)
@@ -658,7 +658,7 @@ Execution Time: 142.250 ms
 
 ```
 
-#### Diagnosis:
+#### 9.2.2 Diagnosis:
 
 1. **Red Flag #1 (`Seq Scan`):** The engine scanned 1,000,000 rows across 12,910 blocks ($100.8\text{ MB}$) to return only **54 matching rows**!
 
@@ -666,7 +666,7 @@ Execution Time: 142.250 ms
 
 3. **Execution Latency:** $142.25\text{ ms}$.
 
-### Step 3: Optimization Phase 1 — Naive Single-Column Indexing
+### 9.3 Step 3: Optimization Phase 1 — Naive Single-Column Indexing
 
 Create a standard index on `station_id`:
 
@@ -690,13 +690,13 @@ Execution Time: 6.490 ms
 
 ```
 
-#### Diagnosis:
+#### 9.3.1 Diagnosis:
 
 * Latency dropped from $142\text{ ms}$ to $6.49\text{ ms}$ ($22\times$ faster).
 
 * **Remaining Inefficiency:** The Bitmap Index Scan found all 10,000 rows belonging to `AWS-042`, loaded 1,820 heap blocks, and discarded 9,946 rows that did not match the timestamp filter.
 
-### Step 4: Optimization Phase 2 — Composite Covering Index (`INCLUDE`)
+### 9.4 Step 4: Optimization Phase 2 — Composite Covering Index (`INCLUDE`)
 
 Deploy an optimized Composite Covering Index matching query filter order and embedding metrics:
 
@@ -726,7 +726,7 @@ Execution Time: 0.075 ms
 
 ```
 
-#### Final Optimization Audit:
+#### 9.4.1 Final Optimization Audit:
 
 | Performance Metric | Baseline (Unoptimized) | Single Index | Composite Covering Index | Net Architectural Gain | 
 | ----- | ----- | ----- | ----- | ----- | 
@@ -768,11 +768,11 @@ Execution Time: 0.075 ms
 ================================================================================
 ```
 
-> **Cross-Reference:** For the full **Unified 10-Layer Performance Optimization Master Matrices**, see [Day 2 Master Coursebook — Section 7.3 (PostgreSQL)](../day2/day2_master_coursebook.md#73-advanced-production-performance-engineering-jit-compilation-traps-parallel-bulk-index-builds-prepared-plan-modes--the-10-layer-master-optimization-matrix), [Day 2 MVCC Guide — Section 6 (`postgresql.conf` vs. `my.cnf` Translator)](../day2/day2_postgres_vs_mysql_mvcc_guide.md#6-side-by-side-performance-tuning-translator-postgresql-postgresqlconf-vs-mysql-innodb-mycnf), and [Reference Card 14 — Section 10.4 (MySQL 8.0/8.4 & MariaDB)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#104-the-unified-10-layer-mysql-8084--mariadb-performance-optimization-master-matrix).
+> **Cross-Reference:** For the full **Unified 10-Layer Performance Optimization Master Matrices**, see [Day 2 Master Coursebook — Section 5.4 (PostgreSQL)](../day2/day2_master_coursebook.md#54-advanced-production-performance-engineering-jit-compilation-traps-parallel-bulk-index-builds-prepared-plan-modes--the-10-layer-master-optimization-matrix), [Day 2 MVCC Guide — Section 6 (`postgresql.conf` vs. `my.cnf` Translator)](../day2/day2_postgres_vs_mysql_mvcc_guide.md#6-side-by-side-performance-tuning-translator-postgresql-postgresqlconf-vs-mysql-innodb-mycnf), and [Reference Card 14 — Section 10.4 (MySQL 8.0/8.4 & MariaDB)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#104-the-unified-10-layer-mysql-8084--mariadb-performance-optimization-master-matrix).
 
 ---
 
-### Reference Library Navigation
+### 10.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | **Card 10 of 14** | [Next Card](./11_python_database_drivers_for_weather_engineers.md) | [⬆ Back to Top](#query-execution-plan-forensics-the-explain--performance-optimization-reference-card)

@@ -69,14 +69,14 @@ flowchart TB
 ```
 
 ### 3.1 Three Critical Consequences for Weather Engineering
-1. **Secondary Index Bloat & Double-Lookup Penalty in InnoDB:**
-   - Suppose a meteorological table uses a natural composite Primary Key `(station_id, obs_time, model_name)` (26 bytes). In MySQL InnoDB, **every single secondary index leaf entry stores a full 26-byte copy of `(station_id, obs_time, model_name)`**, and reading via a secondary index requires traversing **two B+Trees** (Secondary B+Tree $\to$ Clustered PK B+Tree).
-   - In PostgreSQL, every secondary index stores only the **6-byte `ctid`** and jumps directly to the 8 KB heap block in **1 hop**.
-2. **The Out-of-Order Primary Key Page-Split Trap in InnoDB (and B-Tree / `pg_wal` FPW Bloat in PostgreSQL):**
-   - Because InnoDB physically sorts rows inside 16 KB leaf pages by Primary Key, inserting out-of-order Primary Keys (e.g., late-arriving synoptic bulletins with a composite PK `(obs_time, station_id)`, or random `UUIDv4` keys) forces InnoDB to split interior 16 KB pages in half, moving $50\%$ of the rows and fragmenting disk space down to $\approx 50\%$ page fill!
-   - In PostgreSQL, heap inserts always append fast to the end of the file or the first available `_fsm` slot regardless of Primary Key order—**however**, a random `UUIDv4` Primary Key still splits PostgreSQL's 8 KB B-Tree index pages and triggers **$500\times$ `pg_wal` Full-Page Write (`FPW`) amplification**! In both engines, always use sequential `BIGINT IDENTITY` or time-ordered **IETF RFC 9562 `UUIDv7`** (see [Day 2 Coursebook — Black Box 2D](./day2_master_coursebook.md)).
-3. **Read Amplification on Point Queries:**
-   - PostgreSQL fetches **8 KB** pages; InnoDB fetches **16 KB** pages (twice the I/O size per random read).
+#### 3.1.1 Secondary Index Bloat & Double-Lookup Penalty in InnoDB
+- Suppose a meteorological table uses a natural composite Primary Key `(station_id, obs_time, model_name)` (26 bytes). In MySQL InnoDB, **every single secondary index leaf entry stores a full 26-byte copy of `(station_id, obs_time, model_name)`**, and reading via a secondary index requires traversing **two B+Trees** (Secondary B+Tree $\to$ Clustered PK B+Tree).
+- In PostgreSQL, every secondary index stores only the **6-byte `ctid`** and jumps directly to the 8 KB heap block in **1 hop**.
+#### 3.1.2 The Out-of-Order Primary Key Page-Split Trap in InnoDB (and B-Tree / `pg_wal` FPW Bloat in PostgreSQL)
+- Because InnoDB physically sorts rows inside 16 KB leaf pages by Primary Key, inserting out-of-order Primary Keys (e.g., late-arriving synoptic bulletins with a composite PK `(obs_time, station_id)`, or random `UUIDv4` keys) forces InnoDB to split interior 16 KB pages in half, moving $50\%$ of the rows and fragmenting disk space down to $\approx 50\%$ page fill!
+- In PostgreSQL, heap inserts always append fast to the end of the file or the first available `_fsm` slot regardless of Primary Key order—**however**, a random `UUIDv4` Primary Key still splits PostgreSQL's 8 KB B-Tree index pages and triggers **$500\times$ `pg_wal` Full-Page Write (`FPW`) amplification**! In both engines, always use sequential `BIGINT IDENTITY` or time-ordered **IETF RFC 9562 `UUIDv7`** (see [Day 2 Coursebook — Black Box 2D](./day2_master_coursebook.md)).
+#### 3.1.3 Read Amplification on Point Queries
+- PostgreSQL fetches **8 KB** pages; InnoDB fetches **16 KB** pages (twice the I/O size per random read).
 
 ---
 
@@ -136,7 +136,7 @@ Both engines guarantee that **readers never block writers, and writers never blo
          └─────────────────────────────────────────────────────────────┘
 ```
 
-#### PostgreSQL Snapshot Visibility Evaluation ($S = \text{xmin} : \text{xmax} : [\text{xip\_list}]$)
+#### 4.1.1 PostgreSQL Snapshot Visibility Evaluation ($S = \text{xmin} : \text{xmax} : [\text{xip\_list}]$)
 ```
 Is tuple (t_xmin, t_xmax) visible to Snapshot S?
  1. If t_xmin was aborted                  ──> INVISIBLE (Rolled-back insert)

@@ -27,7 +27,7 @@ Treating these engineering artifacts as standard mathematical numbers inside rel
 
 ## 1. Core Engineering Definitions
 
-### Hardware Sentinel Value
+### 1.1 Hardware Sentinel Value
 
 A **sentinel value** (also called a *flag value*, *trip code*, or *out-of-band indicator encoded in-band*) is an impossible physical measurement injected directly into a telemetry data field by sensor firmware or a datalogger to indicate hardware failure, probe disconnection, or invalid bus voltage.
 
@@ -35,7 +35,7 @@ A **sentinel value** (also called a *flag value*, *trip code*, or *out-of-band i
 * **Typical ADC Clipping / Short-Circuit Sentinels:** `9999.0`, `32767` (Max signed 16-bit integer), `65535`.
 * **WMO Floating-Point Missing Indicator:** $1.0 \times 10^{37}$ (Standard IEEE fill value in BUFR/GRIB).
 
-### In-Band vs. Out-of-Band Signaling
+### 1.2 In-Band vs. Out-of-Band Signaling
 
 * **Out-of-Band Signaling:** Transmitting diagnostic metadata through an auxiliary communication channel or an explicit secondary header (e.g., transmitting Byte 0 as a sensor status bitmap and Bytes 1–4 as floating-point temperature). While ideal, this increases transmission payload size by $20\text{–}100\%$, which is often unacceptable over low-bandwidth satellite links (Iridium, Argos) or remote cellular modems.
 * **In-Band Signaling:** Transmitting operational status codes **within the measurement payload itself**. The datalogger repurposes an extreme value within the allowable numeric range of the physical channel to signal state changes.
@@ -59,7 +59,7 @@ A **sentinel value** (also called a *flag value*, *trip code*, or *out-of-band i
 
 To understand why database engines receive sentinels instead of clean `NULL` markers, software engineers must understand the edge electronics:
 
-### 1. Fixed-Width Serial Communication Registers
+### 2.1 Fixed-Width Serial Communication Registers
 
 Automated Weather Stations (AWS) communicate with central loggers using serial protocols:
 
@@ -69,7 +69,7 @@ Automated Weather Stations (AWS) communicate with central loggers using serial p
 
 In a 16-bit binary integer or a 32-bit IEEE 754 float, **every single bit combination maps to a numerical state**. There is no "null" byte available without using IEEE `NaN` (which older microcontrollers and embedded firmware often avoid due to non-standard floating-point hardware support and transmission protocol limits).
 
-### 2. ADC Circuitry and Fault States
+### 2.2 ADC Circuitry and Fault States
 
 Sensors measure continuous physical phenomena by converting resistance or voltage:
 
@@ -90,7 +90,7 @@ float sample_temperature_probe(uint8_t channel) {
 }
 ```
 
-### 3. World Meteorological Organization (WMO) Precedents
+### 2.3 World Meteorological Organization (WMO) Precedents
 
 The WMO Manual on Codes (WMO-No. 306) has defined alphanumeric messages for over half a century:
 
@@ -103,7 +103,7 @@ The WMO Manual on Codes (WMO-No. 306) has defined alphanumeric messages for over
 
 Relational query engines use formal set logic to evaluate queries. When numeric sentinels pass through the ingestion gate, they violate the mathematical assumptions of SQL's relational algebra.
 
-### Three-Valued Logic (3VL)
+### 3.1 Three-Valued Logic (3VL)
 
 Standard Boolean logic operates on two states: `TRUE` and `FALSE`. Relational databases implement Three-Valued Logic: `TRUE`, `FALSE`, and `UNKNOWN` (represented by `NULL`).
 
@@ -121,7 +121,7 @@ Standard Boolean logic operates on two states: `TRUE` and `FALSE`. Relational da
   $$
 * **Row Filtering:** A SQL `WHERE` clause passes rows **if and only if** the expression evaluates strictly to `TRUE`. Rows evaluating to `FALSE` or `UNKNOWN` are discarded.
 
-### ANSI SQL Aggregate Standards
+### 3.2 ANSI SQL Aggregate Standards
 
 Understanding how aggregates process `NULL` is vital for telemetry hygiene:
 
@@ -152,7 +152,7 @@ When an analytical SQL engine processes sentinels as valid numbers, metrics fail
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1. Mean Distortion
+### 4.1 Mean Distortion
 
 Consider an automated station in an arid region with 12 observations recorded over a 2-hour window:
 
@@ -169,12 +169,12 @@ $$
 
 *Result:* A warm desert afternoon is converted into an arctic catastrophe in downstream climate summaries.
 
-### 2. Destruction of Climatological Extremes
+### 4.2 Destruction of Climatological Extremes
 
 * **`MIN(temperature)`:** Returns $-999.0^\circ\text{C}$. This breaks record-low temperature alerts, triggers automated agricultural frost warnings, and invalidates sensor calibration baselines.
 * **`MAX(pressure)`:** If an electrical spike causes a pressure transducer to report `9999.0`, downstream barometric algorithms will interpret it as an impossible hyperbaric event ($10\times$ normal sea-level pressure).
 
-### 3. Variance Explosion & Filter Breakdown
+### 4.3 Variance Explosion & Filter Breakdown
 
 The formula for population variance is:
 
@@ -208,7 +208,7 @@ Execute this sequence in SQLite (`day1/weather_telemetry.db`) to observe sentine
 -- Expected: raw_telemetry  stations
 ```
 
-### Step 1: Execute the Naive Query (The Trap)
+### 5.1 Step 1: Execute the Naive Query (The Trap)
 
 Running a standard summary query across the raw 250,000-row network without sentinel filtering produces the following result:
 
@@ -223,7 +223,7 @@ SELECT
 FROM raw_telemetry;
 ```
 
-#### Terminal Output:
+#### 5.1.1 Terminal Output:
 
 ```
 ┌───────────────┬──────────────────┬──────────────────┬──────────────────┐
@@ -233,13 +233,13 @@ FROM raw_telemetry;
 └───────────────┴──────────────────┴──────────────────┴──────────────────┘
 ```
 
-#### Architectural Analysis:
+#### 5.1.2 Architectural Analysis:
 
 > The average temperature across these warm Mediterranean stations reports as $-1.42^\circ\text{C}$, and the minimum temperature recorded is $-999^\circ\text{C}$—far below physical absolute zero ($-273.15^\circ\text{C}$).
 >
 > The SQLite query engine did not make an arithmetic error: it treated `-999.0` as a legitimate numerical floating-point observation because relational engines do not inherently understand atmospheric physics unless physical boundaries and sentinel translations are explicitly declared.
 
-### Step 2: Forensic Inspection (Unmasking the Damaged Rows)
+### 5.2 Step 2: Forensic Inspection (Unmasking the Damaged Rows)
 
 Inspect the specific observations emitting sentinel values:
 
@@ -252,7 +252,7 @@ WHERE temperature <= -900.0
 LIMIT 5;
 ```
 
-#### Terminal Output:
+#### 5.2.1 Terminal Output:
 
 ```
 ┌────────────┬─────────────────────┬─────────────┬──────────┬────────────┐
@@ -266,7 +266,7 @@ LIMIT 5;
 └────────────┴─────────────────────┴─────────────┴──────────┴────────────┘
 ```
 
-#### The Golden Rule of Multi-Sensor Telemetry Cleaning:
+#### 5.2.2 The Golden Rule of Multi-Sensor Telemetry Cleaning:
 
 > In Row 1 (`AWS-013` at `14:10`), the temperature probe failed and emitted `-999.0`. However, the adjacent columns—barometric pressure ($1012.4\text{ hPa}$) and wind speed ($3.2\text{ m/s}$)—are completely valid physical measurements!
 >
@@ -278,7 +278,7 @@ LIMIT 5;
 
 ## 6. SQL Remediation Patterns
 
-### Pattern 1: `NULLIF()` (Standard In-Flight Translation)
+### 6.1 Pattern 1: `NULLIF()` (Standard In-Flight Translation)
 
 `NULLIF(a, b)` compares two arguments. If $a = b$, it returns `NULL`. Otherwise, it returns $a$.
 
@@ -305,13 +305,13 @@ FROM observations
 GROUP BY station_id;
 ```
 
-#### How this works under the hood:
+#### 6.1.1 How this works under the hood:
 
 1. When `temperature` is `18.5`, `NULLIF(18.5, -999.0)` yields `18.5`.
 2. When `temperature` is `-999.0`, `NULLIF(-999.0, -999.0)` yields `NULL`.
 3. The surrounding `AVG()` aggregate **silently eliminates the `NULL`**, calculating the true mathematical mean across the remaining valid rows.
 
-### Pattern 2: `CASE WHEN` Range Bounds (Production Hardening)
+### 6.2 Pattern 2: `CASE WHEN` Range Bounds (Production Hardening)
 
 In the real world, failing sensors do not always emit cleanly configured `-999.0` constants. A degraded thermistor might output `-998.2` or an electrical short might register `9999.0`. Bounding attributes within known physical limits handles unpredictable failures:
 
@@ -340,7 +340,7 @@ ORDER BY obs_hour DESC
 LIMIT 5;
 ```
 
-### Pattern 3: PostgreSQL Native `FILTER` (Day 2 Preview)
+### 6.3 Pattern 3: PostgreSQL Native `FILTER` (Day 2 Preview)
 
 In Day 2 (PostgreSQL), demonstrate how ANSI SQL provides a clean syntax that eliminates verbose `CASE` blocks:
 
@@ -374,7 +374,7 @@ Before building a multi-tier database architecture, engineers must determine whe
    • Queries must handle NULLIF/CASE                                   • Loses sensor failure diagnostics
 ```
 
-### Philosophy A: The ELT Approach (Raw Telemetry Lake)
+### 7.1 Philosophy A: The ELT Approach (Raw Telemetry Lake)
 
 * **Design:** Store the hardware sentinel (`-999.0` or `-9999.0`) verbatim in the ingestion table (`raw_telemetry`).
 * **Justification:** If you convert `-999.0` to `NULL` at the API gate, downstream systems lose diagnostic context. You can no longer distinguish between:
@@ -396,7 +396,7 @@ SELECT
 FROM raw_telemetry;
 ```
 
-### Philosophy B: The Operational Quality Flag Standard (WMO / NOAA Approach)
+### 7.2 Philosophy B: The Operational Quality Flag Standard (WMO / NOAA Approach)
 
 The industry standard used by national meteorological centers (NOAA, ECMWF, Météo-France, ONM) pairs every observation or column with an explicit **Quality Control (QC) Flag**:
 
@@ -412,7 +412,7 @@ CREATE TABLE operational_telemetry (
 );
 ```
 
-#### Standard WMO Flag Bitmask / Text Representation:
+#### 7.2.1 Standard WMO Flag Bitmask / Text Representation:
 
 * `0` (`'VALID'`): Validated / Physically Consistent
 * `1` (`'SUSPECT'`): Suspect / Beyond Regional Climatological Bounds

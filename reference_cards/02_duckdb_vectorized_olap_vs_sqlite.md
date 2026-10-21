@@ -22,7 +22,7 @@
 - [3. Zero-Copy Memory Interchange: The Arrow Bridge](#3-zero-copy-memory-interchange-the-arrow-bridge)
   - [3.1 Eliminating the Serialization Tax](#31-eliminating-the-serialization-tax)
 - [4. Installing & Starting DuckDB](#4-installing--starting-duckdb)
-  - [Quick Install (Linux CLI & Python)](#quick-install-linux-cli--python)
+  - [Quick Install (Linux CLI & Python)](#41-quick-install-linux-cli--python)
 - [5. Querying External Data Lakes, Cloud Object Storage & DuckDB's 6 Superpowers](#5-querying-external-data-lakes-cloud-object-storage--duckdbs-6-superpowers)
   - [5.1 Superpower 1: Query `.csv`, `.parquet`, and Remote S3/MinIO Directly with SQL (Zero Import!)](#51-superpower-1-query-csv-parquet-and-remote-s3minio-directly-with-sql-zero-import)
   - [5.2 Superpower 2: Direct File-to-File Downsampling & CSV-to-Parquet Conversion in 1 Line](#52-superpower-2-direct-file-to-file-downsampling--csv-to-parquet-conversion-in-1-line)
@@ -162,7 +162,7 @@ One of DuckDB’s most significant architectural advantages is its implementatio
 
 ## 4. Installing & Starting DuckDB
 
-### Quick Install (Linux CLI & Python)
+### 4.1 Quick Install (Linux CLI & Python)
 
 ```bash
 # 1. Install standalone DuckDB CLI binary (single executable file!)
@@ -218,7 +218,7 @@ WHERE temp_c > 35.0
 GROUP BY station_id;
 ```
 
-#### Remote S3 / MinIO Configuration (`httpfs` Extension)
+#### 5.1.1 Remote S3 / MinIO Configuration (`httpfs` Extension)
 
 To query telemetry stored inside an S3 bucket or on-premise MinIO / Ceph RGW server:
 
@@ -242,7 +242,7 @@ FROM read_parquet('s3://weather-lake/year=2026/month=10/*.parquet')
 GROUP BY station_id;
 ```
 
-#### Geospatial Analytics (`spatial` Extension)
+#### 5.1.2 Geospatial Analytics (`spatial` Extension)
 
 DuckDB also supports vector geospatial analytics via its built-in `spatial` extension (`INSTALL spatial; LOAD spatial;`), enabling `ST_Point`, `ST_Within`, `ST_Distance`, and direct reads of **GeoParquet**, Shapefiles, and GeoJSON files!
 
@@ -413,7 +413,7 @@ WHERE temperature > 35.0
 GROUP BY region;
 ```
 
-#### Reading the Execution Plan:
+#### 6.2.1 Reading the Execution Plan:
 
 * **`SEQ_SCAN` (Parquet):** Inspect `Filters` and `EC` (Estimated Cardinality). Verify whether Predicate Pushdown successfully pruned row groups.
 * **`PERFECT_HASH_GROUP_BY`:** Indicates DuckDB executed hash aggregation in CPU registers without spilling to hash tables.
@@ -454,7 +454,7 @@ GROUP BY region;
 
 ---
 
-### Reference Library Navigation
+### 7.3 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./01_apache_parquet_and_columnar_architecture.md) | **Card 02 of 14** | [Next Card](./03_hive_partitioning_and_lakehouse_compaction.md) | [⬆ Back to Top](#duckdb-vectorized-olap-architecture-vs-sqlite-row-oltp-reference-card)

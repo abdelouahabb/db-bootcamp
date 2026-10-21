@@ -9,9 +9,9 @@ This dedicated side-by-side engineering cheatsheet compares the two biggest prod
 
 ---
 
-# PART I: Spatial Meteorology — PostgreSQL `PostGIS` (Day 3) vs. MongoDB `2dsphere` (Day 4)
+## 1. Part I: Spatial Meteorology — PostgreSQL `PostGIS` (Day 3) vs. MongoDB `2dsphere` (Day 4)
 
-## 1.1 First-Principles Mental Model: How `PostGIS GiST` vs. MongoDB `2dsphere` Work Under the Hood
+### 1.1 First-Principles Mental Model: How `PostGIS GiST` vs. MongoDB `2dsphere` Work Under the Hood
 
 ```text
  ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -31,7 +31,7 @@ This dedicated side-by-side engineering cheatsheet compares the two biggest prod
  └───────────────────────────────────────────┴────────────────────────────────────────────┘
 ```
 
-## 1.2 Head-to-Head Architectural Matrix: `PostGIS` vs. MongoDB `2dsphere`
+### 1.2 Head-to-Head Architectural Matrix: `PostGIS` vs. MongoDB `2dsphere`
 
 | Spatial Dimension | PostgreSQL 16 + `PostGIS 3.4` (`Day 3`) | MongoDB 7.0 `GeoJSON` + `2dsphere` (`Day 4`) |
 | :--- | :--- | :--- |
@@ -48,7 +48,7 @@ This dedicated side-by-side engineering cheatsheet compares the two biggest prod
 
 ---
 
-## 1.3 Spatial Operator Rosetta Stone (1-to-1 Translator)
+### 1.3 Spatial Operator Rosetta Stone (1-to-1 Translator)
 
 | Spatial Operation | PostgreSQL `PostGIS` Function (`Day 3`) | MongoDB `MQL` / Aggregation Operator (`Day 4`) |
 | :--- | :--- | :--- |
@@ -61,11 +61,11 @@ This dedicated side-by-side engineering cheatsheet compares the two biggest prod
 
 ---
 
-## 1.4 Side-by-Side Runnable Spatial Recipes (PostgreSQL `psql` vs. MongoDB `mongosh`)
+### 1.4 Side-by-Side Runnable Spatial Recipes (PostgreSQL `psql` vs. MongoDB `mongosh`)
 
-### Recipe 1: Radial Proximity Search — *"Find All Stations Within 250 km of an Offshore Mesocyclone `[3.30E, 36.80N]`"*
+#### 1.4.1 Recipe 1: Radial Proximity Search — *"Find All Stations Within 250 km of an Offshore Mesocyclone `[3.30E, 36.80N]`"*
 
-#### A. PostgreSQL `PostGIS` (`weather_ops` database — seeded by `day2/weather_ops_pg.sql` + `day3/day3_weather_advanced_pg.sql`)
+##### 1.4.1.1 A. PostgreSQL `PostGIS` (`weather_ops` database — seeded by `day2/weather_ops_pg.sql` + `day3/day3_weather_advanced_pg.sql`)
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
 -- PREREQUISITE SCRIPTS: day2/weather_ops_pg.sql and day3/day3_weather_advanced_pg.sql
@@ -88,7 +88,7 @@ WHERE is_active = TRUE
 ORDER BY distance_km ASC;
 ```
 
-#### B. MongoDB `2dsphere` (`weather_nosql` database — seeded by `day4/day4_weather_ops_mongo.js` + `day4/day4_weather_ops_mongo_advanced.js`)
+##### 1.4.1.2 B. MongoDB `2dsphere` (`weather_nosql` database — seeded by `day4/day4_weather_ops_mongo.js` + `day4/day4_weather_ops_mongo_advanced.js`)
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
 // PREREQUISITE SCRIPTS: day4/day4_weather_ops_mongo.js and day4/day4_weather_ops_mongo_advanced.js
@@ -118,7 +118,7 @@ db.stations.aggregate([
 ]).toArray();
 ```
 
-#### Verified Side-by-Side Result (Identical Geodesic Distances in Both Engines!):
+##### 1.4.1.3 Verified Side-by-Side Result (Identical Geodesic Distances in Both Engines!):
 ```text
  station_id / _id | station_name               | climate_zone  | distance_km
 ------------------+----------------------------+---------------+-------------
@@ -129,13 +129,13 @@ db.stations.aggregate([
 
 ---
 
-### Recipe 2: Polygon Containment & Reverse Intersection — *"Stations Inside Radar Storm Cell Alpha (`CELL-MED-20261006-A`)"*
+#### 1.4.2 Recipe 2: Polygon Containment & Reverse Intersection — *"Stations Inside Radar Storm Cell Alpha (`CELL-MED-20261006-A`)"*
 
 Both `day3/day3_weather_advanced_pg.sql` (`alerts.storm_polygons`) and `day4/day4_weather_ops_mongo_advanced.js` (`db.storm_polygons`) seed the exact same two GeoJSON/WKT storm polygons:
 - **`CELL-MED-20261006-A` (`Mediterranean Convective System Alpha`):** Closed ring `POLYGON((2.5 35.8, 7.2 35.8, 7.2 37.1, 2.5 37.1, 2.5 35.8))` (`58.5 dBZ`)
 - **`CELL-SAH-20261006-B` (`Southern Erg Haboob Dust Front`):** Closed ring `POLYGON((1.5 22.0, 6.5 22.0, 6.5 28.0, 1.5 28.0, 1.5 22.0))` (`34.0 dBZ`)
 
-#### A. PostgreSQL `PostGIS` (`ST_Covers` & `ST_Intersects` on `alerts.storm_polygons`)
+##### 1.4.2.1 A. PostgreSQL `PostGIS` (`ST_Covers` & `ST_Intersects` on `alerts.storm_polygons`)
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
 -- PREREQUISITE SCRIPTS: day2/weather_ops_pg.sql and day3/day3_weather_advanced_pg.sql
@@ -168,7 +168,7 @@ WHERE ST_Intersects(
 );
 ```
 
-#### B. MongoDB `2dsphere` (`$geoWithin` & `$geoIntersects` on `db.storm_polygons`)
+##### 1.4.2.2 B. MongoDB `2dsphere` (`$geoWithin` & `$geoIntersects` on `db.storm_polygons`)
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
 // PREREQUISITE SCRIPTS: day4/day4_weather_ops_mongo.js and day4/day4_weather_ops_mongo_advanced.js
@@ -204,13 +204,13 @@ db.storm_polygons.find(
 ).toArray();
 ```
 
-#### Verified Side-by-Side Result:
+##### 1.4.2.3 Verified Side-by-Side Result:
 - **Query 1 (`ST_Covers` / `$geoWithin`):** Returns the northern stations inside `[2.5..7.2E, 35.8..37.1N]`: **`60390` (Algiers)**, **`60402` (Bejaia)**, **`60419` (Constantine)** (plus **`60901` Algiers Bay Marine Buoy** in MongoDB).
 - **Query 2 (`ST_Intersects` / `$geoIntersects`):** Returns **`CELL-MED-20261006-A` (`Mediterranean Convective System Alpha`, `58.5 dBZ`, `vil_kg_m2: 42.0`)**.
 
 ---
 
-## 1.5 Engineering Decision Matrix: When to Choose `PostGIS` vs. MongoDB `2dsphere`
+### 1.5 Engineering Decision Matrix: When to Choose `PostGIS` vs. MongoDB `2dsphere`
 
 | Workload / Requirement | Winner | Why? |
 | :--- | :---: | :--- |
@@ -220,9 +220,9 @@ db.storm_polygons.find(
 
 ---
 
-# PART II: Table Partitioning in PostgreSQL (`PARTITION BY RANGE`) vs. MongoDB's 4 Partitioning Equivalents
+## 2. Part II: Table Partitioning in PostgreSQL (`PARTITION BY RANGE`) vs. MongoDB's 4 Partitioning Equivalents
 
-## 2.1 First-Principles Mental Model: *"Does MongoDB Have `PARTITION BY RANGE`?"*
+### 2.1 First-Principles Mental Model: *"Does MongoDB Have `PARTITION BY RANGE`?"*
 
 * **In PostgreSQL (`Day 3`):**  
   `CREATE TABLE synoptic.observations_part (...) PARTITION BY RANGE (obs_time);` splits a single logical table into **separate physical child tables (`relfilenode` files) per month** (`obs_y2026m06` .. `obs_y2026m10`) on the same server.
@@ -253,7 +253,7 @@ db.storm_polygons.find(
 
 ---
 
-## 2.2 Master Mapping Matrix: PostgreSQL Partitioning vs. MongoDB Equivalents
+### 2.2 Master Mapping Matrix: PostgreSQL Partitioning vs. MongoDB Equivalents
 
 | Engineering Problem Solved by Partitioning | PostgreSQL 16 Solution (`Day 3`) | MongoDB 7.0 Equivalent / Alternative (`Day 4`) | Physical Storage & Execution Comparison |
 | :--- | :--- | :--- | :--- |
@@ -265,11 +265,11 @@ db.storm_polygons.find(
 
 ---
 
-## 2.3 Side-by-Side Runnable Partitioning & Time-Series Recipes
+### 2.3 Side-by-Side Runnable Partitioning & Time-Series Recipes
 
-### Recipe 1: Creating Partitioned / Time-Series Storage, Inspecting Buckets & Verifying Pruning
+#### 2.3.1 Recipe 1: Creating Partitioned / Time-Series Storage, Inspecting Buckets & Verifying Pruning
 
-#### A. PostgreSQL `PARTITION BY RANGE` + `BRIN` (`weather_ops` database)
+##### 2.3.1.1 A. PostgreSQL `PARTITION BY RANGE` + `BRIN` (`weather_ops` database)
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
 -- PREREQUISITE SCRIPTS: day2/weather_ops_pg.sql and day3/day3_weather_advanced_pg.sql
@@ -305,7 +305,7 @@ WHERE obs_time >= '2026-10-05 00:00:00+00'
 GROUP BY station_id;
 ```
 
-#### B. MongoDB Native Time-Series Buckets + TTL & Manual Bucket Pattern (`weather_nosql` & `weather_telemetry_db`)
+##### 2.3.1.2 B. MongoDB Native Time-Series Buckets + TTL & Manual Bucket Pattern (`weather_nosql` & `weather_telemetry_db`)
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
 // PREREQUISITE SCRIPT: day4/day4_weather_ops_mongo.js
@@ -341,9 +341,9 @@ db.hourly_sensor_buckets.findOne();
 
 ---
 
-### Recipe 2: Zero-Bloat Lifecycle Management (`DETACH / ATTACH PARTITION` vs. `Manual Bucket Upsert` & `Zone Sharding`)
+#### 2.3.2 Recipe 2: Zero-Bloat Lifecycle Management (`DETACH / ATTACH PARTITION` vs. `Manual Bucket Upsert` & `Zone Sharding`)
 
-#### A. PostgreSQL: Detaching & Re-Attaching a Monthly Partition Without Blocking Queries
+##### 2.3.2.1 A. PostgreSQL: Detaching & Re-Attaching a Monthly Partition Without Blocking Queries
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
 -- PREREQUISITE SCRIPTS: day2/weather_ops_pg.sql and day3/day3_weather_advanced_pg.sql
@@ -366,7 +366,7 @@ ALTER TABLE synoptic.observations_part
     FOR VALUES FROM ('2026-06-01 00:00:00+00') TO ('2026-07-01 00:00:00+00');
 ```
 
-#### B. MongoDB: Atomic Manual Bucket Pattern Upsert & Horizontal Range / Zone Sharding Reference
+##### 2.3.2.2 B. MongoDB: Atomic Manual Bucket Pattern Upsert & Horizontal Range / Zone Sharding Reference
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_telemetry_db' (mongosh weather_telemetry_db)
 // PREREQUISITE SCRIPT: day4/day4_mongo_50k_polymorphic_benchmark.js
@@ -413,7 +413,7 @@ db.hourly_sensor_buckets.deleteOne({ _id: "AWS-001_2026-10-06_H14" });
 
 ---
 
-## 2.4 The 2 Critical Partitioning & Sharding Traps ("Black Box" Summary)
+### 2.4 The 2 Critical Partitioning & Sharding Traps ("Black Box" Summary)
 
 | Engine | The Trap | Why It Fails | The Production Rule |
 | :--- | :--- | :--- | :--- |

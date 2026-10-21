@@ -97,23 +97,23 @@ DROP TABLE IF EXISTS observations;
 DROP TABLE IF EXISTS stations;
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.1.1 Deep-Dive Architectural Explanation
 
-1. **Standard Input Redirection (`sqlite3 weather_ops.db < weather_ops_seed.sql`):**
-   - Invokes the `sqlite3` binary, opens or creates the single-file database `weather_ops.db` in the current working directory, and streams the SQL script over standard input (`stdin`). Each statement terminated by a semicolon (`;`) is parsed, compiled into SQLite Virtual Database Engine (VDBE) bytecode, and executed sequentially.
-2. **Why SQLite Disables Foreign Keys by Default (`PRAGMA foreign_keys = ON;`):**
-   - Historically, SQLite versions prior to `3.6.19` (released in October 2009) parsed `FOREIGN KEY` syntax in `CREATE TABLE` statements for SQL standard compatibility but did not enforce referential integrity at runtime. To preserve strict backwards compatibility with legacy embedded applications that relied on unvalidated writes or out-of-order table loads, the SQLite C library compiles with `PRAGMA foreign_keys = OFF` as its default state.
-   - Crucially, `PRAGMA foreign_keys` is a **connection-scoped runtime flag**, not a persistent database file header property. Even after `weather_ops_seed.sql` finishes creating `weather_ops.db`, every future interactive `sqlite3 weather_ops.db` session or Python `sqlite3.connect('weather_ops.db')` connection starts with `foreign_keys = 0` (`OFF`) unless that connection explicitly executes `PRAGMA foreign_keys = ON;`.
-   - You can verify the active enforcement state at any time by running `PRAGMA foreign_keys;`, which returns `1` when active and `0` when inactive.
-   - **Understanding the Broader SQLite `PRAGMA` Family (Connection vs. Persistent Scope):** Unlike CLI dot-commands (`.tables`, `.schema`) which only work in the `sqlite3` terminal, `PRAGMA` statements are engine-level SQL directives parsed by `libsqlite3` (working in CLI, Python, and DBeaver):
-     - **Integrity & Auditing (`Per-Connection` / Action):** `PRAGMA foreign_keys = ON;` (enforces FK constraints), `PRAGMA foreign_key_check;` (scans tables for existing orphaned FK rows), and `PRAGMA integrity_check;` / `PRAGMA quick_check;` (verifies physical B-Tree pages and constraints).
-     - **Journaling & Concurrency (`Persistent` for WAL / `Per-Connection` for others):** `PRAGMA journal_mode = WAL;` (**persists in the `.db` file header** and allows concurrent readers alongside one writer), `PRAGMA synchronous = NORMAL;` (crash-safe in WAL mode without per-commit `fsync` stalls; vs. `OFF` used in disposable bulk loaders like `generate_weather_db.py`), `PRAGMA busy_timeout = 5000;` (waits up to 5s on `SQLITE_BUSY` write locks), and `PRAGMA wal_checkpoint(TRUNCATE);`.
-     - **Memory & I/O Performance (`Per-Connection`):** `PRAGMA cache_size = -64000;` (`64 MiB` RAM page cache; or `+100000` pages in `generate_weather_db.py`), `PRAGMA temp_store = MEMORY;` (keeps sort/group/window temp B-Trees in RAM), and `PRAGMA mmap_size = 268435456;`.
-     - **Schema Introspection & Optimizer (SQL-Callable Table-Valued Functions):** `PRAGMA table_info('observations');` (or `SELECT * FROM pragma_table_info('observations');`), `PRAGMA index_list('observations');`, `PRAGMA foreign_key_list('observations');`, and `PRAGMA optimize;`. (See [`day1_sqlite_and_sql_cheatsheet.md`](./day1_sqlite_and_sql_cheatsheet.md) §Part I.5 for the full reference matrix).
-3. **Child-to-Parent Teardown Order (`DROP TABLE IF EXISTS ...`):**
-   - Because `PRAGMA foreign_keys = ON;` is active on Line 7, SQLite enforces referential integrity during DDL teardown operations.
-   - `weather_alerts`, `forecasts`, and `observations` are **child tables** that hold foreign key references pointing to `stations(station_id)` (the **parent table**).
-   - If the script attempted to execute `DROP TABLE IF EXISTS stations;` first while child rows still existed in `observations`, `forecasts`, or `weather_alerts`, SQLite would guard the parent rows against orphaning or require cascading checks. Dropping the leaf child tables first (`weather_alerts` $\rightarrow$ `forecasts` $\rightarrow$ `observations`) and dropping the root parent table (`stations`) last follows a strict **reverse-topological dependency order**:
+##### 2.1.1.1 Standard Input Redirection (`sqlite3 weather_ops.db < weather_ops_seed.sql`)
+- Invokes the `sqlite3` binary, opens or creates the single-file database `weather_ops.db` in the current working directory, and streams the SQL script over standard input (`stdin`). Each statement terminated by a semicolon (`;`) is parsed, compiled into SQLite Virtual Database Engine (VDBE) bytecode, and executed sequentially.
+##### 2.1.1.2 Why SQLite Disables Foreign Keys by Default (`PRAGMA foreign_keys = ON;`)
+- Historically, SQLite versions prior to `3.6.19` (released in October 2009) parsed `FOREIGN KEY` syntax in `CREATE TABLE` statements for SQL standard compatibility but did not enforce referential integrity at runtime. To preserve strict backwards compatibility with legacy embedded applications that relied on unvalidated writes or out-of-order table loads, the SQLite C library compiles with `PRAGMA foreign_keys = OFF` as its default state.
+- Crucially, `PRAGMA foreign_keys` is a **connection-scoped runtime flag**, not a persistent database file header property. Even after `weather_ops_seed.sql` finishes creating `weather_ops.db`, every future interactive `sqlite3 weather_ops.db` session or Python `sqlite3.connect('weather_ops.db')` connection starts with `foreign_keys = 0` (`OFF`) unless that connection explicitly executes `PRAGMA foreign_keys = ON;`.
+- You can verify the active enforcement state at any time by running `PRAGMA foreign_keys;`, which returns `1` when active and `0` when inactive.
+- **Understanding the Broader SQLite `PRAGMA` Family (Connection vs. Persistent Scope):** Unlike CLI dot-commands (`.tables`, `.schema`) which only work in the `sqlite3` terminal, `PRAGMA` statements are engine-level SQL directives parsed by `libsqlite3` (working in CLI, Python, and DBeaver):
+  - **Integrity & Auditing (`Per-Connection` / Action):** `PRAGMA foreign_keys = ON;` (enforces FK constraints), `PRAGMA foreign_key_check;` (scans tables for existing orphaned FK rows), and `PRAGMA integrity_check;` / `PRAGMA quick_check;` (verifies physical B-Tree pages and constraints).
+  - **Journaling & Concurrency (`Persistent` for WAL / `Per-Connection` for others):** `PRAGMA journal_mode = WAL;` (**persists in the `.db` file header** and allows concurrent readers alongside one writer), `PRAGMA synchronous = NORMAL;` (crash-safe in WAL mode without per-commit `fsync` stalls; vs. `OFF` used in disposable bulk loaders like `generate_weather_db.py`), `PRAGMA busy_timeout = 5000;` (waits up to 5s on `SQLITE_BUSY` write locks), and `PRAGMA wal_checkpoint(TRUNCATE);`.
+  - **Memory & I/O Performance (`Per-Connection`):** `PRAGMA cache_size = -64000;` (`64 MiB` RAM page cache; or `+100000` pages in `generate_weather_db.py`), `PRAGMA temp_store = MEMORY;` (keeps sort/group/window temp B-Trees in RAM), and `PRAGMA mmap_size = 268435456;`.
+  - **Schema Introspection & Optimizer (SQL-Callable Table-Valued Functions):** `PRAGMA table_info('observations');` (or `SELECT * FROM pragma_table_info('observations');`), `PRAGMA index_list('observations');`, `PRAGMA foreign_key_list('observations');`, and `PRAGMA optimize;`. (See [`day1_sqlite_and_sql_cheatsheet.md`](./day1_sqlite_and_sql_cheatsheet.md) §Part I.5 for the full reference matrix).
+##### 2.1.1.3 Child-to-Parent Teardown Order (`DROP TABLE IF EXISTS ...`)
+- Because `PRAGMA foreign_keys = ON;` is active on Line 7, SQLite enforces referential integrity during DDL teardown operations.
+- `weather_alerts`, `forecasts`, and `observations` are **child tables** that hold foreign key references pointing to `stations(station_id)` (the **parent table**).
+- If the script attempted to execute `DROP TABLE IF EXISTS stations;` first while child rows still existed in `observations`, `forecasts`, or `weather_alerts`, SQLite would guard the parent rows against orphaning or require cascading checks. Dropping the leaf child tables first (`weather_alerts` $\rightarrow$ `forecasts` $\rightarrow$ `observations`) and dropping the root parent table (`stations`) last follows a strict **reverse-topological dependency order**:
 
 ```mermaid
 flowchart TD
@@ -144,7 +144,7 @@ CREATE TABLE stations (
 );
 ```
 
-#### Column-by-Column & Constraint Architecture
+#### 2.2.1 Column-by-Column & Constraint Architecture
 
 | Column Name | Declared Type & Affinity | Constraints | Physical & Meteorological Engineering Rationale |
 | :--- | :--- | :--- | :--- |
@@ -178,39 +178,39 @@ CREATE TABLE observations (
 );
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.3.1 Deep-Dive Architectural Explanation
 
-1. **`INTEGER PRIMARY KEY` vs. `INTEGER PRIMARY KEY AUTOINCREMENT` (`obs_id`):**
-   - On `stations(station_id)`, we used `INTEGER PRIMARY KEY` because the WMO station ID is an natural external identifier.
-   - On `observations(obs_id)`, the script uses `INTEGER PRIMARY KEY AUTOINCREMENT`. While plain `INTEGER PRIMARY KEY` automatically assigns `MAX(rowid) + 1` when `NULL` is inserted, it can reuse a `rowid` if the highest-numbered row is deleted. Adding the `AUTOINCREMENT` keyword instructs SQLite to create and maintain an internal system table named `sqlite_sequence(name, seq)` that tracks the highest historical `obs_id` ever allocated, guaranteeing monotonically increasing, never-reused surrogate keys across the lifetime of the database.
-   - *Architectural Tradeoff:* Because `AUTOINCREMENT` must read and update `sqlite_sequence` on every `INSERT`, it incurs extra B-Tree page writes and CPU overhead compared to plain `INTEGER PRIMARY KEY`. In high-frequency telemetry tables where monotonic non-reuse after deletion is not strictly required, plain `INTEGER PRIMARY KEY` is faster.
-2. **ISO-8601 UTC Timestamps in `TEXT` (`obs_time`):**
-   - SQLite stores dates and timestamps using `TEXT` (ISO-8601 strings), `REAL` (Julian day numbers), or `INTEGER` (Unix epoch seconds).
-   - Storing timestamps as fixed-width zero-padded ISO-8601 UTC strings (`'YYYY-MM-DD HH:MM:SS'`, e.g., `'2026-10-05 06:00:00'`) guarantees that **lexicographical byte-order sorting (`ORDER BY obs_time`) is identical to chronological sorting**, while remaining human-readable and compatible with SQLite's built-in date/time functions (`datetime()`, `strftime()`, `julianday()`).
-3. **`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK` & Three-Valued Logic (`3VL`) Inside `CHECK` Constraints:**
-   - Look closely at how constraints vary across `stations`, `observations`, and `forecasts`:
-     - **Pattern 1 (`NOT NULL` only):** `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL` — enforces **Presence** (rejects `NULL`), while permitting any value of the column's type.
-     - **Pattern 2 (`NOT NULL CHECK (...)`):** `latitude REAL NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0)`, `pred_wind_kt REAL NOT NULL CHECK (pred_wind_kt >= 0.0)`, `qc_flag TEXT NOT NULL DEFAULT 'VALID' CHECK (...)` — enforces **both Presence and Domain Bounds**.
-     - **Pattern 3 (Nullable + `CHECK`):** `humidity_pct REAL CHECK (humidity_pct IS NULL OR (humidity_pct >= 0.0 AND humidity_pct <= 100.0))` and `wind_speed_kt REAL CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` — allows `NULL` when a field sensor drops offline, **but if a reading is present**, enforces physical bounds.
-     - **Pattern 4 (Nullable with NO `CHECK`):** `precip_1h_mm REAL`, `temp_c REAL` — raw landing columns that permit `NULL` as well as raw in-band wire sentinels (`-9999.0`) or uncalibrated spikes (`68.5°C`) so they can be audited via `qc_flag` and sanitized with `NULLIF`.
-   - **Why `CHECK (col >= 0.0)` Alone NEVER Prevents `NULL`s (The `WHERE` vs. `CHECK` 3VL Asymmetry):**
-     - In ANSI SQL, when a column is `NULL`, `NULL >= 0.0` evaluates to **`UNKNOWN`**.
-     - **`WHERE` / `HAVING` clauses require `TRUE`** (discarding both `FALSE` and `UNKNOWN`).
-     - **`CHECK` constraints only reject `FALSE`** (allowing both `TRUE` **and `UNKNOWN` (`NULL`)**!).
-     - Consequently, declaring `latitude REAL CHECK (latitude BETWEEN -90.0 AND 90.0)` *without* `NOT NULL` allows `latitude = NULL` to be inserted! Whenever a column is mandatory *and* range-bounded, you **must** combine `NOT NULL CHECK (...)`.
-   - **Why Write `IS NULL OR (...)` on Nullable Sensor Columns (`humidity_pct` and `wind_speed_kt`)?**
-     - Although `CHECK (wind_speed_kt >= 0.0)` and `CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` accept the same rows in DDL, writing `IS NULL OR (...)` explicitly converts the `NULL` sensor case from `UNKNOWN` to `TRUE` (`TRUE OR UNKNOWN` $\equiv$ `TRUE`). This documents to every engineer that `NULL` is intentionally valid for offline sensors, and prevents silent row loss if the validation expression is ever copied into a `WHERE` filter or `dbt` quality test.
-4. **Why `precip_1h_mm` Intentionally Omits `CHECK (precip_1h_mm >= 0.0)` (Line 35):**
-   - Notice the inline comment on Line 35: `-- 1h Precipitation (mm) - includes legacy -9999.0 in raw rows for cleaning lab!`.
-   - In legacy meteorological ingestion pipelines, raw landing tables often lack lower-bound `CHECK` constraints so that raw telemetry frames containing hardware diagnostic sentinels (`-9999.0` or `-999.0`) are not rejected before reaching the staging table. Leaving `precip_1h_mm` unconstrained in the Day 1 seed table allows Line 105 (`Constantine - El Khroub` at `2026-10-06 12:00:00`) to insert `-9999.0`, demonstrating why unconstrained raw tables require `NULLIF(precip_1h_mm, -9999.0)` during queries—and why on Day 2 (`weather_ops_pg.sql` Line 45) the production PostgreSQL table enforces `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` at the database gate.
-5. **WMO Quality Control Flag (`qc_flag`):**
-   - Defaults to `'VALID'` and restricts values to `'VALID'`, `'SUSPECT'`, or `'ERRONEOUS'`. This mirrors operational WMO Global Data-Processing and Forecasting System (GDPFS) quality flags.
-6. **Referential Integrity & Cascading Deletes (`FOREIGN KEY (station_id) REFERENCES stations(station_id) ON DELETE CASCADE`):**
-   - Guarantees that no observation can be inserted for a `station_id` that does not exist in `stations`.
-   - `ON DELETE CASCADE` instructs SQLite that if a station row in `stations` is ever deleted, all child rows in `observations` matching that `station_id` are automatically deleted within the same atomic transaction, preventing orphaned observation records.
-7. **Composite Uniqueness Constraint (`UNIQUE (station_id, obs_time)`):**
-   - A single station can record many observations across different hours, and many stations can record observations at the exact same hour, so neither `station_id` nor `obs_time` is unique on its own.
-   - Declaring table-level `UNIQUE (station_id, obs_time)` enforces that the **tuple `(station_id, obs_time)`** can appear at most once. Under the hood, SQLite automatically builds a composite B-Tree index (`sqlite_autoindex_observations_1`) over `(station_id, obs_time)`. This both blocks duplicate telemetry packet ingestion (idempotency via `INSERT OR IGNORE` / `ON CONFLICT`) and accelerates queries that filter by `station_id` and `obs_time`.
+##### 2.3.1.1 `INTEGER PRIMARY KEY` vs. `INTEGER PRIMARY KEY AUTOINCREMENT` (`obs_id`)
+- On `stations(station_id)`, we used `INTEGER PRIMARY KEY` because the WMO station ID is an natural external identifier.
+- On `observations(obs_id)`, the script uses `INTEGER PRIMARY KEY AUTOINCREMENT`. While plain `INTEGER PRIMARY KEY` automatically assigns `MAX(rowid) + 1` when `NULL` is inserted, it can reuse a `rowid` if the highest-numbered row is deleted. Adding the `AUTOINCREMENT` keyword instructs SQLite to create and maintain an internal system table named `sqlite_sequence(name, seq)` that tracks the highest historical `obs_id` ever allocated, guaranteeing monotonically increasing, never-reused surrogate keys across the lifetime of the database.
+- *Architectural Tradeoff:* Because `AUTOINCREMENT` must read and update `sqlite_sequence` on every `INSERT`, it incurs extra B-Tree page writes and CPU overhead compared to plain `INTEGER PRIMARY KEY`. In high-frequency telemetry tables where monotonic non-reuse after deletion is not strictly required, plain `INTEGER PRIMARY KEY` is faster.
+##### 2.3.1.2 ISO-8601 UTC Timestamps in `TEXT` (`obs_time`)
+- SQLite stores dates and timestamps using `TEXT` (ISO-8601 strings), `REAL` (Julian day numbers), or `INTEGER` (Unix epoch seconds).
+- Storing timestamps as fixed-width zero-padded ISO-8601 UTC strings (`'YYYY-MM-DD HH:MM:SS'`, e.g., `'2026-10-05 06:00:00'`) guarantees that **lexicographical byte-order sorting (`ORDER BY obs_time`) is identical to chronological sorting**, while remaining human-readable and compatible with SQLite's built-in date/time functions (`datetime()`, `strftime()`, `julianday()`).
+##### 2.3.1.3 `NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK` & Three-Valued Logic (`3VL`) Inside `CHECK` Constraints
+- Look closely at how constraints vary across `stations`, `observations`, and `forecasts`:
+  - **Pattern 1 (`NOT NULL` only):** `obs_time TEXT NOT NULL`, `pred_temp_c REAL NOT NULL` — enforces **Presence** (rejects `NULL`), while permitting any value of the column's type.
+  - **Pattern 2 (`NOT NULL CHECK (...)`):** `latitude REAL NOT NULL CHECK (latitude BETWEEN -90.0 AND 90.0)`, `pred_wind_kt REAL NOT NULL CHECK (pred_wind_kt >= 0.0)`, `qc_flag TEXT NOT NULL DEFAULT 'VALID' CHECK (...)` — enforces **both Presence and Domain Bounds**.
+  - **Pattern 3 (Nullable + `CHECK`):** `humidity_pct REAL CHECK (humidity_pct IS NULL OR (humidity_pct >= 0.0 AND humidity_pct <= 100.0))` and `wind_speed_kt REAL CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` — allows `NULL` when a field sensor drops offline, **but if a reading is present**, enforces physical bounds.
+  - **Pattern 4 (Nullable with NO `CHECK`):** `precip_1h_mm REAL`, `temp_c REAL` — raw landing columns that permit `NULL` as well as raw in-band wire sentinels (`-9999.0`) or uncalibrated spikes (`68.5°C`) so they can be audited via `qc_flag` and sanitized with `NULLIF`.
+- **Why `CHECK (col >= 0.0)` Alone NEVER Prevents `NULL`s (The `WHERE` vs. `CHECK` 3VL Asymmetry):**
+  - In ANSI SQL, when a column is `NULL`, `NULL >= 0.0` evaluates to **`UNKNOWN`**.
+  - **`WHERE` / `HAVING` clauses require `TRUE`** (discarding both `FALSE` and `UNKNOWN`).
+  - **`CHECK` constraints only reject `FALSE`** (allowing both `TRUE` **and `UNKNOWN` (`NULL`)**!).
+  - Consequently, declaring `latitude REAL CHECK (latitude BETWEEN -90.0 AND 90.0)` *without* `NOT NULL` allows `latitude = NULL` to be inserted! Whenever a column is mandatory *and* range-bounded, you **must** combine `NOT NULL CHECK (...)`.
+- **Why Write `IS NULL OR (...)` on Nullable Sensor Columns (`humidity_pct` and `wind_speed_kt`)?**
+  - Although `CHECK (wind_speed_kt >= 0.0)` and `CHECK (wind_speed_kt IS NULL OR wind_speed_kt >= 0.0)` accept the same rows in DDL, writing `IS NULL OR (...)` explicitly converts the `NULL` sensor case from `UNKNOWN` to `TRUE` (`TRUE OR UNKNOWN` $\equiv$ `TRUE`). This documents to every engineer that `NULL` is intentionally valid for offline sensors, and prevents silent row loss if the validation expression is ever copied into a `WHERE` filter or `dbt` quality test.
+##### 2.3.1.4 Why `precip_1h_mm` Intentionally Omits `CHECK (precip_1h_mm >= 0.0)` (Line 35)
+- Notice the inline comment on Line 35: `-- 1h Precipitation (mm) - includes legacy -9999.0 in raw rows for cleaning lab!`.
+- In legacy meteorological ingestion pipelines, raw landing tables often lack lower-bound `CHECK` constraints so that raw telemetry frames containing hardware diagnostic sentinels (`-9999.0` or `-999.0`) are not rejected before reaching the staging table. Leaving `precip_1h_mm` unconstrained in the Day 1 seed table allows Line 105 (`Constantine - El Khroub` at `2026-10-06 12:00:00`) to insert `-9999.0`, demonstrating why unconstrained raw tables require `NULLIF(precip_1h_mm, -9999.0)` during queries—and why on Day 2 (`weather_ops_pg.sql` Line 45) the production PostgreSQL table enforces `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` at the database gate.
+##### 2.3.1.5 WMO Quality Control Flag (`qc_flag`)
+- Defaults to `'VALID'` and restricts values to `'VALID'`, `'SUSPECT'`, or `'ERRONEOUS'`. This mirrors operational WMO Global Data-Processing and Forecasting System (GDPFS) quality flags.
+##### 2.3.1.6 Referential Integrity & Cascading Deletes (`FOREIGN KEY (station_id) REFERENCES stations(station_id) ON DELETE CASCADE`)
+- Guarantees that no observation can be inserted for a `station_id` that does not exist in `stations`.
+- `ON DELETE CASCADE` instructs SQLite that if a station row in `stations` is ever deleted, all child rows in `observations` matching that `station_id` are automatically deleted within the same atomic transaction, preventing orphaned observation records.
+##### 2.3.1.7 Composite Uniqueness Constraint (`UNIQUE (station_id, obs_time)`)
+- A single station can record many observations across different hours, and many stations can record observations at the exact same hour, so neither `station_id` nor `obs_time` is unique on its own.
+- Declaring table-level `UNIQUE (station_id, obs_time)` enforces that the **tuple `(station_id, obs_time)`** can appear at most once. Under the hood, SQLite automatically builds a composite B-Tree index (`sqlite_autoindex_observations_1`) over `(station_id, obs_time)`. This both blocks duplicate telemetry packet ingestion (idempotency via `INSERT OR IGNORE` / `ON CONFLICT`) and accelerates queries that filter by `station_id` and `obs_time`.
 
 ---
 
@@ -232,18 +232,18 @@ CREATE TABLE forecasts (
 );
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.4.1 Deep-Dive Architectural Explanation
 
-1. **Multi-Model NWP Domain (`model_name`):**
-   - Restricts `model_name` via `CHECK` to the three primary NWP systems used in Mediterranean and North African operational forecasting:
-     - `'ECMWF-HRES'`: European Centre for Medium-Range Weather Forecasts High-Resolution deterministic model ($\approx 9\text{ km}$ horizontal grid spacing).
-     - `'GFS'`: NOAA/NCEP Global Forecast System ($\approx 13\text{ km}$ global grid spacing).
-     - `'AROME'`: Météo-France / ALADIN consortium Applications of Research to Operations at Mesoscale convective-scale non-hydrostatic model ($\approx 1.3\text{–}2.5\text{ km}$ grid spacing).
-2. **NWP Temporal Coordinate Triad (`init_time`, `valid_time`, `lead_hours`):**
-   - Every NWP prediction is uniquely identified by *when the supercomputer run was initialized* (`init_time`, e.g., `'2026-10-05 00:00:00'` for the `00Z` synoptic cycle), *how many hours into the future the integration stepped* (`lead_hours`, constrained to `>= 0` so hindcasts cannot accidentally be stored as negative lead hours), and *the target physical timestamp being predicted* (`valid_time = init_time + lead_hours`).
-   - During NWP forecast verification, `forecasts.valid_time` is joined directly against `observations.obs_time` (`ON f.station_id = o.station_id AND f.valid_time = o.obs_time`) to compute Forecast Error (Bias), Mean Absolute Error (MAE), and Root Mean Square Error (RMSE).
-3. **Strict `NOT NULL` Physical Output (`pred_temp_c`, `pred_wind_kt`, `pred_precip_mm`):**
-   - Unlike physical field instruments (`observations`) which suffer hardware dropouts (`NULL`), deterministic NWP grid-point extractions always produce numeric state variables at every grid cell. Thus, `pred_temp_c`, `pred_wind_kt`, and `pred_precip_mm` are all declared `NOT NULL`, with non-negative physical lower bounds (`>= 0.0`) on wind speed and precipitation accumulation.
+##### 2.4.1.1 Multi-Model NWP Domain (`model_name`)
+- Restricts `model_name` via `CHECK` to the three primary NWP systems used in Mediterranean and North African operational forecasting:
+  - `'ECMWF-HRES'`: European Centre for Medium-Range Weather Forecasts High-Resolution deterministic model ($\approx 9\text{ km}$ horizontal grid spacing).
+  - `'GFS'`: NOAA/NCEP Global Forecast System ($\approx 13\text{ km}$ global grid spacing).
+  - `'AROME'`: Météo-France / ALADIN consortium Applications of Research to Operations at Mesoscale convective-scale non-hydrostatic model ($\approx 1.3\text{–}2.5\text{ km}$ grid spacing).
+##### 2.4.1.2 NWP Temporal Coordinate Triad (`init_time`, `valid_time`, `lead_hours`)
+- Every NWP prediction is uniquely identified by *when the supercomputer run was initialized* (`init_time`, e.g., `'2026-10-05 00:00:00'` for the `00Z` synoptic cycle), *how many hours into the future the integration stepped* (`lead_hours`, constrained to `>= 0` so hindcasts cannot accidentally be stored as negative lead hours), and *the target physical timestamp being predicted* (`valid_time = init_time + lead_hours`).
+- During NWP forecast verification, `forecasts.valid_time` is joined directly against `observations.obs_time` (`ON f.station_id = o.station_id AND f.valid_time = o.obs_time`) to compute Forecast Error (Bias), Mean Absolute Error (MAE), and Root Mean Square Error (RMSE).
+##### 2.4.1.3 Strict `NOT NULL` Physical Output (`pred_temp_c`, `pred_wind_kt`, `pred_precip_mm`)
+- Unlike physical field instruments (`observations`) which suffer hardware dropouts (`NULL`), deterministic NWP grid-point extractions always produce numeric state variables at every grid cell. Thus, `pred_temp_c`, `pred_wind_kt`, and `pred_precip_mm` are all declared `NOT NULL`, with non-negative physical lower bounds (`>= 0.0`) on wind speed and precipitation accumulation.
 
 ---
 
@@ -262,7 +262,7 @@ CREATE TABLE weather_alerts (
 );
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.5.1 Deep-Dive Architectural Explanation
 
 - Models the operational warning bulletins (Carte de Vigilance Météorologique) issued by forecasters when synoptic observations or NWP forecasts breach hazard thresholds:
   - `phenomenon`: Constrained to the five standardized regional hazard codes (`'HEATWAVE'`, `'HIGH_WIND'`, `'FLASH_FLOOD'`, `'SANDSTORM'`, `'FROST'`).
@@ -287,7 +287,7 @@ INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m
 (60402, 'Bejaia - Soummam',       36.7120,  5.0699,    6.0, 'Mediterranean', 0); -- Station under maintenance (0 observations)
 ```
 
-#### Complete Station Inventory & Planted Anomaly Analysis
+#### 2.6.1 Complete Station Inventory & Planted Anomaly Analysis
 
 | WMO ID | Official Station Name | Coordinates (`lat`, `lon`) | Elevation | Climate Zone | `is_active` | Operational Role in Curriculum |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -362,7 +362,7 @@ INSERT INTO observations (station_id, obs_time, temp_c, dewpoint_c, humidity_pct
 (60531, '2026-10-06 12:00:00', 25.9, 13.0, 45.0, 1015.8, 12.0,  0.0, 'VALID');
 ```
 
-#### Deep-Dive Synoptic Physics & Planted Anomaly Forensics
+#### 2.7.1 Deep-Dive Synoptic Physics & Planted Anomaly Forensics
 
 The 36 synoptic rows (6 active stations $\times$ 6 six-hourly synoptic cycles from `2026-10-05 06:00:00` to `2026-10-06 12:00:00`) model a classic autumn Mediterranean cold-frontal trough sweeping across northern Algeria on the night of October 5–6, 2026:
 - **Frontal Passage Dynamics (`Algiers 60390` & `Constantine 60419`):** Notice how mean sea-level pressure (`pressure_hpa`) at Algiers drops from `1016.2 hPa` (`06:00 UTC` Oct 5) to `1011.5 hPa` (`00:00 UTC` Oct 6) as winds veer and intensify from `8.0 kt` to `28.0 kt`, delivering `18.6 mm` of overnight convective rainfall before pressure rebounds to `1014.4 hPa` by `12:00 UTC` Oct 6. At Constantine (`60419`, elevation `694 m`), orographic lifting intensifies the midnight thunderstorm cell to `34.0 kt` winds and `24.0 mm` of rainfall (`1012.2 hPa`).
@@ -415,7 +415,7 @@ INSERT INTO forecasts (station_id, model_name, init_time, valid_time, lead_hours
 (60571, 'GFS',        '2026-10-05 00:00:00', '2026-10-06 00:00:00', 24, 26.8, 24.0,  0.0);
 ```
 
-#### Deep-Dive NWP Verification Design (22 Forecast Rows)
+#### 2.8.1 Deep-Dive NWP Verification Design (22 Forecast Rows)
 
 - **Asymmetric Model Coverage by Design:**
   - `Algiers (60390)` and `Constantine (60419)` have 9 forecasts each (3 models $\times$ 3 lead times: `+12h`, `+24h`, `+36h`).
@@ -442,7 +442,7 @@ INSERT INTO weather_alerts (station_id, issued_at, phenomenon, severity, message
 (60680, '2026-10-05 10:00:00', 'HEATWAVE',    'YELLOW', 'Afternoon temperatures exceeding 36°C at high elevation.');
 ```
 
-#### Deep-Dive Alert Correlation with Seeded Telemetry
+#### 2.9.1 Deep-Dive Alert Correlation with Seeded Telemetry
 
 Each of the 4 seeded alerts corresponds directly to a physical event recorded in `observations`:
 1. **`60390` (`Algiers`, `2026-10-05 21:00:00`, `FLASH_FLOOD`, `ORANGE`):** Issued 3 hours ahead of the `2026-10-06 00:00:00` deluge (`18.6 mm/h` observed).
@@ -490,7 +490,7 @@ UNION ALL
 SELECT 'weather_alerts', COUNT(*) FROM weather_alerts;
 ```
 
-#### Expected Terminal Output
+#### 3.2.1 Expected Terminal Output
 
 ```text
 ┌────────────────┬───────────┐
@@ -524,7 +524,7 @@ WHERE s.is_active = 0
 ORDER BY s.station_id;
 ```
 
-#### Expected Terminal Output
+#### 3.3.1 Expected Terminal Output
 
 ```text
 ┌────────────┬──────────────────────────┬───────────┬─────────────────────┬────────┬──────────────┬───────────┐
@@ -541,7 +541,7 @@ ORDER BY s.station_id;
 
 ### 3.4 Why `weather_ops_seed.sql` Uses `3NF` Normalization & How Every SQL `JOIN` Recombines It
 
-#### 1. `3NF` Normalization vs. Denormalization in `weather_ops_seed.sql`
+#### 3.4.1 `3NF` Normalization vs. Denormalization in `weather_ops_seed.sql`
 Notice how `weather_ops_seed.sql` decomposes our meteorological domain into **4 Third-Normal-Form (`3NF`) tables**:
 - **`stations` (Master Entity Table — 7 rows):** Stores `station_name`, `latitude`, `longitude`, `elevation_m`, and `climate_zone` **exactly once per station**.
 - **`observations`, `forecasts`, `weather_alerts` (Fact/Event Tables — 62 total rows):** Reference `stations` via a compact integer foreign key (`station_id`).

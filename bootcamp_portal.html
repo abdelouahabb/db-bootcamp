@@ -3178,15 +3178,42 @@ uvicorn serving_api:app --host 0.0.0.0 --port 8080 --workers 4`
           continue;
         }
 
-        // Unordered or Ordered Lists
+        // Unordered or Ordered Lists (with nested sublist support)
         if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
-          const isOrdered = /^\s*\d+\.\s+/.test(line);
+          const baseIndent = (line.match(/^\s*/)[0] || '').length;
+          const firstOrdMatch = line.match(/^\s*(\d+)\.\s+/);
+          const isOrdered = Boolean(firstOrdMatch);
           const tag = isOrdered ? 'ol' : 'ul';
-          html += `<${tag} class="md-list">`;
+          const startAttr = (isOrdered && Number(firstOrdMatch[1]) > 1) ? ` start="${Number(firstOrdMatch[1])}"` : '';
+          html += `<${tag} class="md-list"${startAttr}>`;
           while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
-            const itemText = lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, '');
-            html += `<li>${formatInlineMarkdown(itemText, docPath)}</li>`;
+            const curLine = lines[i];
+            const curIndent = (curLine.match(/^\s*/)[0] || '').length;
+            const curIsOrdered = /^\s*\d+\.\s+/.test(curLine);
+            if (curIndent === baseIndent && curIsOrdered !== isOrdered) {
+              break;
+            }
+            const itemText = curLine.replace(/^\s*([-*+]|\d+\.)\s+/, '');
+            html += `<li>${formatInlineMarkdown(itemText, docPath)}`;
             i++;
+            // Check for indented sub-list items directly beneath this item
+            if (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
+              const nextIndent = (lines[i].match(/^\s*/)[0] || '').length;
+              if (nextIndent > baseIndent) {
+                const subIsOrd = /^\s*\d+\.\s+/.test(lines[i]);
+                const subTag = subIsOrd ? 'ol' : 'ul';
+                html += `<${subTag} class="md-list" style="margin-top:0.35rem; margin-bottom:0.35rem;">`;
+                while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
+                  const sIndent = (lines[i].match(/^\s*/)[0] || '').length;
+                  if (sIndent <= baseIndent) break;
+                  const sText = lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, '');
+                  html += `<li>${formatInlineMarkdown(sText, docPath)}</li>`;
+                  i++;
+                }
+                html += `</${subTag}>`;
+              }
+            }
+            html += `</li>`;
           }
           html += `</${tag}>`;
           continue;

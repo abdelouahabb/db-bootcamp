@@ -15,9 +15,9 @@
   - [2.1 PostgreSQL Golden Signals (`postgres_exporter` / SQL)](#21-postgresql-golden-signals-postgres_exporter--sql)
   - [2.2 MongoDB Golden Signals (`mongodb_exporter` / `db.serverStatus()`)](#22-mongodb-golden-signals-mongodb_exporter--dbserverstatus)
 - [3. Layer 2: Meteorological Data Freshness & Sensor Health SQL Queries](#3-layer-2-meteorological-data-freshness--sensor-health-sql-queries)
-  - [Check 1: Silent / Late Synoptic Station Detector (Station Heartbeat Alert)](#check-1-silent--late-synoptic-station-detector-station-heartbeat-alert)
-  - [Check 2: NWP Model Run Arrival Monitor (`ECMWF-HRES`, `GFS`, `AROME`)](#check-2-nwp-model-run-arrival-monitor-ecmwf-hres-gfs-arome)
-  - [Check 3: Sensor Quality Control (`SUSPECT` / `ERRONEOUS`) Anomaly Rate](#check-3-sensor-quality-control-suspect--erroneous-anomaly-rate)
+  - [Check 1: Silent / Late Synoptic Station Detector (Station Heartbeat Alert)](#31-check-1-silent--late-synoptic-station-detector-station-heartbeat-alert)
+  - [Check 2: NWP Model Run Arrival Monitor (`ECMWF-HRES`, `GFS`, `AROME`)](#32-check-2-nwp-model-run-arrival-monitor-ecmwf-hres-gfs-arome)
+  - [Check 3: Sensor Quality Control (`SUSPECT` / `ERRONEOUS`) Anomaly Rate](#33-check-3-sensor-quality-control-suspect--erroneous-anomaly-rate)
 - [4. Equivalent MongoDB Telemetry Health Check (`mongosh` / Compass)](#4-equivalent-mongodb-telemetry-health-check-mongosh--compass)
 
 ---
@@ -60,7 +60,7 @@ Every weather database dashboard (Grafana) must track **two layers**:
 
 Add these 3 SQL queries directly as **Grafana Panels / Prometheus Custom Queries** (or `pg_cron` alerting checks) in your operations room:
 
-### Check 1: Silent / Late Synoptic Station Detector (Station Heartbeat Alert)
+### 3.1 Check 1: Silent / Late Synoptic Station Detector (Station Heartbeat Alert)
 *Alerts whenever an active WMO station has not reported an observation in the last 2 hours:*
 
 ```sql
@@ -84,7 +84,7 @@ HAVING MAX(o.obs_time) IS NULL OR NOW() - MAX(o.obs_time) > INTERVAL '1 hour'
 ORDER BY hours_silent DESC NULLS FIRST;
 ```
 
-### Check 2: NWP Model Run Arrival Monitor (`ECMWF-HRES`, `GFS`, `AROME`)
+### 3.2 Check 2: NWP Model Run Arrival Monitor (`ECMWF-HRES`, `GFS`, `AROME`)
 *Verifies that the latest `00Z` / `12Z` model runs arrived on schedule and loaded the expected number of forecast rows:*
 
 ```sql
@@ -106,7 +106,7 @@ GROUP BY f.model_name, l.latest_init_utc
 ORDER BY f.model_name;
 ```
 
-### Check 3: Sensor Quality Control (`SUSPECT` / `ERRONEOUS`) Anomaly Rate
+### 3.3 Check 3: Sensor Quality Control (`SUSPECT` / `ERRONEOUS`) Anomaly Rate
 *Alerts hardware technicians if a station's error rate exceeds 10% over the last 24 hours:*
 
 ```sql
@@ -161,7 +161,7 @@ db.synoptic_timeseries.aggregate([
 
 ---
 
-### Reference Library Navigation
+### 4.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | **Card 13 of 14** | [Next Card](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md) | [⬆ Back to Top](#weather-database-observability--monitoring-cheatsheet-prometheus-grafana--meteorological-health-checks)

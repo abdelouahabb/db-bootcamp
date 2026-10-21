@@ -22,9 +22,9 @@
 
 ---
 
-## PART I: SQLite CLI Shell Directives (`.dot-commands`) & Engine `PRAGMA` Reference
+## 1. PART I: SQLite CLI Shell Directives (`.dot-commands`) & Engine `PRAGMA` Reference
 
-### 1. Core Concept: Shell Dot-Commands vs. `PRAGMA` Directives vs. Declarative SQL
+### 1.1 Core Concept: Shell Dot-Commands vs. `PRAGMA` Directives vs. Declarative SQL
 
 When working with SQLite, engineers must distinguish between **three** fundamentally different instruction layers:
 
@@ -51,7 +51,7 @@ When working with SQLite, engineers must distinguish between **three** fundament
                                           └────────────────────────────────────────────────┘
 ```
 
-### 2. Launching & Switching Databases from Terminal
+### 1.2 Launching & Switching Databases from Terminal
 
 ```bash
 # Always cd into day1/ first! (Opening sqlite3 in the wrong folder creates an empty 0-byte .db file!)
@@ -74,7 +74,7 @@ sqlite3 weather_telemetry.db
 # sqlite> .open weather_telemetry.db
 ```
 
-### 3. Complete `sqlite3` CLI Dot-Commands Reference Table
+### 1.3 Complete `sqlite3` CLI Dot-Commands Reference Table
 
 | Dot-Command | Category | Purpose in Weather Lab | Typical Output / Effect |
 | :--- | :--- | :--- | :--- |
@@ -98,9 +98,9 @@ sqlite3 weather_telemetry.db
 
 ---
 
-### 4. Deep-Dive on Essential Directives
+### 1.4 Deep-Dive on Essential Directives
 
-#### 4.1 `.headers on`
+#### 1.4.1 `.headers on`
 Controls whether column attribute names are displayed as the top row of a query result set.
 * **Default:** Often `off` in script-piping modes to simplify unix-pipe parsing (`awk`, `sed`).
 * **Impact on Meteorological Telemetry:** Weather stations output multi-column floating-point series (`temperature`, `dew_point`, `wet_bulb_temp`, `soil_temp_5cm`). Without headers, an analyst viewing raw numeric streams cannot distinguish ambient temperature from dew point.
@@ -116,7 +116,7 @@ AWS-001|2026-10-04 12:00:00|18.4|12.1|1014.2|4.5
 AWS-001|2026-10-04 12:10:00|18.6|12.0|1014.1|5.1
 ```
 
-#### 4.2 `.mode box` vs. `.mode list`
+#### 1.4.2 `.mode box` vs. `.mode list`
 Sets the output presentation layout to use Unicode line-drawing box borders with automatic column width calculation. In exploratory data analysis (EDA), `box` mode immediately reveals alignment shifts caused by negative numbers, long timestamps, or sentinel values (`-999.0`), making visual QC scanning effortless.
 
 ```text
@@ -134,7 +134,7 @@ AWS-013|2026-10-04 12:10:00|16.2|1012.3
 └────────────┴─────────────────────┴─────────────┴──────────┘
 ```
 
-#### 4.3 `.timer on`
+#### 1.4.3 `.timer on`
 Instructs the SQLite shell to measure and print the precise CPU and elapsed wall-clock execution time for every SQL statement executed:
 ```text
 Run Time: real 0.084 user 0.071230 sys 0.012410
@@ -144,7 +144,7 @@ Run Time: real 0.084 user 0.071230 sys 0.012410
 * **`sys` (Kernel-Space CPU Time):** CPU time spent handling OS system calls on behalf of SQLite (allocating memory pages, reading physical file blocks via `read()`).
 * **The Pedagogical Bridge to Day 2:** On 250,000 rows, SQLite takes $\approx 0.08\text{ seconds}$ because the entire $20\text{ MB}$ database resides in OS RAM cache. On Day 2, running an unindexed table scan across 50 million records in PostgreSQL jumps from $80\text{ ms}$ to $45\text{ seconds}$ due to disk head read amplification.
 
-#### 4.4 `.tables` and `.schema <table>` Under the Hood
+#### 1.4.4 `.tables` and `.schema <table>` Under the Hood
 Both commands are syntactic sugar querying SQLite's internal system catalog (`sqlite_schema`, formerly `sqlite_master`):
 
 ```sql
@@ -167,7 +167,7 @@ ORDER BY type = 'table' DESC, name;
 2. **Constraint Auditing:** Confirms whether sensor metrics allow `NULL` or enforce physical `CHECK` constraints.
 3. **Type Affinity Inspection:** Ensures sensor timestamps are stored consistently as ISO-8601 `TEXT` strings (`YYYY-MM-DD HH:MM:SS`).
 
-#### 4.5 Permanent Shell Automation (`~/.sqliterc`)
+#### 1.4.5 Permanent Shell Automation (`~/.sqliterc`)
 Persist both `PRAGMA` engine rules and CLI display directives so every `sqlite3` session opens pre-configured:
 
 ```bash
@@ -189,9 +189,9 @@ Set-Content -Path "$HOME\.sqliterc" -Value "PRAGMA foreign_keys = ON;`nPRAGMA bu
 
 ---
 
-### 5. Complete SQLite `PRAGMA` Options Reference & Production Tuning Guide
+### 1.5 Complete SQLite `PRAGMA` Options Reference & Production Tuning Guide
 
-#### 5.1 How `PRAGMA` Syntax Works & Scope Rules (Per-Connection vs. Persistent)
+#### 1.5.1 How `PRAGMA` Syntax Works & Scope Rules (Per-Connection vs. Persistent)
 Unlike standard SQL statements, a `PRAGMA` can be called in three ways:
 - **Query current setting:** `PRAGMA foreign_keys;` or `PRAGMA journal_mode;`
 - **Assign a new setting:** `PRAGMA foreign_keys = ON;` or `PRAGMA cache_size = -64000;`
@@ -204,7 +204,7 @@ Unlike standard SQL statements, a `PRAGMA` can be called in three ways:
 
 ---
 
-#### 5.2 Category A: Data Integrity, Foreign Keys & Corruption Auditing Pragmas
+#### 1.5.2 Category A: Data Integrity, Foreign Keys & Corruption Auditing Pragmas
 
 | `PRAGMA` Option | Default | Scope | Values / Syntax | Purpose & Meteorological Engineering Impact |
 | :--- | :---: | :---: | :--- | :--- |
@@ -217,7 +217,7 @@ Unlike standard SQL statements, a `PRAGMA` can be called in three ways:
 
 ---
 
-#### 5.3 Category B: Journaling, Crash Recovery (`WAL`) & Lock Concurrency Pragmas
+#### 1.5.3 Category B: Journaling, Crash Recovery (`WAL`) & Lock Concurrency Pragmas
 
 *(For cross-engine architectural diagrams comparing SQLite WAL vs. PostgreSQL `XLogRecord` vs. MySQL InnoDB Redo Log, see [Reference Card 07: WAL & Crash Recovery](../reference_cards/07_wal_crash_recovery_sqlite_postgres_mysql.md)).*
 
@@ -231,7 +231,7 @@ Unlike standard SQL statements, a `PRAGMA` can be called in three ways:
 | **`PRAGMA journal_size_limit`** | `-1` (Unlimited) | **Per-Connection** | Bytes (e.g., `PRAGMA journal_size_limit = 67108864;` for `64 MiB`; `0` truncates to minimum) | Caps the on-disk size of `.db-wal` (and `PERSIST` journals). Whenever a WAL checkpoint rewinds to frame 1, SQLite automatically truncates `.db-wal` if it exceeded this byte limit! |
 | **`PRAGMA locking_mode`** | `NORMAL` | **Per-Connection** | `NORMAL` \| `EXCLUSIVE` | In `EXCLUSIVE` + `WAL` mode, a single-process edge logger keeps locks permanently and never creates or maps the `.db-shm` shared-memory file (reducing flash I/O, but forbidding any second process from connecting). |
 
-##### 5.3a. Deep-Dive: The 4 `PRAGMA wal_checkpoint` Modes & Return Tuple `(busy, log, checkpointed)`
+##### 1.5.3.1 5.3a. Deep-Dive: The 4 `PRAGMA wal_checkpoint` Modes & Return Tuple `(busy, log, checkpointed)`
 
 When SQLite runs in `WAL` mode, every `INSERT`/`UPDATE`/`DELETE` appends modified 4 KB pages ("frames") sequentially to `weather_ops.db-wal`. Checkpointing copies those committed frames back into the main `weather_ops.db` file so `.db-wal` can be rewound to the beginning and reused.
 
@@ -255,7 +255,7 @@ Every execution of `PRAGMA wal_checkpoint(<MODE>);` returns a single diagnostic 
 | **3. `RESTART`** | `PRAGMA wal_checkpoint(RESTART);` | **Waits** for all readers to finish **after** flushing so next writer **must** start at byte 0 | **Guaranteed** (blocks new writers until WAL rewinds to frame 1) | No (reuses existing file allocation for speed) | High-throughput ingestion daemons that want to bound `.db-wal` growth without filesystem `ftruncate()` metadata stalls. |
 | **4. `TRUNCATE`** | `PRAGMA wal_checkpoint(TRUNCATE);` | **Waits** for all writers & readers, flushes all frames, and rewinds | **Guaranteed** | **Yes (`0` bytes)** | Pre-backup / pre-archival hook (`compact_hot_to_cold.py`) to fold everything into a clean single `.db` file. |
 
-##### 5.3b. Deep-Dive: The `journal_mode` $\times$ `synchronous` Durability & `fsync()` Matrix
+##### 1.5.3.2 5.3b. Deep-Dive: The `journal_mode` $\times$ `synchronous` Durability & `fsync()` Matrix
 
 A common misconception is that `PRAGMA synchronous = NORMAL;` is "unsafe." In reality, its safety depends entirely on whether you are in legacy `DELETE` mode or `WAL` mode:
 
@@ -267,7 +267,7 @@ A common misconception is that `PRAGMA synchronous = NORMAL;` is "unsafe." In re
 | **`journal_mode = WAL` + `synchronous = FULL`** | **1 `fsync`** per commit (on `.db-wal` append) | Safe | **100% Safe + Zero Lost Commits** | $\approx 3\text{--}5\times$ faster than `DELETE+FULL` | Use for critical operational alert tables (`weather_alerts`) where even 1 second of power-cut rollback is unacceptable. |
 | `journal_mode = OFF` + `synchronous = OFF` | **0 `fsync`s** | **DB Corrupts** | **DB Corrupts** | **$50\times$ faster** | **Only** for disposable scratch generators ([`generate_weather_db.py`](./generate_weather_db.py)) where the file is rebuilt from scratch on failure. |
 
-##### 5.3c. Two Production WAL Pitfalls Every Engineer Must Know
+##### 1.5.3.3 5.3c. Two Production WAL Pitfalls Every Engineer Must Know
 
 > [!WARNING]
 > **Pitfall 1 — "WAL Starvation" (Why `.db-wal` Can Grow to Gigabytes Despite `wal_autocheckpoint = 1000`):**  
@@ -284,7 +284,7 @@ A common misconception is that `PRAGMA synchronous = NORMAL;` is "unsafe." In re
 
 ---
 
-#### 5.4 Category C: Memory Cache, I/O Performance & Storage Layout Pragmas
+#### 1.5.4 Category C: Memory Cache, I/O Performance & Storage Layout Pragmas
 
 | `PRAGMA` Option | Default | Scope | Values / Syntax | Purpose & Meteorological Engineering Impact |
 | :--- | :---: | :---: | :--- | :--- |
@@ -296,7 +296,7 @@ A common misconception is that `PRAGMA synchronous = NORMAL;` is "unsafe." In re
 
 ---
 
-#### 5.5 Category D: Schema Introspection, System Metadata & Optimizer Pragmas
+#### 1.5.5 Category D: Schema Introspection, System Metadata & Optimizer Pragmas
 
 Unlike CLI dot-commands (`.tables`, `.schema`) which fail outside the `sqlite3` terminal, **Introspection Pragmas are valid SQL statements** that return tabular rows in Python (`cur.fetchall()`), DBeaver, and SQL queries (via `pragma_*` table-valued functions):
 
@@ -311,7 +311,7 @@ Unlike CLI dot-commands (`.tables`, `.schema`) which fail outside the `sqlite3` 
 | **`PRAGMA page_count;`** & **`PRAGMA freelist_count;`** | `SELECT * FROM pragma_page_count;` | Single integer | Total 4 KB pages in the database file vs. unused pages available for reuse before growing the file. |
 | **`PRAGMA optimize;`** | — | Action (run before closing connection) | Inspects query planner usage and automatically runs `ANALYZE` (`sqlite_stat1`) **only** on tables/indexes whose row counts changed significantly during the session. |
 
-#### 5.6 Side-by-Side Comparison: Three Real-World SQLite `PRAGMA` Profiles
+#### 1.5.6 Side-by-Side Comparison: Three Real-World SQLite `PRAGMA` Profiles
 
 ```sql
 -- ============================================================================
@@ -352,9 +352,9 @@ PRAGMA cache_size = 100000;          -- 100,000 pages (~400 MB RAM) for fast ind
 ---
 
 
-## PART II: Declarative SQL Execution Order, DDL & Three-Valued Logic (3VL)
+## 2. PART II: Declarative SQL Execution Order, DDL & Three-Valued Logic (3VL)
 
-### 1. Declarative Execution Order (The 8 Logical Phases)
+### 2.1 Declarative Execution Order (The 8 Logical Phases)
 
 SQL is not executed top-to-bottom. The query planner evaluates statements in eight distinct logical phases:
 
@@ -389,7 +389,7 @@ SQL is not executed top-to-bottom. The query planner evaluates statements in eig
 
 ---
 
-### 2. DDL & Physical Meteorology Constraints (`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK`)
+### 2.2 DDL & Physical Meteorology Constraints (`NOT NULL` vs. `CHECK` vs. `NOT NULL CHECK`)
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db (DDL Reference — already created by weather_ops_seed.sql)
@@ -409,7 +409,7 @@ CREATE TABLE IF NOT EXISTS stations (
 );
 ```
 
-#### The 4 Column Constraint Patterns (`NOT NULL` vs. `CHECK`)
+#### 2.2.1 The 4 Column Constraint Patterns (`NOT NULL` vs. `CHECK`)
 * **`NOT NULL` enforces Presence (Existence):** Rejects `NULL`, but allows *any* value of that type (`-9999.0`, `145.0`, or empty string `''`).
 * **`CHECK (expr)` enforces Domain Validity (Physics/Enums):** Rejects `FALSE`, **but silently allows `NULL`** because `NULL` evaluates to `UNKNOWN`, and `CHECK` only blocks `FALSE`!
 
@@ -424,11 +424,11 @@ CREATE TABLE IF NOT EXISTS stations (
 
 ---
 
-### 3. Three-Valued Logic (3VL) & `NULL` Truth Tables
+### 2.3 Three-Valued Logic (3VL) & `NULL` Truth Tables
 
 SQL implements Three-Valued Logic: `TRUE`, `FALSE`, and `UNKNOWN` (represented by `NULL`).
 
-#### Logical Truth Matrix
+#### 2.3.1 Logical Truth Matrix
 
 | Condition $A$ | Condition $B$ | $A \text{ AND } B$ | $A \text{ OR } B$ | $\text{NOT } A$ |
 | :--- | :--- | :--- | :--- | :--- |
@@ -436,7 +436,7 @@ SQL implements Three-Valued Logic: `TRUE`, `FALSE`, and `UNKNOWN` (represented b
 | `FALSE` | `NULL` | `FALSE` | `UNKNOWN` | `TRUE` |
 | `NULL` | `NULL` | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 
-#### Comparison Propagation & The `WHERE` vs. `CHECK` Asymmetry Gate
+#### 2.3.2 Comparison Propagation & The `WHERE` vs. `CHECK` Asymmetry Gate
 * `val = NULL` $\implies$ `UNKNOWN` (never evaluates to `TRUE`).
 * `val != NULL` $\implies$ `UNKNOWN` (never evaluates to `TRUE`).
 * `NULL = NULL` $\implies$ `UNKNOWN` (never evaluates to `TRUE`).
@@ -450,11 +450,11 @@ SQL implements Three-Valued Logic: `TRUE`, `FALSE`, and `UNKNOWN` (represented b
 
 ---
 
-### 4. Aggregate Hygiene & Hardware Sentinel Handling (`NULL` vs. `-999.0` / `-9999.0`)
+### 2.4 Aggregate Hygiene & Hardware Sentinel Handling (`NULL` vs. `-999.0` / `-9999.0`)
 
 In SQL, **`NULL` means "missing/unknown"** and is **ignored** by `AVG()`, `MIN()`, `MAX()`, `SUM()`, and `COUNT(column)`. Legacy Fortran/WMO/datalogger codes like `-9999.0`, `-999.0`, or `9999.0` are treated as real numbers and corrupt averages!
 
-#### Aggregate Function Behavior Matrix
+#### 2.4.1 Aggregate Function Behavior Matrix
 
 | Aggregate | Behavior on `NULL` | Behavior on Sentinel (`-999.0` / `-9999.0`) |
 | :--- | :--- | :--- |
@@ -464,7 +464,7 @@ In SQL, **`NULL` means "missing/unknown"** and is **ignored** by `AVG()`, `MIN()
 | `MIN(column)` | **Silently ignores `NULL`** | **Returns** $-999.0$ / $-9999.0$ as absolute network minimum |
 | `MAX(column)` | **Silently ignores `NULL`** | Returns sentinel if ADC shorts to `9999.0` |
 
-#### Essential Null & Cleaning Functions
+#### 2.4.2 Essential Null & Cleaning Functions
 
 | SQL Function / Operator | Meteorological Example | What It Does |
 | :--- | :--- | :--- |
@@ -473,7 +473,7 @@ In SQL, **`NULL` means "missing/unknown"** and is **ignored** by `AVG()`, `MIN()
 | `COALESCE(col, fallback)` | `SUM(COALESCE(precip_1h_mm, 0.0))` | Replaces `NULL` with `0.0` when summing rainfall |
 | `ROUND(expr, decimals)` | `ROUND(temp_c + 273.15, 2) AS temp_k` | Rounds floating-point calculations |
 
-#### In-Flight & Permanent Sanitization Patterns
+#### 2.4.3 In-Flight & Permanent Sanitization Patterns
 
 > [!WARNING]
 > **Notice the two different `.db` files below!**
@@ -523,7 +523,7 @@ WHERE precip_1h_mm = -9999.0;
 
 ---
 
-## PART III: Filtering, Classification, Temporal Bucketing & `JOIN` Verification
+## 3. PART III: Filtering, Classification, Temporal Bucketing & `JOIN` Verification
 
 > [!IMPORTANT]
 > ** Database Switch — All SQL Queries in Part III Run on `day1/weather_ops.db`!**
@@ -532,7 +532,7 @@ WHERE precip_1h_mm = -9999.0;
 > .open weather_ops.db
 > ```
 
-### 1. Operational Classification (`CASE WHEN`) & Climatological Rollups (`GROUP BY` / `HAVING`)
+### 3.1 Operational Classification (`CASE WHEN`) & Climatological Rollups (`GROUP BY` / `HAVING`)
 
 ```sql
 -- TARGET FILE: day1/weather_ops.db
@@ -573,7 +573,7 @@ ORDER BY daily_rain_mm DESC;
 
 ---
 
-### 2. Synoptic Bucketing & Temporal Intervals (SQLite vs. PostgreSQL)
+### 3.2 Synoptic Bucketing & Temporal Intervals (SQLite vs. PostgreSQL)
 
 Raw pings arrive asynchronously. Telemetry must be aggregated into regular synoptic hours ($00:00, 01:00, \dots$).
 
@@ -588,7 +588,7 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 
 ---
 
-### 3. Normalization (`1NF`–`3NF`) vs. Denormalization Quick Reference
+### 3.3 Normalization (`1NF`–`3NF`) vs. Denormalization Quick Reference
 
 | Pattern | Rule / Structure | Where We Use It in the Bootcamp | Key Trade-Off |
 | :--- | :--- | :--- | :--- |
@@ -599,7 +599,7 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 
 ---
 
-### 4. SQL `JOIN` Compatibility Matrix (`SQLite < 3.39` vs. `3.39+` vs. `MySQL 8.0/8.4` vs. `PostgreSQL` vs. `DuckDB`)
+### 3.4 SQL `JOIN` Compatibility Matrix (`SQLite < 3.39` vs. `3.39+` vs. `MySQL 8.0/8.4` vs. `PostgreSQL` vs. `DuckDB`)
 
 > [!IMPORTANT]
 > **Cross-Engine `JOIN` Boundaries (`SQLite < 3.39` & `MySQL 8.0/8.4`):**
@@ -623,7 +623,7 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 
 ---
 
-## PART IV: Common Table Expressions (CTEs), Recursive Grids & Window Functions
+## 4. PART IV: Common Table Expressions (CTEs), Recursive Grids & Window Functions
 
 > [!IMPORTANT]
 > ** Database Switch — All SQL Queries in Part IV Run on `day1/weather_telemetry.db`!**
@@ -632,7 +632,7 @@ Raw pings arrive asynchronously. Telemetry must be aggregated into regular synop
 > .open weather_telemetry.db
 > ```
 
-### 1. Multi-Stage CTE Pipeline Blueprint
+### 4.1 Multi-Stage CTE Pipeline Blueprint
 
 Use CTEs (`WITH` clauses) to organize transformations as a linear Directed Acyclic Graph (DAG) instead of deeply nested subqueries:
 
@@ -668,7 +668,7 @@ WHERE peak_gust >= 20.0
 ORDER BY peak_gust DESC;
 ```
 
-### 2. Gap Detection via Recursive Time Grid (`WITH RECURSIVE`)
+### 4.2 Gap Detection via Recursive Time Grid (`WITH RECURSIVE`)
 
 A simple `GROUP BY` cannot report on hours where a station sent zero packets. Generate a continuous reference grid to spot communication blackouts:
 
@@ -701,11 +701,11 @@ GROUP BY t.slot, s.station_id;
 
 ---
 
-### 3. Window Functions for Sensor Streams
+### 4.3 Window Functions for Sensor Streams
 
 Unlike `GROUP BY`, which collapses rows, **window functions preserve individual observation rows** while computing context across partitions.
 
-#### Syntax Layout
+#### 4.3.1 Syntax Layout
 
 $$
 \text{FUNCTION}(\dots)\ \mathbf{OVER}\ (\mathbf{PARTITION\ BY}\ \text{station}\ \mathbf{ORDER\ BY}\ \text{time}\ [\mathbf{FRAME}])
@@ -723,7 +723,7 @@ $$
  └──────────────────────┴─────────────────────────────────────────────────┘
 ```
 
-#### Sliding Frames: `ROWS` vs. `RANGE`
+#### 4.3.2 Sliding Frames: `ROWS` vs. `RANGE`
 
 ```sql
 -- ROWS: Exact physical count of preceding rows
@@ -740,9 +740,9 @@ ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING
 
 ---
 
-### 4. Field-Ready Telemetry Window Recipes
+### 4.4 Field-Ready Telemetry Window Recipes
 
-#### Recipe 1: 3-Hour Barometric Tendency ($\Delta P$)
+#### 4.4.1 Recipe 1: 3-Hour Barometric Tendency ($\Delta P$)
 Detect approaching squall lines or frontal passages:
 ```sql
 -- TARGET FILE: day1/weather_telemetry.db
@@ -763,7 +763,7 @@ FROM raw_telemetry
 WHERE pressure > -900.0;
 ```
 
-#### Recipe 2: Latest State Deduplication (`ROW_NUMBER()`)
+#### 4.4.2 Recipe 2: Latest State Deduplication (`ROW_NUMBER()`)
 Retrieve the single latest observation per station without correlated subqueries:
 ```sql
 -- TARGET FILE: day1/weather_telemetry.db
@@ -787,7 +787,7 @@ FROM indexed_stream
 WHERE recency_rank = 1;
 ```
 
-#### Recipe 3: Rolling 5-Point Wind Gust Smoother
+#### 4.4.3 Recipe 3: Rolling 5-Point Wind Gust Smoother
 Filter out single-ping turbulent noise:
 ```sql
 -- TARGET FILE: day1/weather_telemetry.db
@@ -810,7 +810,7 @@ FROM raw_telemetry
 WHERE wind_speed >= 0.0;
 ```
 
-#### Recipe 4: Thermal Spike / Inversion Detector
+#### 4.4.4 Recipe 4: Thermal Spike / Inversion Detector
 Flag measurements deviating by $>6.0^\circ\text{C}$ from a centered moving window:
 ```sql
 -- TARGET FILE: day1/weather_telemetry.db

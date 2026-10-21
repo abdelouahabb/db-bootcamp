@@ -149,7 +149,7 @@ What occurs if a Primary accepts writes with `w: 1` (acknowledged in Primary RAM
 
 ## 4. Step-by-Step: Deploying & Operating a 3-Node Replica Set
 
-### Step 1: Configure `/etc/mongod.conf` on All 3 Nodes (`10.20.2.11`, `.12`, `.13`)
+### 4.1 Step 1: Configure `/etc/mongod.conf` on All 3 Nodes (`10.20.2.11`, `.12`, `.13`)
 
 1. Generate a shared Keyfile so the 3 `mongod` nodes can authenticate to each other:
    ```bash
@@ -172,7 +172,7 @@ What occurs if a Primary accepts writes with `w: 1` (acknowledged in Primary RAM
      oplogSizeMB: 20480             # 20 GB Oplog (holds 48-72h of bursty synoptic/radar writes!)
    ```
 
-### Step 2: Initialize the Replica Set in `mongosh` (Connect to `mongo-node1`)
+### 4.2 Step 2: Initialize the Replica Set in `mongosh` (Connect to `mongo-node1`)
 
 ```javascript
 // Initialize the 3-node Replica Set with custom priorities and analytics workload tags!
@@ -201,7 +201,7 @@ rs.initiate({
 });
 ```
 
-### Step 3: Multi-Node Replica Set Administration & Failover Commands (`rs.*`)
+### 4.3 Step 3: Multi-Node Replica Set Administration & Failover Commands (`rs.*`)
 
 ```javascript
 // 1. Check overall cluster health, current Primary, node states, and heartbeat latency:

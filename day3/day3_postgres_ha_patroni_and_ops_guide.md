@@ -50,7 +50,7 @@ Formulated by Eric Brewer and proven by Gilbert and Lynch, the CAP theorem state
 * **Availability ($A$):** Every non-failing node returns a successful (non-error) response to every request—without guaranteeing that it contains the most recent write.
 * **Partition Tolerance ($P$):** The system continues to operate despite an arbitrary number of messages being dropped or delayed by the network between nodes.
 
-#### The Physical Reality of Partition Tolerance ($P$)
+#### 1.1.1 The Physical Reality of Partition Tolerance ($P$)
 In real-world meteorological infrastructure—involving remote mountain radar stations, offshore buoys, microwave relays, and cellular modems—**network partitions ($P$) are unavoidable**. Therefore, distributed systems architecture is not a choice between $C$, $A$, and $P$. **You must choose how the system behaves when a partition ($P$) occurs:**
 
 $$
@@ -146,14 +146,14 @@ PostgreSQL provides two built-in replication engines. Weather centers often use 
 ```
 
 ### 3.1 Asynchronous vs. Synchronous Commit Modes
-1. **Asynchronous Mode (`synchronous_commit = off` or `local`):**
-   - Primary writes transaction to local WAL and immediately returns `COMMIT` to client.
-   - **CAP Profile:** Prioritizes **Availability ($A > C$)**.
-   - **Risk:** **Data Loss ($\text{RPO} > 0$)** if the Primary suffers power loss before buffered WAL reaches the Standby.
-2. **Synchronous Mode (`synchronous_commit = on` or `remote_apply`):**
-   - Primary blocks client `COMMIT` until the Standby confirms WAL write (`remote_write`/`on`) or memory replay (`remote_apply`).
-   - **CAP Profile:** Prioritizes **Consistency ($C > A$, $\text{RPO} = 0$)**.
-   - **Risk:** **Write Stall ($\text{Availability} = 0$)** if the network link to the synchronous standby drops and no other standby is available in `synchronous_standby_names`.
+#### 3.1.1 Asynchronous Mode (`synchronous_commit = off` or `local`)
+- Primary writes transaction to local WAL and immediately returns `COMMIT` to client.
+- **CAP Profile:** Prioritizes **Availability ($A > C$)**.
+- **Risk:** **Data Loss ($\text{RPO} > 0$)** if the Primary suffers power loss before buffered WAL reaches the Standby.
+#### 3.1.2 Synchronous Mode (`synchronous_commit = on` or `remote_apply`)
+- Primary blocks client `COMMIT` until the Standby confirms WAL write (`remote_write`/`on`) or memory replay (`remote_apply`).
+- **CAP Profile:** Prioritizes **Consistency ($C > A$, $\text{RPO} = 0$)**.
+- **Risk:** **Write Stall ($\text{Availability} = 0$)** if the network link to the synchronous standby drops and no other standby is available in `synchronous_standby_names`.
 
 ### 3.2 The Nightmare of Relational Split-Brain
 
@@ -229,33 +229,33 @@ Even when using Patroni, every database engineer must know how raw PostgreSQL re
 
 ### 4.1 Step 1: Configure the Primary Node (`pg-node1` — `10.20.1.11`)
 
-1. **In `postgresql.conf` on Primary:**
-   ```ini
-   listen_addresses = '*'
-   wal_level = replica                  # Required for physical streaming (use 'logical' if also using Logical Replication)
-   max_wal_senders = 10                 # Max concurrent standby replication streams
-   max_replication_slots = 10           # Prevents Primary from deleting WAL still needed by a Standby!
-   wal_keep_size = 4GB                  # Safety buffer of WAL retained on Primary
-   max_slot_wal_keep_size = 50GB        # Safety guardrail (PG 13+): prevents a dead standby slot from filling Primary disk 100%!
-   hot_standby = on                     # Allows read-only queries when a node is a Standby
+#### 4.1.1 In `postgresql.conf` on Primary
+```ini
+listen_addresses = '*'
+wal_level = replica                  # Required for physical streaming (use 'logical' if also using Logical Replication)
+max_wal_senders = 10                 # Max concurrent standby replication streams
+max_replication_slots = 10           # Prevents Primary from deleting WAL still needed by a Standby!
+wal_keep_size = 4GB                  # Safety buffer of WAL retained on Primary
+max_slot_wal_keep_size = 50GB        # Safety guardrail (PG 13+): prevents a dead standby slot from filling Primary disk 100%!
+hot_standby = on                     # Allows read-only queries when a node is a Standby
 
-   # OPTIONAL: Enable Synchronous Replication so commits wait for pg-node2:
-   # synchronous_commit = on
-   # synchronous_standby_names = 'FIRST 1 (pg_node2)'
-   ```
+# OPTIONAL: Enable Synchronous Replication so commits wait for pg-node2:
+# synchronous_commit = on
+# synchronous_standby_names = 'FIRST 1 (pg_node2)'
+```
 
-2. **Create Dedicated Replication User & Physical Replication Slot in `psql` on Primary:**
-   ```sql
-   CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'ReplSecretPassword!';
-   SELECT pg_create_physical_replication_slot('slot_pg_node2');
-   ```
+#### 4.1.2 Create Dedicated Replication User & Physical Replication Slot in `psql` on Primary
+```sql
+CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'ReplSecretPassword!';
+SELECT pg_create_physical_replication_slot('slot_pg_node2');
+```
 
-3. **Allow Standby IPs in `pg_hba.conf` on Primary (`SELECT pg_reload_conf();`):**
-   ```text
-   # TYPE   DATABASE      USER          ADDRESS          METHOD
-   host     replication   replicator    10.20.1.12/32    scram-sha-256
-   host     replication   replicator    10.20.1.13/32    scram-sha-256
-   ```
+#### 4.1.3 Allow Standby IPs in `pg_hba.conf` on Primary (`SELECT pg_reload_conf();`)
+```text
+# TYPE   DATABASE      USER          ADDRESS          METHOD
+host     replication   replicator    10.20.1.12/32    scram-sha-256
+host     replication   replicator    10.20.1.13/32    scram-sha-256
+```
 
 ### 4.2 Step 2: Bootstrap the Standby Node (`pg-node2` — `10.20.1.12`)
 
@@ -588,7 +588,7 @@ patronictl -c /etc/patroni/patroni.yml reload weather-cluster
 
 ## 6. Hands-On CAP Failure Labs: Simulating Real-World Disasters
 
-### Lab 1: Simulating Sudden Primary Power Loss (Automated Failover & `pg_rewind`)
+### 6.1 Lab 1: Simulating Sudden Primary Power Loss (Automated Failover & `pg_rewind`)
 1. Boot the stack (`docker compose up -d`) and verify `etcd` health (`docker exec -it etcd1 etcdctl endpoint health --cluster`).
 2. Create an advisory table and insert a row via HAProxy Primary Port `5000`:
    ```bash
@@ -615,7 +615,7 @@ patronictl -c /etc/patroni/patroni.yml reload weather-cluster
    ```
 5. Start the old primary (`docker start pg_node1`) and observe Patroni execute **`pg_rewind`** to heal `pg_node1` onto Timeline 2 as a Standby replica!
 
-### Lab 2: Simulating the CAP Write Stall (Network Isolation Under Synchronous CP Mode)
+### 6.2 Lab 2: Simulating the CAP Write Stall (Network Isolation Under Synchronous CP Mode)
 1. Enable strict synchronous replication (`CP` mode):
    ```bash
    docker exec -it pg_node2 patronictl -c /etc/patroni/patroni.yml edit-config --set synchronous_mode=true
@@ -662,7 +662,7 @@ ALTER ROLE forecaster_ro SET statement_timeout = '60s';
 ### 7.2 Connection Pooling with `PgBouncer` (Handling 5,000+ Weather Stations)
 As covered on Day 2, opening 5,000 direct TCP connections to PostgreSQL spawns 5,000 OS processes and exhausts RAM. **`PgBouncer`** sits on port `6432` and multiplexes thousands of station connections over a small pool of **40 real PostgreSQL backend processes**!
 
-#### `/etc/pgbouncer/pgbouncer.ini` (Production Weather Template)
+#### 7.2.1 `/etc/pgbouncer/pgbouncer.ini` (Production Weather Template)
 ```ini
 [databases]
 weather_ops = host=127.0.0.1 port=5432 dbname=weather_ops
@@ -686,7 +686,7 @@ reserve_pool_size = 10
 
 ### 7.3 PostgreSQL Backup & Point-in-Time Recovery (PITR) Runbook
 
-#### 1. Logical Backups (`pg_dump` & `pg_restore` — Best for Specific Schemas or Detached Partitions)
+#### 7.3.1 Logical Backups (`pg_dump` & `pg_restore` — Best for Specific Schemas or Detached Partitions)
 Always use **Directory (`-Fd`) or Custom Format (`-Fc`)** instead of plain `.sql` text: it is **compressed automatically**, supports **parallel multi-core dump/restore (`-j 4`)**, and lets you restore a single table or detached monthly partition!
 
 ```bash
@@ -700,7 +700,7 @@ pg_dump -U postgres -d weather_ops -Fc -t synoptic.obs_y2026m06 -f /backups/obs_
 pg_restore -U postgres -d weather_ops -j 4 /backups/obs_y2026m06.dump
 ```
 
-#### 2. Physical Base Backups & Point-in-Time Recovery (`pg_basebackup` / `pgBackRest`)
+#### 7.3.2 Physical Base Backups & Point-in-Time Recovery (`pg_basebackup` / `pgBackRest`)
 For databases $> 100\text{ GB}$, logical `pg_dump` is too slow to restore during an emergency. Physical backups copy the raw 8 KB heap pages + archive the `pg_wal` stream so you can recover to the **exact second before an accidental `DROP TABLE`**!
 
 ```bash
@@ -712,7 +712,7 @@ pg_basebackup -U postgres -D /backups/base_20261007 -Ft -z -Xs -P
 
 ### 7.4 Emergency Operational Troubleshooting (3:00 AM On-Call Sheet)
 
-#### Find & Kill a Runaway Query or Lock Blocker in PostgreSQL
+#### 7.4.1 Find & Kill a Runaway Query or Lock Blocker in PostgreSQL
 ```sql
 -- 1. Find any query running longer than 30 seconds or blocking another process:
 SELECT

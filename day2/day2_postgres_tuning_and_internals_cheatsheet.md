@@ -25,7 +25,7 @@
 
 ### 1.1 Installation Commands (Ubuntu/Debian, RHEL/Rocky, Docker)
 
-#### Option A: Ubuntu / Debian (APT)
+#### 1.1.1 Option A: Ubuntu / Debian (APT)
 ```bash
 # 1. Install PostgreSQL server and contrib extensions (pageinspect, pgstattuple, pg_stat_statements)
 sudo apt update
@@ -40,14 +40,14 @@ sudo -u postgres createuser --interactive --pwprompt weather_eng
 sudo -u postgres createdb -O weather_eng weather_ops
 ```
 
-#### Option B: RHEL / Rocky / AlmaLinux (DNF)
+#### 1.1.2 Option B: RHEL / Rocky / AlmaLinux (DNF)
 ```bash
 sudo dnf install -y postgresql-server postgresql-contrib
 sudo postgresql-setup --initdb
 sudo systemctl enable --now postgresql
 ```
 
-#### Option C: Docker (Fastest Lab Setup with Mandatory UTC)
+#### 1.1.3 Option C: Docker (Fastest Lab Setup with Mandatory UTC)
 ```bash
 docker run -d \
   --name weather-pg \
@@ -96,7 +96,7 @@ SHOW hba_file;         -- Client authentication rules (pg_hba.conf)
 | `$PGDATA/pg_xact/` | Transaction commit/abort status bitmaps (formerly `pg_clog`) |
 | `$PGDATA/log/` | Server error logs, checkpoint statistics (`log_checkpoints`), and slow-query logs |
 
-### Enabling Remote Connections (DBeaver / Automated Ingest Scripts)
+### 2.1 Enabling Remote Connections (DBeaver / Automated Ingest Scripts)
 1. In `postgresql.conf`: `listen_addresses = '*'` (Default is `'localhost'`).
 2. In `pg_hba.conf`:
    ```text
@@ -109,7 +109,7 @@ SHOW hba_file;         -- Client authentication rules (pg_hba.conf)
 
 ## 3. Production `postgresql.conf` Profile for Weather Workloads
 
-### Reference Server Profile: **32 GB RAM, 8 vCPU, NVMe SSD**
+### 3.1 Reference Server Profile: **32 GB RAM, 8 vCPU, NVMe SSD**
 
 ```ini
 # =========================================================================
@@ -207,7 +207,7 @@ shared_preload_libraries = 'pg_stat_statements'
 ================================================================================
 ```
 
-### Alignment Size Lookup Table ("Tuple Tetris")
+### 4.1 Alignment Size Lookup Table ("Tuple Tetris")
 | Alignment Boundary | `typalign` | PostgreSQL Data Types |
 | :--- | :--- | :--- |
 | **8-Byte Aligned** (Offsets `0, 8, 16...`) | `'d'` (`double`) | `BIGINT` (`int8`), `BIGSERIAL`, `TIMESTAMPTZ`, `TIMESTAMP`, `DOUBLE PRECISION` (`float8`), `INTERVAL` (16B) |
@@ -215,9 +215,9 @@ shared_preload_libraries = 'pg_stat_statements'
 | **2-Byte Aligned** (Offsets `0, 2, 4...`) | `'s'` (`short`) | `SMALLINT` (`int2`) |
 | **1-Byte / Packed** (Any offset) | `'c'` (`char`) | `UUID` (**16B fixed, zero alignment padding!**), `BOOLEAN` (1B), `"char"`, and short variable-length (`NUMERIC`, `VARCHAR`, `TEXT`, `JSONB` with 1B `varlena` header) |
 
-### 4.1 Data Type & Uniqueness Decision Matrices (Black Boxes 2A, 2B, 2C, 2D)
+### 4.2 Data Type & Uniqueness Decision Matrices (Black Boxes 2A, 2B, 2C, 2D)
 
-#### A. Temporal Types (`TIMESTAMPTZ` vs. `TIMESTAMP` — Both Are 8 Bytes on Disk!)
+#### 4.2.1 A. Temporal Types (`TIMESTAMPTZ` vs. `TIMESTAMP` — Both Are 8 Bytes on Disk!)
 > **The Hardware Secret:** Neither `TIMESTAMPTZ` nor `TIMESTAMP` stores a timezone string or offset in its 8 bytes on disk. Both store a `BIGINT` count of microseconds since `2000-01-01 00:00:00`. The difference is **Boundary Normalization**: `TIMESTAMPTZ` converts any input offset to **UTC** on `INSERT` and converts back to the session's `timezone` on `SELECT`, whereas `TIMESTAMP` strips the offset and stores raw wall-clock numbers (causing 1-hour duplicate collisions during Autumn DST fallback).
 
 | Pattern | SQL Declaration | Disk Size | UTC Normalized? | DST-Safe? | When to Use |
@@ -227,7 +227,7 @@ shared_preload_libraries = 'pg_stat_statements'
 | **3. Abstract Calendar Date/Time** | `DATE` (`4B`) / `TIME` (`8B`) | `4B / 8B` | N/A | N/A | Daily climatological summaries (`valid_date DATE`) or scheduled launch times (`00:00`, `12:00`). |
 | **4. Naive `TIMESTAMP` *(Anti-Pattern)*** | `TIMESTAMP WITHOUT TIME ZONE` | `8 bytes` | **NO** | **NO** | **Avoid for physical events.** Only acceptable for synthetic simulation clocks with no real-world timezone. |
 
-#### B. Exact Decimal (`NUMERIC(p,s)`) vs. IEEE-754 Binary Float (`REAL` / `DOUBLE PRECISION`)
+#### 4.2.2 B. Exact Decimal (`NUMERIC(p,s)`) vs. IEEE-754 Binary Float (`REAL` / `DOUBLE PRECISION`)
 > **The `(p, s)` Trap:** In `NUMERIC(p, s)`, $p$ is **total digits** (left + right of decimal) and $s$ is **fractional digits**. Maximum integer digits = $p - s$. Thus `NUMERIC(4,1)` holds `-999.9` to `999.9` (inserting `1013.2` raises `22003: numeric field overflow`; pressure requires `NUMERIC(6,1)`).
 
 | Pattern | SQL Declaration | Disk Size | Math Representation | `0.1 + 0.2 = 0.3`? | When to Use |
@@ -237,7 +237,7 @@ shared_preload_libraries = 'pg_stat_statements'
 | **3. Compact 32-Bit Sensor Float** | `REAL` (`float4`) | `4 bytes` (fixed) | IEEE-754 binary32 ($\approx 6–7$ digits) | **NO** | Massive 5M–1B row raw IoT tables (`day3` benchmark) where saving 4 bytes/column in Tuple Tetris is paramount. |
 | **4. Scaled Integer Quantization** | `SMALLINT` (`int2`) / `INTEGER` (`int4`) | `2B / 4B` (fixed) | Integer $\times \text{scale\_factor}$ | **YES** | Satellite rasters (`COG`/`NetCDF4` `UInt16` with `scale_factor = 0.01`) and ultra-compact wire protocols. |
 
-#### C. `PRIMARY KEY` vs. `UNIQUE NOT NULL` vs. Nullable `UNIQUE` (`NULLS DISTINCT`)
+#### 4.2.3 C. `PRIMARY KEY` vs. `UNIQUE NOT NULL` vs. Nullable `UNIQUE` (`NULLS DISTINCT`)
 | Constraint Pattern | Implicitly Adds `NOT NULL`? | Multiple `NULL`s Allowed? | When to Use |
 | :--- | :--- | :--- | :--- |
 | **`PRIMARY KEY (col)`** | **YES** | **NO** (`0` `NULL`s) | Every table's canonical row identity (`station_id`, `obs_id`, or partitioned `(obs_time, station_id)`). |
@@ -245,7 +245,7 @@ shared_preload_libraries = 'pg_stat_statements'
 | **`UNIQUE` (Default `NULLS DISTINCT`)** | **NO** | **YES (Unlimited `NULL`s!)** | Optional external identifiers (`wigos_id VARCHAR(32) UNIQUE`) where unassigned stations are `NULL`, but every assigned ID must be unique. |
 | **`UNIQUE NULLS NOT DISTINCT` *(PG 15+)*** | **NO** | **At most ONE `NULL`** | Composite keys with optional dimensions where `(60390, NULL)` must not be inserted twice. |
 
-#### D. Surrogate Primary Keys (`BIGINT IDENTITY` vs. `UUIDv7` RFC 9562 vs. `UUIDv4`)
+#### 4.2.4 D. Surrogate Primary Keys (`BIGINT IDENTITY` vs. `UUIDv7` RFC 9562 vs. `UUIDv4`)
 > **The B-Tree & WAL Secret:** Random `UUIDv4` (`gen_random_uuid()`) scatters `INSERT`s uniformly across all B-Tree leaf pages, causing **50/50 page splits** (~55% fill density), `shared_buffers` cache thrashing, and **$500\times$ `pg_wal` Full-Page Write (`FPW`) amplification** (dirtying 1,000 random 8 KB pages after a checkpoint logs $8\text{ MB}$ of WAL instead of $16\text{ KB}$!). **`UUIDv7` (RFC 9562)** places a **48-bit big-endian Unix millisecond timestamp** in the top 6 bytes (`[48b unix_ts_ms][4b ver=7][12b rand_a][2b var=10][62b rand_b]`), restoring 100% rightmost B-Tree leaf append locality while allowing offline edge weather stations to generate globally unique IDs without central sequence coordination.
 
 | Identifier Strategy | SQL Declaration | Disk Size | B-Tree Locality | WAL FPW Cost | When to Use |

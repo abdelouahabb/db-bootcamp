@@ -468,7 +468,7 @@ LIMIT 3;
 
 Execute this hands-on lab in `psql` against `weather_ops_db` (created in Module 0 / `day3_postgis_5m_benchmark.sql`) to install the diagnostic suite and run operational health audits.
 
-### Step 1: Install and Enable Diagnostic Extensions
+### 8.1 Step 1: Install and Enable Diagnostic Extensions
 ```sql
 \c weather_ops_db
 
@@ -482,7 +482,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 \dx
 ```
 
-#### Expected Terminal Output:
+#### 8.1.1 Expected Terminal Output:
 ```text
                                   List of installed extensions
       Name      | Version |   Schema   |                            Description                            
@@ -497,7 +497,7 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 (7 rows)
 ```
 
-### Step 2: Buffer Cache Forensics (`pg_buffercache`)
+### 8.2 Step 2: Buffer Cache Forensics (`pg_buffercache`)
 ```sql
 SELECT 
     CASE 
@@ -516,7 +516,7 @@ ORDER BY count(*) DESC
 LIMIT 8;
 ```
 
-### Step 3: Exact Bloat Audit on a Partition (`pgstattuple`)
+### 8.3 Step 3: Exact Bloat Audit on a Partition (`pgstattuple`)
 ```sql
 SELECT 
     table_len AS total_file_bytes,
@@ -529,7 +529,7 @@ FROM pgstattuple('telemetry_y2026m10');
 ```
 - **Diagnostic Decision Rule:** If `bloat_dead_pct > 20%` and `free_space_pct > 25%`, and standard `VACUUM` cannot shrink the file because live tuples are scattered at the end of the heap, schedule an online compaction with `pg_repack`.
 
-### Step 4: Trigram Fuzzy Search on Station Registries (`pg_trgm`)
+### 8.4 Step 4: Trigram Fuzzy Search on Station Registries (`pg_trgm`)
 ```sql
 CREATE INDEX IF NOT EXISTS idx_stations_trgm_name ON stations USING GIN (station_name gin_trgm_ops);
 

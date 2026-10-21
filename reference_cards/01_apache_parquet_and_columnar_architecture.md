@@ -207,13 +207,17 @@ Why does Parquet write its metadata at the physical end of the file instead of t
 
 When DuckDB, PyArrow, or Spark reads a Parquet file:
 
-1. **Seek to EOF:** The engine reads the last **8 bytes** of the file to extract the 4-byte footer length and verify the `"PAR1"` magic number.
-2. **Fetch Metadata:** The engine seeks backward by the footer length and parses the Thrift `FileMetaData` payload.
-3. **Execution Plan Generation:** Without reading a single byte of row group data, the engine:
-   * Inspects the schema.
-   * Maps out which byte ranges belong to the queried columns (**Projection Pushdown / Column Pruning**).
-   * Evaluates the query `WHERE` clause against the min/max statistics of each row group (**Predicate Pushdown / Row Group Skipping**).
-4. **Selective Byte-Range Fetch:** The engine issues targeted filesystem or HTTP range reads exclusively for the surviving column byte chunks.
+#### 3.4.1 Seek to EOF
+The engine reads the last **8 bytes** of the file to extract the 4-byte footer length and verify the `"PAR1"` magic number.
+#### 3.4.2 Fetch Metadata
+The engine seeks backward by the footer length and parses the Thrift `FileMetaData` payload.
+#### 3.4.3 Execution Plan Generation
+Without reading a single byte of row group data, the engine:
+* Inspects the schema.
+* Maps out which byte ranges belong to the queried columns (**Projection Pushdown / Column Pruning**).
+* Evaluates the query `WHERE` clause against the min/max statistics of each row group (**Predicate Pushdown / Row Group Skipping**).
+#### 3.4.4 Selective Byte-Range Fetch
+The engine issues targeted filesystem or HTTP range reads exclusively for the surviving column byte chunks.
 
 ---
 
@@ -301,11 +305,13 @@ $$
 
 ### 5.1 Projection Pushdown (Column Pruning) & Predicate Pushdown (Row Group Skipping)
 
-1. **Projection Pushdown (Column Pruning):** If your SQL or Python script asks for `SELECT station_id, AVG(temp_c)`, the Parquet reader reads **only** the `station_id` and `temp_c` column chunks—skipping 90% of the file I/O!
-2. **Predicate Pushdown (Row Group Skipping / Zone Maps):**
-   * Before reading a Row Group, the engine checks the **File Footer** statistics (`min` and `max` per column—identical in concept to PostgreSQL's **BRIN index** and MongoDB's **Time-Series buckets**!).
-   * If the filter condition mathematically cannot match any row within that range (e.g., searching for `temperature > 40.0` when $\text{Max} = 28.1$ or $36.4^\circ\text{C}$), the query engine **skips the entire Row Group (e.g., 500,000 to 1,000,000 rows)** without reading or decompressing a single byte from disk!
-3. **Page-Level Pruning (Parquet v2):** If a Row Group matches, the engine reads the Page Index at the beginning of the Column Chunk and skips individual 1 MB data pages whose internal min/max bounds fail the predicate.
+#### 5.1.1 Projection Pushdown (Column Pruning)
+If your SQL or Python script asks for `SELECT station_id, AVG(temp_c)`, the Parquet reader reads **only** the `station_id` and `temp_c` column chunks—skipping 90% of the file I/O!
+#### 5.1.2 Predicate Pushdown (Row Group Skipping / Zone Maps)
+* Before reading a Row Group, the engine checks the **File Footer** statistics (`min` and `max` per column—identical in concept to PostgreSQL's **BRIN index** and MongoDB's **Time-Series buckets**!).
+* If the filter condition mathematically cannot match any row within that range (e.g., searching for `temperature > 40.0` when $\text{Max} = 28.1$ or $36.4^\circ\text{C}$), the query engine **skips the entire Row Group (e.g., 500,000 to 1,000,000 rows)** without reading or decompressing a single byte from disk!
+#### 5.1.3 Page-Level Pruning (Parquet v2)
+If a Row Group matches, the engine reads the Page Index at the beginning of the Column Chunk and skips individual 1 MB data pages whose internal min/max bounds fail the predicate.
 
 ### 5.2 Parquet Bloom Filters
 
@@ -340,7 +346,7 @@ climatology_lake/
         └── part-0.parquet
 ```
 
-#### Directory Pruning
+#### 6.1.1 Directory Pruning
 
 When an analyst executes:
 
@@ -367,7 +373,7 @@ The most common production failure mode in data lakes is creating too many tiny 
  └───────────────────────────┴───────────────────────────┴───────────────────────────┘
 ```
 
-#### Production Rules of Thumb:
+#### 6.2.1 Production Rules of Thumb:
 
 1. **Target File Size:** Aim for $128\text{ MB}$ **to** $512\text{ MB}$ per file.
 2. **Row Group Sizing:** Configure Row Groups between $128\text{ MB}$ **and** $256\text{ MB}$ uncompressed ($\approx 250,000$ to $1,000,000$ rows). This ensures that each row group fits neatly into an L3 CPU cache or worker thread memory allocation.
@@ -579,11 +585,13 @@ print("================================================================\n")
 
 ### 7.3 Teaching Takeaways from the Benchmark
 
-1. **Physical Footprint:** Parquet with Zstandard compresses the $62\text{ MB}$ raw CSV file down to $6.81\text{ MB}$ **(**$9.12\times$ **smaller)**.
-2. **Analytical Query Speedup:** DuckDB executes the exact same analytical aggregation over Parquet in $2.85\text{ ms}$, compared to $74.50\text{ ms}$ over CSV ($26\times$ **faster**).
-3. **Why Parquet Outperforms:**
-   * **Column Projection:** Parquet loads only the byte addresses for `temperature` and `wind_speed`. The other 5 columns are never read from disk.
-   * **Zero Parsing:** Data is stored as native IEEE 754 32-bit floats. DuckDB copies the bytes directly into AVX CPU registers with zero ASCII string parsing overhead.
+#### 7.3.1 Physical Footprint
+Parquet with Zstandard compresses the $62\text{ MB}$ raw CSV file down to $6.81\text{ MB}$ **(**$9.12\times$ **smaller)**.
+#### 7.3.2 Analytical Query Speedup
+DuckDB executes the exact same analytical aggregation over Parquet in $2.85\text{ ms}$, compared to $74.50\text{ ms}$ over CSV ($26\times$ **faster**).
+#### 7.3.3 Why Parquet Outperforms
+* **Column Projection:** Parquet loads only the byte addresses for `temperature` and `wind_speed`. The other 5 columns are never read from disk.
+* **Zero Parsing:** Data is stored as native IEEE 754 32-bit floats. DuckDB copies the bytes directly into AVX CPU registers with zero ASCII string parsing overhead.
 
 ---
 
@@ -621,7 +629,7 @@ flowchart LR
 
 ### 8.2 Method 1: Python Scripts (PostgreSQL $\rightarrow$ Parquet)
 
-#### Setup Dependencies (Using a Virtual Environment)
+#### 8.2.1 Setup Dependencies (Using a Virtual Environment)
 
 ```bash
 python3 -m venv .venv
@@ -629,7 +637,7 @@ source .venv/bin/activate
 pip install "psycopg[binary]" pyarrow pandas polars connectorx
 ```
 
-#### Script A: Production Chunked Streaming with `psycopg` + `PyArrow` (Best for 10M+ Rows!)
+#### 8.2.2 Script A: Production Chunked Streaming with `psycopg` + `PyArrow` (Best for 10M+ Rows!)
 
 *Why use chunked streaming?* Calling `pd.read_sql()` on 50 million weather observations loads all 50 million rows into RAM at once and crashes with `OutOfMemory`! Streaming with a **server-side cursor** + `pyarrow.parquet.ParquetWriter` uses **< 200 MB of RAM** regardless of table size.
 
@@ -710,7 +718,7 @@ if __name__ == "__main__":
     export_postgres_to_parquet()
 ```
 
-#### Script B: Ultra-Fast Hive-Partitioned Export (`year=.../month=...`) Using `Polars` + `PyArrow`
+#### 8.2.3 Script B: Ultra-Fast Hive-Partitioned Export (`year=.../month=...`) Using `Polars` + `PyArrow`
 
 ```python
 import polars as pl
@@ -826,7 +834,7 @@ DROP TABLE synoptic.obs_y2026m06;
 
 ---
 
-### Reference Library Navigation
+### 8.6 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** ⬅ *First Card* | **Card 01 of 14** | [Next Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | [⬆ Back to Top](#apache-parquet-columnar-storage-architecture--postgresql-to-parquet-archival-reference-card)

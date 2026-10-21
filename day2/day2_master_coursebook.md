@@ -54,7 +54,9 @@
 
 ---
 
-## 1. Day 2 Objective & Core Philosophy
+## 0. Day 2 Objective & Five-Module Architectural Outline
+
+### 0.1 Day 2 Objective & Core Philosophy
 
 On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today we answer the critical engineering question:
 > *"Why can't our national meteorological center just put `weather_ops.db` on a shared network drive for 500 automated weather stations, 3 NWP ingestion pipelines, and 40 forecasters—and why does an untuned default PostgreSQL installation choke when a 00Z ECMWF/GFS dump arrives?"*
@@ -68,7 +70,7 @@ On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today 
 
 ---
 
-## 2. Five-Module Architectural Outline
+### 0.2 Five-Module Architectural Outline
 
 ```
 ┌─────────────────┬────────────────────────────────────────────────────────────────────────────┐
@@ -114,9 +116,9 @@ On Day 1, attendees learned core SQL using **SQLite** (`weather_ops.db`). Today 
 
 ---
 
-## 3. Module 1: Enterprise Deployment, Process Architecture, Host Storage Topology & Dual-Tier Memory
+## 1. Module 1: Enterprise Deployment, Process Architecture, Host Storage Topology & Dual-Tier Memory
 
-### 3.1 The Desktop Default Trap
+### 1.1 The Desktop Default Trap
 Standard installations via package managers (`apt install postgresql`) deploy PostgreSQL with conservative desktop defaults designed to coexist alongside a web browser on a small laptop:
 * **$128\text{ MB}$ of `shared_buffers`** (starving hot synoptic tables and B-Tree indexes of RAM).
 * **Checkpoints forced every $1\text{ GB}$ of Write-Ahead Log** (`max_wal_size = 1GB`, `checkpoint_timeout = 5min`).
@@ -125,7 +127,7 @@ Standard installations via package managers (`apt install postgresql`) deploy Po
 
 For an operational meteorological service ingesting thousands of high-frequency sensor packets per second and massive 00Z/12Z NWP model runs (`ECMWF-HRES`, `GFS`, `AROME`), these defaults cause severe checkpoint stalls, disk head thrashing, and connection timeouts during storm events.
 
-### 3.2 Configuration File Anatomy & Mandatory Meteorology Rule #1 (`UTC`)
+### 1.2 Configuration File Anatomy & Mandatory Meteorology Rule #1 (`UTC`)
 Every weather DBA and data engineer must know the 3 core cluster paths (queryable via `psql`):
 1. **`$PGDATA` (`SHOW data_directory;`):** Where physical 8 KB pages (`base/`) and 16 MB WAL segments (`pg_wal/`) live (e.g., `/var/lib/postgresql/16/main`).
 2. **`postgresql.conf` (`SHOW config_file;`):** Server resource, memory, WAL, autovacuum, and query planner configuration.
@@ -135,7 +137,7 @@ Every weather DBA and data engineer must know the 3 core cluster paths (queryabl
 > **Mandatory Meteorology Rule #1: Enforce `UTC` (Zulu Time) Globally!**  
 > Synoptic observations (`00Z`, `06Z`, `12Z`, `18Z`) and NWP model runs must **never** shift during local daylight saving transitions. Always enforce `timezone = 'UTC'`, `log_timezone = 'UTC'`, and `datestyle = 'iso, ymd'` in `postgresql.conf` (or via `ALTER SYSTEM`).
 
-### 3.3 Storage Decoupling & Linux Filesystem Optimization
+### 1.3 Storage Decoupling & Linux Filesystem Optimization
 
 ```
                          Production Storage Decoupling
@@ -150,36 +152,36 @@ Every weather DBA and data engineer must know the 3 core cluster paths (queryabl
  └──────────────────────────────────────┘     └──────────────────────────────────────┘
 ```
 
-1. **Decoupling the Write-Ahead Log (`pg_wal`):**
-   - PostgreSQL writes all modifications sequentially to the Write-Ahead Log (`pg_wal`) before flushing dirty pages to the table heap.
-   - If `pg_wal` and `$PGDATA/base` reside on the same physical disk, heavy analytical queries reading random 8 KB heap blocks across historical partitions directly interrupt the disk controller's sequential WAL write stream.
-   - **Production Rule:** Mount `pg_wal` (via `initdb --waldir=/data/pgwal` or symlink) onto a dedicated high-write-endurance NVMe drive.
-2. **Linux Filesystem Mount Flags (`/etc/fstab`):**
-   Use **XFS** or **ext4** with explicit mount flags disabling access-time metadata updates:
-   ```ini
-   # Production /etc/fstab entry
-   UUID=xxxx-xxxx-xxxx  /var/lib/postgresql/data  ext4  noatime,nodiratime,errors=remount-ro,data=ordered  0  2
-   ```
-   * **`noatime, nodiratime`:** Prevents the Linux kernel from issuing a metadata write every time a query reads an 8 KB block. On high-throughput meteorological read workloads, this eliminates up to **$25\%$ of unnecessary disk I/O**.
-3. **Linux Kernel & OOM-Killer Protections (`/etc/sysctl.conf`):**
-   ```ini
-   # 1. Prevent kernel from aggressively swapping shared_buffers out to disk
-   vm.swappiness = 1
+#### 1.3.1 Decoupling the Write-Ahead Log (`pg_wal`)
+- PostgreSQL writes all modifications sequentially to the Write-Ahead Log (`pg_wal`) before flushing dirty pages to the table heap.
+- If `pg_wal` and `$PGDATA/base` reside on the same physical disk, heavy analytical queries reading random 8 KB heap blocks across historical partitions directly interrupt the disk controller's sequential WAL write stream.
+- **Production Rule:** Mount `pg_wal` (via `initdb --waldir=/data/pgwal` or symlink) onto a dedicated high-write-endurance NVMe drive.
+#### 1.3.2 Linux Filesystem Mount Flags (`/etc/fstab`)
+Use **XFS** or **ext4** with explicit mount flags disabling access-time metadata updates:
+```ini
+# Production /etc/fstab entry
+UUID=xxxx-xxxx-xxxx  /var/lib/postgresql/data  ext4  noatime,nodiratime,errors=remount-ro,data=ordered  0  2
+```
+* **`noatime, nodiratime`:** Prevents the Linux kernel from issuing a metadata write every time a query reads an 8 KB block. On high-throughput meteorological read workloads, this eliminates up to **$25\%$ of unnecessary disk I/O**.
+#### 1.3.3 Linux Kernel & OOM-Killer Protections (`/etc/sysctl.conf`)
+```ini
+# 1. Prevent kernel from aggressively swapping shared_buffers out to disk
+vm.swappiness = 1
 
-   # 2. Guard against Linux OOM-Killer terminating the PostgreSQL postmaster process
-   vm.overcommit_memory = 2
-   vm.overcommit_ratio = 80
+# 2. Guard against Linux OOM-Killer terminating the PostgreSQL postmaster process
+vm.overcommit_memory = 2
+vm.overcommit_ratio = 80
 
-   # 3. Allow large IPC shared memory allocation
-   kernel.shmmax = 18446744073709551615
-   kernel.shmall = 18446744073709551615
-   ```
+# 3. Allow large IPC shared memory allocation
+kernel.shmmax = 18446744073709551615
+kernel.shmall = 18446744073709551615
+```
 
-### 3.4 Process-per-Connection Model & Connection Pooling (`PgBouncer`)
+### 1.4 Process-per-Connection Model & Connection Pooling (`PgBouncer`)
 * **`postmaster` (Main Supervisor Daemon):** Listens on TCP port `5432` and forks a dedicated OS **`postgres` backend process** for every client connection, alongside background daemons (`checkpointer`, `background writer`, `walwriter`, `autovacuum launcher`, `logical replication launcher`).
 * **Why `max_connections` Should Be Kept Moderate (`100`–`200`, Never `5000`):** Each backend process allocates ~5–10 MB of private RAM and increases CPU context switching and shared-memory spinlock contention during Buffer Pool scans. If 2,000 automated weather stations transmit every minute, place **PgBouncer** (in `transaction` pooling mode) in front of PostgreSQL and keep `max_connections = 200`.
 
-#### PostgreSQL 16 Process, Dual-Tier Memory & NVMe Storage Architecture
+#### 1.4.1 PostgreSQL 16 Process, Dual-Tier Memory & NVMe Storage Architecture
 
 ```mermaid
 flowchart TD
@@ -221,7 +223,7 @@ flowchart TD
     OSCACHE <-->|"noatime, nodiratime"| NVME_DATA
 ```
 
-### 3.5 Dual-Tier Caching Architecture: `shared_buffers` vs. Linux OS Page Cache
+### 1.5 Dual-Tier Caching Architecture: `shared_buffers` vs. Linux OS Page Cache
 Unlike MySQL InnoDB, which uses direct I/O (`O_DIRECT`) to bypass the operating system cache and allocates $70\%\text{–}80\%$ of RAM to its own Buffer Pool, PostgreSQL relies on a **dual-tier caching architecture**:
 
 ```
@@ -238,13 +240,13 @@ Unlike MySQL InnoDB, which uses direct I/O (`O_DIRECT`) to bypass the operating 
  └────────────────────────────┴───────────────────────────────────────────┘
 ```
 
-#### Why Setting `shared_buffers = 80%` Degrades PostgreSQL
+#### 1.5.1 Why Setting `shared_buffers = 80%` Degrades PostgreSQL
 Setting `shared_buffers` to $80\%$ of RAM (an InnoDB habit) harms PostgreSQL performance for three reasons:
 1. **Double Buffering:** Disk blocks read via standard buffered I/O enter the Linux OS page cache first and are then copied into `shared_buffers`.
 2. **Buffer Mapping Lock Contention:** The Linux kernel's page cache operates in kernel space with minimal overhead, whereas managing an oversized `shared_buffers` pool increases clock-sweep and buffer mapping lock contention across PostgreSQL backends.
 3. **Sort & Hash Join Deprivation (`work_mem`):** Analytical weather queries (joining `nwp.forecasts` with `synoptic.observations`, computing window functions) allocate **`work_mem` per sort/hash operation**. If `shared_buffers` monopolizes host RAM, queries either trigger the OS OOM-killer or spill to slow temporary disk files.
 
-#### Memory Sizing Rules for a 32 GB RAM Weather Database Server
+#### 1.5.2 Memory Sizing Rules for a 32 GB RAM Weather Database Server
 * **`shared_buffers = 8GB` (~25% of RAM):** Caches hot 8 KB pages of recent synoptic observations and B-Tree indexes (`huge_pages = try` reduces CPU TLB page-table overhead).
 * **`effective_cache_size = 24GB` (~75% of RAM):** Does *not* allocate RAM; it is a mathematical hint telling the Query Planner how much combined RAM (`shared_buffers` + Linux OS Page Cache) is available to hold cached pages so it favors Index Scans over full Sequential Scans.
 * **`work_mem = 32MB` to `64MB` (Default `4MB`):** Allocated per sort/hash node. Prevents multi-million-row NWP verification `Hash Join` and `GROUP BY` queries from spilling to disk.
@@ -254,7 +256,7 @@ Setting `shared_buffers` to $80\%$ of RAM (an InnoDB habit) harms PostgreSQL per
 > **Production Engineering Pitfall — Setting `work_mem = 2GB` Globally in `postgresql.conf`:**  
 > Unlike `shared_buffers` (which is a single global pool), **`work_mem` is allocated per sort or hash node, per query, per parallel worker!** If a single complex NWP verification query contains 4 Hash Joins and runs across 4 parallel workers with `max_connections = 100`, setting `work_mem = 2GB` globally allows a burst of queries to request $4 \times 4 \times 2\text{ GB} = 32\text{ GB}$ per connection, immediately invoking the Linux OOM-Killer! Keep global `work_mem` at `32MB–64MB` and boost it selectively inside heavy analytical sessions using `SET LOCAL work_mem = '256MB';`.
 
-### Lab 1 Walkthrough: Verifying Installation, Live Processes, UTC & Memory Tuning
+### 1.6 Lab 1 Walkthrough: Verifying Installation, Live Processes, UTC & Memory Tuning
 First, `cd` into `day2/`, initialize the `weather_ops` PostgreSQL database, and load [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql):
 
 ```bash
@@ -315,9 +317,9 @@ WHERE datname = current_database();
 
 ---
 
-## 4. Module 2: Storage Engine Internals — Schemas, Strict Meteorological Types, 8 KB Pages, Tuples & Padding
+## 2. Module 2: Storage Engine Internals — Schemas, Strict Meteorological Types, 8 KB Pages, Tuples & Padding
 
-### 4.1 Logical vs. Physical Storage Hierarchy & Multi-Schema Isolation
+### 2.1 Logical vs. Physical Storage Hierarchy & Multi-Schema Isolation
 * **Logical Hierarchy:** **Cluster** $\rightarrow$ **Database** (`weather_ops`) $\rightarrow$ **Schemas** (`synoptic`, `nwp`, `alerts`) $\rightarrow$ **Relations** (Tables, Indexes, Sequences, Views).
 * **Physical Hierarchy on Disk:**
   - `$PGDATA/base/<database_oid>/<relfilenode>` — Every table and index is stored as a series of files named after its `relfilenode` (automatically split into `1 GB` segments if a table exceeds 1 GB: `<relfilenode>`, `<relfilenode>.1`, `<relfilenode>.2`).
@@ -331,7 +333,7 @@ WHERE datname = current_database();
   - `alerts.weather_alerts` — Severe weather warnings (`HEATWAVE`, `FLASH_FLOOD`, `SANDSTORM`).
   This enables granular role-based access control (`GRANT USAGE ON SCHEMA synoptic TO ingest_worker;`), clean search paths (`SET search_path TO synoptic, nwp, alerts, public;`), and independent backup/restore operations (`pg_dump -n synoptic`).
 
-### 4.2 Strict Meteorological Data Types & Constraint Black Boxes Demystified
+### 2.2 Strict Meteorological Data Types & Constraint Black Boxes Demystified
 
 | Domain Concept | Anti-Pattern / Legacy Type | Production PostgreSQL Type | Physical Size | Meteorological Engineering Rationale |
 | :--- | :--- | :--- | :--- | :--- |
@@ -343,16 +345,16 @@ WHERE datname = current_database();
 
 ---
 
-#### Black Box 2A Demystified: `TIMESTAMPTZ` vs. `TIMESTAMP` (Why `TIMESTAMPTZ` Does NOT Store a Timezone on Disk!)
+#### 2.2.1 Black Box 2A Demystified: `TIMESTAMPTZ` vs. `TIMESTAMP` (Why `TIMESTAMPTZ` Does NOT Store a Timezone on Disk!)
 
 One of the biggest misconceptions in PostgreSQL is assuming that `TIMESTAMP WITH TIME ZONE` (`TIMESTAMPTZ`) stores the input timezone string (like `'+01:00'` or `'Europe/Paris'`) alongside the timestamp on disk, or that it takes more bytes than `TIMESTAMP WITHOUT TIME ZONE` (`TIMESTAMP`).
 
-1. **The Physical Reality Under the Hood:**
-   - **Both `TIMESTAMP` and `TIMESTAMPTZ` occupy strictly `8 bytes` (`int64` microseconds since `2000-01-01 00:00:00`).**
-   - **`TIMESTAMPTZ` does NOT store the original timezone offset on disk!** Instead, on `INSERT`, PostgreSQL inspects the input string's offset (or the session's `timezone` setting if no offset is provided), **converts the instant to pure UTC microseconds**, and discards the input offset. On `SELECT`, it converts the stored UTC microseconds into the client's current session `timezone` (`SET timezone = 'UTC'`).
-   - **`TIMESTAMP` (without time zone) is a "Blind Wall-Clock":** If you insert `'2026-10-05 12:00:00+02'`, bare `TIMESTAMP` **silently throws away the `+02` offset without converting to UTC** and stores `12:00:00` verbatim!
+##### 2.2.1.1 The Physical Reality Under the Hood
+- **Both `TIMESTAMP` and `TIMESTAMPTZ` occupy strictly `8 bytes` (`int64` microseconds since `2000-01-01 00:00:00`).**
+- **`TIMESTAMPTZ` does NOT store the original timezone offset on disk!** Instead, on `INSERT`, PostgreSQL inspects the input string's offset (or the session's `timezone` setting if no offset is provided), **converts the instant to pure UTC microseconds**, and discards the input offset. On `SELECT`, it converts the stored UTC microseconds into the client's current session `timezone` (`SET timezone = 'UTC'`).
+- **`TIMESTAMP` (without time zone) is a "Blind Wall-Clock":** If you insert `'2026-10-05 12:00:00+02'`, bare `TIMESTAMP` **silently throws away the `+02` offset without converting to UTC** and stores `12:00:00` verbatim!
 
-2. **The Asymmetry Matrix: What Happens When an Algerian Station (`+01`) and a Ship in UTC (`+00`) Report Simultaneously?**
+##### 2.2.1.2 The Asymmetry Matrix: What Happens When an Algerian Station (`+01`) and a Ship in UTC (`+00`) Report Simultaneously?
 
 | Input Literal Inserted at `12:00 UTC` | Stored in `TIMESTAMPTZ` Column (`8 Bytes`) | Stored in Bare `TIMESTAMP` Column (`8 Bytes`) | Resulting Bug in Bare `TIMESTAMP` |
 | :--- | :--- | :--- | :--- |
@@ -360,7 +362,7 @@ One of the biggest misconceptions in PostgreSQL is assuming that `TIMESTAMP WITH
 | Algiers Station (`+01`): `'2026-10-05 13:00:00+01'` | `2026-10-05 12:00:00 UTC` *(Normalized!)* | `2026-10-05 13:00:00` *(`+01` stripped without conversion!)* | Synoptic `JOIN ON f.valid_time = o.obs_time` **fails by 1 hour**! |
 | European Station Across Autumn DST Fallback (`02:30 CEST` $\rightarrow$ `02:30 CET`) | Two distinct UTC microsecond values (`00:30 UTC` and `01:30 UTC`) | **Identical `02:30:00` twice!** | Violates `UNIQUE (station_id, obs_time)` and crashes ingestion during DST fallback! |
 
-3. **The 4-Pattern Temporal Decision Matrix**
+##### 2.2.1.3 The 4-Pattern Temporal Decision Matrix
 
 | Temporal Type | Physical Size | Timezone-Aware? | When to Use It in Weather Engineering | Example in `weather_ops` |
 | :--- | :---: | :---: | :--- | :--- |
@@ -371,25 +373,25 @@ One of the biggest misconceptions in PostgreSQL is assuming that `TIMESTAMP WITH
 
 ---
 
-#### Black Box 2B Demystified: `NUMERIC(p, s)` vs. `REAL` / `DOUBLE PRECISION` (Exact Base-10 vs. IEEE-754 Binary Float)
+#### 2.2.2 Black Box 2B Demystified: `NUMERIC(p, s)` vs. `REAL` / `DOUBLE PRECISION` (Exact Base-10 vs. IEEE-754 Binary Float)
 
 Why did `weather_ops_pg.sql` use `NUMERIC(4,1)` and `NUMERIC(7,4)` on `synoptic.observations` and `synoptic.stations`, while Day 3's 5,000,000-row high-frequency benchmark used `REAL` (`float4`)?
 
-1. **The Binary Floating-Point Trap (`0.1 + 0.2 != 0.3`):**
-   - `REAL` (`4-byte float4`, ~6–7 decimal digits precision) and `DOUBLE PRECISION` (`8-byte float8`, ~15–17 decimal digits precision) store numbers in **base-2 (binary) scientific notation** executed directly by the CPU's hardware FPU/SIMD registers.
-   - In base-2, simple base-10 fractions like $0.1_{10}$ ($1/10$) have an **infinite repeating binary expansion** ($0.0001100110011\dots_2$).
-   - Consequently, in PostgreSQL:
-     ```sql
-     SELECT (0.1::REAL + 0.2::REAL) = 0.3::REAL;          -- Returns FALSE! (0.30000000447 != 0.30000001192)
-     SELECT (0.1::NUMERIC + 0.2::NUMERIC) = 0.3::NUMERIC; -- Returns TRUE!  (Exact base-10000 arithmetic)
-     ```
-2. **What `(p, s)` Means in `NUMERIC(p, s)`:**
-   - **`p` (Precision):** Total number of significant digits stored (both left *and* right of the decimal point).
-   - **`s` (Scale):** Number of digits to the **right** of the decimal point.
-   - **Maximum Integer Digits Allowed to the Left of the Decimal Point = $p - s$!**
-     - Example: `temp_c NUMERIC(4,1)` allows $4 - 1 = 3$ digits before the decimal and $1$ after (`-999.9` to `+999.9`). If a corrupted datalogger tries to insert `-9999.0` (4 digits before the decimal), `NUMERIC(4,1)` rejects it automatically with `ERROR: numeric field overflow`!
+##### 2.2.2.1 The Binary Floating-Point Trap (`0.1 + 0.2 != 0.3`)
+- `REAL` (`4-byte float4`, ~6–7 decimal digits precision) and `DOUBLE PRECISION` (`8-byte float8`, ~15–17 decimal digits precision) store numbers in **base-2 (binary) scientific notation** executed directly by the CPU's hardware FPU/SIMD registers.
+- In base-2, simple base-10 fractions like $0.1_{10}$ ($1/10$) have an **infinite repeating binary expansion** ($0.0001100110011\dots_2$).
+- Consequently, in PostgreSQL:
+  ```sql
+  SELECT (0.1::REAL + 0.2::REAL) = 0.3::REAL;          -- Returns FALSE! (0.30000000447 != 0.30000001192)
+  SELECT (0.1::NUMERIC + 0.2::NUMERIC) = 0.3::NUMERIC; -- Returns TRUE!  (Exact base-10000 arithmetic)
+  ```
+##### 2.2.2.2 What `(p, s)` Means in `NUMERIC(p, s)`
+- **`p` (Precision):** Total number of significant digits stored (both left *and* right of the decimal point).
+- **`s` (Scale):** Number of digits to the **right** of the decimal point.
+- **Maximum Integer Digits Allowed to the Left of the Decimal Point = $p - s$!**
+  - Example: `temp_c NUMERIC(4,1)` allows $4 - 1 = 3$ digits before the decimal and $1$ after (`-999.9` to `+999.9`). If a corrupted datalogger tries to insert `-9999.0` (4 digits before the decimal), `NUMERIC(4,1)` rejects it automatically with `ERROR: numeric field overflow`!
 
-3. **The 4-Pattern Numeric Decision Matrix**
+##### 2.2.2.3 The 4-Pattern Numeric Decision Matrix
 
 | PostgreSQL Numeric Type | Storage Size & Alignment | Exact or Approximate? | CPU Math Speed | When to Use It in Meteorology | Examples in Bootcamp |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -400,16 +402,16 @@ Why did `weather_ops_pg.sql` use `NUMERIC(4,1)` and `NUMERIC(7,4)` on `synoptic.
 
 ---
 
-#### Black Box 2C Demystified: `PRIMARY KEY` vs. `UNIQUE NOT NULL` vs. Nullable `UNIQUE` (Why `UNIQUE` Allows Multiple `NULL`s!)
+#### 2.2.3 Black Box 2C Demystified: `PRIMARY KEY` vs. `UNIQUE NOT NULL` vs. Nullable `UNIQUE` (Why `UNIQUE` Allows Multiple `NULL`s!)
 
 Engineers are often surprised to discover that in SQLite, PostgreSQL, DuckDB, and MySQL, declaring a column `UNIQUE` (without `NOT NULL`) **allows you to insert `NULL` thousands of times** without triggering a uniqueness violation!
 
-1. **Why Does `UNIQUE` Allow Multiple `NULL`s?**
-   - Under SQL Three-Valued Logic (`3VL`), `NULL = NULL` evaluates to **`UNKNOWN`** (not `TRUE`). Two missing values are not considered "equal" to each other.
-   - Therefore, ANSI SQL defines a standard `UNIQUE` constraint as **`NULLS DISTINCT`** (every `NULL` is treated as distinct from every other `NULL`).
-2. **How PostgreSQL 15+ Solves This When Needed (`UNIQUE NULLS NOT DISTINCT`):**
-   - If you have an optional column (like an external `wigos_id VARCHAR(32)`) where stations without a WIGOS ID are `NULL`, you want **standard `UNIQUE`** (multiple stations can have `NULL`, but no two stations can share the same non-null WIGOS ID).
-   - If you instead want **at most one `NULL` row**, PostgreSQL 15+ supports `UNIQUE NULLS NOT DISTINCT (col)`.
+##### 2.2.3.1 Why Does `UNIQUE` Allow Multiple `NULL`s?
+- Under SQL Three-Valued Logic (`3VL`), `NULL = NULL` evaluates to **`UNKNOWN`** (not `TRUE`). Two missing values are not considered "equal" to each other.
+- Therefore, ANSI SQL defines a standard `UNIQUE` constraint as **`NULLS DISTINCT`** (every `NULL` is treated as distinct from every other `NULL`).
+##### 2.2.3.2 How PostgreSQL 15+ Solves This When Needed (`UNIQUE NULLS NOT DISTINCT`)
+- If you have an optional column (like an external `wigos_id VARCHAR(32)`) where stations without a WIGOS ID are `NULL`, you want **standard `UNIQUE`** (multiple stations can have `NULL`, but no two stations can share the same non-null WIGOS ID).
+- If you instead want **at most one `NULL` row**, PostgreSQL 15+ supports `UNIQUE NULLS NOT DISTINCT (col)`.
 
 | Constraint Pattern | Allows `NULL`? | Max `NULL` Rows Allowed | Automatically Creates B-Tree Index? | Default Target for Foreign Keys & Logical Replication? | When to Use It |
 | :--- | :---: | :---: | :---: | :---: | :--- |
@@ -420,16 +422,16 @@ Engineers are often surprised to discover that in SQLite, PostgreSQL, DuckDB, an
 
 ---
 
-#### Black Box 2D Demystified: Surrogate Primary Keys at Scale — `BIGINT IDENTITY` vs. `UUIDv4` (B-Tree & WAL Killer) vs. `UUIDv7` (RFC 9562 Time-Ordered)
+#### 2.2.4 Black Box 2D Demystified: Surrogate Primary Keys at Scale — `BIGINT IDENTITY` vs. `UUIDv4` (B-Tree & WAL Killer) vs. `UUIDv7` (RFC 9562 Time-Ordered)
 
 When designing a 500-million-row telemetry table or a distributed network of remote Saharan automatic weather stations (`AWS`) that buffer readings offline during satellite outages and sync later, **what data type should you choose for your surrogate Primary Key?**
 
-##### 1. First Rule of UUIDs in PostgreSQL: Native `UUID` (`16 Bytes`) vs. `VARCHAR(36)` (`37 Bytes`)
+##### 2.2.4.1 First Rule of UUIDs in PostgreSQL: Native `UUID` (`16 Bytes`) vs. `VARCHAR(36)` (`37 Bytes`)
 Never store a UUID as `VARCHAR(36)`, `CHAR(36)`, or `TEXT`!
 - A canonical UUID string like `'01925a6b-9c00-7e42-8a1b-3c4d5e6f7a8b'` is **36 ASCII characters** (`32` hex digits + `4` hyphens), which occupies **`37 bytes` on disk** (`1-byte` short `varlena` header + `36` bytes) and forces slow locale/collation string comparisons.
 - PostgreSQL's native **`UUID`** data type strips the hyphens at parse time and stores the raw **128-bit (`16-byte`) binary value** (`typlen = 16` in `pg_type`). Better yet, its alignment in `pg_type` is **`typalign = 'c'` (`1-byte` char alignment)**—meaning a `UUID` column can be placed at *any* byte offset in a tuple without causing a single byte of CPU alignment padding!
 
-##### 2. Why Random `UUIDv4` (`gen_random_uuid()`) Destroys Database Performance Once the B-Tree Exceeds RAM
+##### 2.2.4.2 Why Random `UUIDv4` (`gen_random_uuid()`) Destroys Database Performance Once the B-Tree Exceeds RAM
 For years, developers defaulted to **`UUIDv4`** (`gen_random_uuid()` in PostgreSQL), where **122 out of 128 bits are cryptographically random**. While `UUIDv4` guarantees zero collisions across offline edge stations, it is a **physical catastrophe for B-Tree indexes and Write-Ahead Logs (`pg_wal`)** once your index grows larger than `shared_buffers`:
 
 ```
@@ -451,12 +453,12 @@ For years, developers defaulted to **`UUIDv4`** (`gen_random_uuid()` in PostgreS
 Here are the **four compounding hardware penalties** of `UUIDv4`:
 1. **`shared_buffers` Cache Thrashing (Zero Spatial Locality):** With sequential `BIGINT` or time-ordered `UUIDv7`, 100% of new `INSERT`s hit the **single rightmost 8 KB B-Tree leaf page**, which stays pinned in L3 CPU cache / `shared_buffers`. With random `UUIDv4` on a 100 GB index, every single row targets a different random 8 KB leaf page across the entire 12.8-million-page B-Tree, turning fast memory appends into random SSD read/write IOPS.
 2. **Chronic 50/50 B-Tree Page Splits & Index Bloat:** Because random inserts arrive in the middle of already-full leaf pages, PostgreSQL must constantly split 8 KB leaf pages in half (`50%` full on the left, `50%` full on the right). Your B-Tree index averages **~55–65% page density** (wasting 35–45% of disk and RAM on empty air inside pages!).
-3. **The Hidden Killer — `pg_wal` Full-Page Write (`FPW`) Amplification:** Recall from Section 3.4 that to prevent 4 KB OS torn pages, PostgreSQL's `full_page_writes = on` logs the **entire 8 KB page image** into `pg_wal` the *first time* any page is dirtied after a `CHECKPOINT`.
+3. **The Hidden Killer — `pg_wal` Full-Page Write (`FPW`) Amplification:** Recall from Section 1.4 that to prevent 4 KB OS torn pages, PostgreSQL's `full_page_writes = on` logs the **entire 8 KB page image** into `pg_wal` the *first time* any page is dirtied after a `CHECKPOINT`.
    - If you insert **1,000 rows** after a checkpoint using **`UUIDv7` or `BIGINT`**, all 1,000 index entries land on **2 or 3 adjacent rightmost leaf pages** $\rightarrow$ PostgreSQL writes only **$2 \times 8\text{ KB} = 16\text{ KB}$** of Full-Page Images to `pg_wal`.
    - If you insert **1,000 rows** after a checkpoint using **`UUIDv4`**, those 1,000 index entries dirty **~1,000 distinct random leaf pages** $\rightarrow$ PostgreSQL is forced to write **$1,000 \times 8\text{ KB} = 8,000\text{ KB}$ ($8\text{ MB}$!)** of Full-Page Images into `pg_wal`! That is a **$500\times$ WAL write amplification penalty** on the index alone!
 4. **Even Worse in MySQL InnoDB:** Because PostgreSQL uses an unclustered heap, `UUIDv4` only fragments the *B-Tree index* while heap tuples still append sequentially. In MySQL InnoDB (where the `PRIMARY KEY` *is* the Clustered B+Tree containing the full row), `UUIDv4` splits and fragments the **entire 16 KB table pages**, cutting ingestion throughput by $10\times\text{–}30\times$!
 
-##### 3. The Solution: `UUIDv7` (IETF RFC 9562) — Bit-Level Anatomy
+##### 2.2.4.3 The Solution: `UUIDv7` (IETF RFC 9562) — Bit-Level Anatomy
 Standardized in **May 2024 (`RFC 9562`)**, **`UUIDv7`** solves the distributed primary key dilemma by placing a **48-bit big-endian Unix Epoch millisecond timestamp (`unix_ts_ms`)** in the most significant bits, followed by a version tag (`0111` = `7`), optional sub-millisecond monotonic counter bits (`rand_a`), variant bits (`10`), and **62 bits of cryptographic randomness (`rand_b`)**:
 
 ```
@@ -479,7 +481,7 @@ Example UUIDv7: 01925a6b-9c00-7e42-8a1b-3c4d5e6f7a8b
 
 - **Why `UUIDv7` Restores B-Tree Locality:** Because the first 6 bytes (`48 bits`) are a big-endian timestamp in milliseconds since `1970-01-01 00:00:00 UTC` (good until the year **10,889 AD**), every newly generated `UUIDv7` sorts **strictly after** all previous milliseconds! All new B-Tree entries append cleanly to the **rightmost leaf page**, eliminating random page splits and `pg_wal` FPW amplification while still allowing 10,000 disconnected Saharan edge dataloggers to generate globally unique IDs offline without coordinating with a central sequence server!
 
-##### 4. Runnable PostgreSQL Implementation (`uuid_generate_v7()` & Extracting the Embedded Timestamp)
+##### 2.2.4.4 Runnable PostgreSQL Implementation (`uuid_generate_v7()` & Extracting the Embedded Timestamp)
 - **PostgreSQL 18+** includes a built-in C function **`uuidv7()`** out of the box.
 - **PostgreSQL 14–17** can generate RFC 9562 `UUIDv7` at full speed in pure SQL/PLpgSQL with zero external C extensions by stamping the 48-bit millisecond clock (`clock_timestamp()`) and version `'7'` over `gen_random_uuid()`:
 
@@ -529,7 +531,7 @@ FROM (
 ) s;
 ```
 
-##### 5. The 5-Identifier Surrogate Key Engineering Decision Matrix
+##### 2.2.4.5 The 5-Identifier Surrogate Key Engineering Decision Matrix
 
 | Identifier Strategy | PostgreSQL Declaration | Disk Size | B-Tree Append Locality | Offline Edge Generation? | When to Use It in Weather Engineering |
 | :--- | :--- | :---: | :---: | :---: | :--- |
@@ -539,7 +541,7 @@ FROM (
 | **4. `ULID`** *(Crockford Base32 48b ts + 80b rand)* | Stored as `UUID` (`16B`) or `CHAR(26)` (`27B`) | **`16B` or `27B`** | **Monotonic by ms** | **Yes** | Predecessor to `UUIDv7`. Prefer **`UUIDv7`** in new greenfield PostgreSQL systems because `UUIDv7` is an official IETF standard (`RFC 9562`) supported natively by every database driver's `uuid` type. |
 | **5. MongoDB `ObjectId`** *(BSON 12-byte ID)* | N/A *(Day 4 MongoDB `_id`)* | **`12 Bytes`** (`4B` sec + `5B` host/proc + `3B` counter) | **Monotonic by second** | **Yes** | Native default `_id` in MongoDB (`weather_nosql`). Note that Day 4 often overrides `_id` with natural string keys (like `'DZ-ONM-2026-10-07-001'`) for idempotent alert upserts. |
 
-### 4.3 Unclustered Heap vs. Clustered B+Tree Storage
+### 2.3 Unclustered Heap vs. Clustered B+Tree Storage
 
 To understand PostgreSQL's physical design, compare its storage engine with MySQL InnoDB:
 
@@ -565,7 +567,7 @@ To understand PostgreSQL's physical design, compare its storage engine with MySQ
 > **When MySQL (`InnoDB` / `MyRocks`) Beats PostgreSQL — Dedicated Engineering Reference:**  
 > While PostgreSQL (`+ PostGIS`) is our primary relational engine in the live VM labs, **MySQL 8.0/8.4 & MariaDB** remain ubiquitous in external meteorological web portals, IAM registries, and high-churn station heartbeat tables (`station_live_status` updated every 5 seconds via `ON DUPLICATE KEY UPDATE`, where InnoDB's **in-place MVCC via Undo Logs** avoids PostgreSQL heap bloat, and **Clustered Composite PKs `(station_id, obs_time)`** provide contiguous 1-tree range scans). For a complete architectural & operational reference, inspect **[day2_postgres_vs_mysql_mvcc_guide.md](./day2_postgres_vs_mysql_mvcc_guide.md)** and **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide](../reference_cards/14_mysql_and_mariadb_innodb_complete_engineering_guide.md)**.
 
-### 4.4 Inside an 8 KB Heap Page (`block_size = 8192` bytes)
+### 2.4 Inside an 8 KB Heap Page (`block_size = 8192` bytes)
 
 ```
  0 bytes ┌─────────────────────────────────────────────────────────────┐
@@ -597,7 +599,7 @@ pd_upper │ ───┼──────────────────�
 2. **`ItemIdData` (Line Pointers, 4 bytes each):** An array of 32-bit structures starting at byte 24 (`lp_off` 15 bits, `lp_flags` 2 bits, `lp_len` 15 bits). Indexes point to `(block_number, line_pointer_number)` (`ctid`), *not* the raw byte offset! This indirection allows `VACUUM` to slide live tuples around inside the 8 KB page to defragment free space without invalidating external B-Tree indexes.
 3. **`fillfactor` Storage Parameter:** Defaults to `100` ($100\%$) for heap tables. For **immutable append-only weather telemetry**, keep `fillfactor = 100` to pack maximum tuples per 8 KB page. For **high-update tables** (e.g., live station status or QC flags), setting `fillfactor = 80` reserves $20\%$ free space per page so `UPDATE`s stay inside the same 8 KB block via **HOT (Heap-Only Tuple)** updates!
 
-### 4.5 The 23-Byte Tuple Header (`HeapTupleHeaderData`)
+### 2.5 The 23-Byte Tuple Header (`HeapTupleHeaderData`)
 
 Every individual row in PostgreSQL carries a minimum **23-byte header**, padded to **24 bytes** on 64-bit architectures (plus an optional Null Bitmap if any column is `NULL`):
 
@@ -615,7 +617,7 @@ $$
 > [!WARNING]
 > **The Narrow-Table Metadata Tax:** If an IoT sensor stores `station_id` ($4\text{B}$), `recorded_at` ($8\text{B}$), and `temperature` ($4\text{B}$), the user payload is **$16\text{ bytes}$**, while PostgreSQL adds a **$24\text{ byte}$ tuple header** + **$4\text{ byte}$ line pointer** = **$28\text{ bytes}$ of metadata** ($63.6\%$ of the row's physical footprint!). Never create five separate narrow tables per sensor metric; combine metrics into wide rows per `(station_id, obs_time)` so one 24-byte header is amortized across 10+ atmospheric columns!
 
-### 4.6 CPU Byte-Alignment Padding & "Tuple Tetris" (Saving 8 to 16 Bytes per Row!)
+### 2.6 CPU Byte-Alignment Padding & "Tuple Tetris" (Saving 8 to 16 Bytes per Row!)
 
 Modern 64-bit CPUs fetch memory in 8-byte words (`MAXALIGN = 8`). To prevent unaligned memory access stalls, PostgreSQL aligns every column's starting offset inside a tuple according to its data type's `typlen` and `typalign` in `pg_type`:
 * **8-byte alignment (`typalign = 'd'`):** `BIGINT`, `TIMESTAMPTZ`, `TIMESTAMP`, `DOUBLE PRECISION` — must start at an offset divisible by `8` (`0, 8, 16, 24...`).
@@ -645,13 +647,13 @@ If a schema designer interleaves 1-byte `BOOLEAN` or 2-byte `SMALLINT` columns w
         Zero Internal Gaps! 20% Reduction in Total Table Size, shared_buffers RAM & WAL Volume!
 ```
 
-#### The Golden Rule of PostgreSQL Column Ordering ("Tuple Tetris")
+#### 2.6.1 The Golden Rule of PostgreSQL Column Ordering ("Tuple Tetris")
 > **Always order fixed-width columns strictly in descending order of alignment size, placing variable-length columns last:**
 > $$\mathbf{8\text{ Bytes}} \ (\texttt{TIMESTAMPTZ, BIGINT, FLOAT8}) \longrightarrow \mathbf{4\text{ Bytes}} \ (\texttt{INT, REAL, DATE}) \longrightarrow \mathbf{2\text{ Bytes}} \ (\texttt{SMALLINT}) \longrightarrow \mathbf{1\text{ Byte}} \ (\texttt{BOOLEAN}) \longrightarrow \textbf{Variable} \ (\texttt{NUMERIC, VARCHAR, TEXT, JSONB})$$
 
 Across **1 billion historical weather observations**, saving 16 bytes per row reclaims **$16\text{ GB}$ of NVMe storage, $16\text{ GB}$ of `shared_buffers` RAM, and $16\text{ GB}$ of WAL bandwidth** without losing a single bit of data!
 
-### 4.7 TOAST (*The Oversized-Attribute Storage Technique*)
+### 2.7 TOAST (*The Oversized-Attribute Storage Technique*)
 PostgreSQL does not allow a single tuple to span across two 8 KB heap pages. What happens when a station stores a 6 KB calibration header (`raw_metadata`) or a multi-kilobyte GeoJSON radar polygon?
 * Whenever a tuple's size exceeds **`TOAST_TUPLE_THRESHOLD` ($\approx 2000\text{ bytes}$, or $\frac{1}{4}$ of an 8 KB page)**:
   1. PostgreSQL first **compresses** variable-length attributes in-line using **`pglz`** or **`lz4`** (`default_toast_compression = lz4`).
@@ -660,8 +662,8 @@ PostgreSQL does not allow a single tuple to span across two 8 KB heap pages. Wha
 
 ---
 
-### Lab 2A & 2B: Inspecting Disk Files, `ctid`, TOAST & `pageinspect` Byte Alignment
-#### Lab 2A: Inspecting `weather_ops` Physical Files, 8 KB Pages, `ctid` & TOAST
+### 2.8 Lab 2A & 2B: Inspecting Disk Files, `ctid`, TOAST & `pageinspect` Byte Alignment
+#### 2.8.1 Lab 2A: Inspecting `weather_ops` Physical Files, 8 KB Pages, `ctid` & TOAST
 Run these queries in `psql -d weather_ops` (requires [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql) loaded in Lab 1):
 
 ```sql
@@ -701,7 +703,7 @@ SELECT
 FROM synoptic.stations;
 ```
 
-#### Lab 2B: Physical Block Forensics & Tuple Tetris with `pageinspect`
+#### 2.8.2 Lab 2B: Physical Block Forensics & Tuple Tetris with `pageinspect`
 Run this lab in `psql -d weather_ops` (either paste the block below directly or run `\i day2_pageinspect_and_storage_lab.sql` from [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql) Lab 1) to verify both the **16-byte Tuple Tetris savings** (`80B` vs. `64B` on `public.telemetry_unaligned` vs. `public.telemetry_aligned`) and the **8-byte block inspection** (`48B` vs. `40B` on `public.layout_padded` vs. `public.layout_packed`):
 
 ```sql
@@ -764,7 +766,7 @@ SELECT 'layout_packed' AS table_name, lp, lp_off, lp_flags, lp_len AS physical_b
 FROM heap_page_items(get_raw_page('layout_packed', 0)) LIMIT 3;
 ```
 
-#### Verified Terminal Output (`pageinspect`):
+#### 2.8.3 Verified Terminal Output (`pageinspect`):
 ```
 ┌───────────────┬────┬────────┬──────────┬────────────────────────┬────────┬────────┐
 │ table_name    │ lp │ lp_off │ lp_flags │ physical_bytes_on_disk │ t_xmin │ t_ctid │
@@ -790,15 +792,18 @@ FROM heap_page_items(get_raw_page('layout_packed', 0)) LIMIT 3;
 
 ---
 
-## 5. Module 3: Concurrency Control (MVCC), Two-Terminal Locking, Dead Tuples & Vacuum Mechanics
+## 3. Module 3: Concurrency Control (MVCC), Two-Terminal Locking, Dead Tuples & Vacuum Mechanics
 
-### 5.1 How PostgreSQL MVCC Works Physically (`INSERT`, `DELETE`, `UPDATE`)
+### 3.1 How PostgreSQL MVCC Works Physically (`INSERT`, `DELETE`, `UPDATE`)
 In PostgreSQL, **readers never block writers, and writers never block readers**. Instead of overwriting rows in-place, PostgreSQL maintains multiple physical tuple versions inside the 8 KB heap pages:
-1. **`INSERT` (by $\text{XID}=100$):** Writes a new tuple at `(0, 1)` with `t_xmin = 100`, `t_xmax = 0`, `t_ctid = (0, 1)`.
-2. **`DELETE` (by $\text{XID}=105$):** Does **not** erase bytes from the page! It simply sets `t_xmax = 105` on the existing tuple header.
-3. **`UPDATE` (by $\text{XID}=110$):** An `UPDATE` in PostgreSQL is physically a **`DELETE` + `INSERT`**:
-   - Marks the old tuple `(0, 1)` obsolete by setting `t_xmax = 110` and updates its `t_ctid` to point to `(0, 2)`.
-   - Appends a brand-new tuple version at `(0, 2)` with `t_xmin = 110`, `t_xmax = 0`, `t_ctid = (0, 2)`.
+#### 3.1.1 `INSERT` (by $\text{XID}=100$)
+Writes a new tuple at `(0, 1)` with `t_xmin = 100`, `t_xmax = 0`, `t_ctid = (0, 1)`.
+#### 3.1.2 `DELETE` (by $\text{XID}=105$)
+Does **not** erase bytes from the page! It simply sets `t_xmax = 105` on the existing tuple header.
+#### 3.1.3 `UPDATE` (by $\text{XID}=110$)
+An `UPDATE` in PostgreSQL is physically a **`DELETE` + `INSERT`**:
+- Marks the old tuple `(0, 1)` obsolete by setting `t_xmax = 110` and updates its `t_ctid` to point to `(0, 2)`.
+- Appends a brand-new tuple version at `(0, 2)` with `t_xmin = 110`, `t_xmax = 0`, `t_ctid = (0, 2)`.
 
 ```
                          The PostgreSQL Update Tuple Chain
@@ -816,7 +821,7 @@ In PostgreSQL, **readers never block writers, and writers never block readers**.
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Snapshot Visibility Rules, Hint Bits & HOT Updates
+### 3.2 Snapshot Visibility Rules, Hint Bits & HOT Updates
 When a query begins (at every statement in `READ COMMITTED`, or at the first statement of the transaction in `REPEATABLE READ`), PostgreSQL takes a **Snapshot** (`pg_current_snapshot()`):
 
 $$
@@ -829,7 +834,7 @@ $$
 * **Hint Bits (`t_infomask`):** The first reader that checks `pg_xact` to see whether `t_xmin` committed or aborted sets the `HEAP_XMIN_COMMITTED` or `HEAP_XMIN_INVALID` bit directly on the 8 KB page so future readers evaluate visibility in $O(1)$ without touching `pg_xact`! (This is why a pure `SELECT` query can report `Buffers: shared dirtied=N` in `EXPLAIN`!)
 * **Heap-Only Tuples (`HOT`):** Normally, creating a new tuple version at `(0, 2)` requires inserting new index entries into **every** B-Tree index on the table. However, if the `UPDATE` does **not** modify any indexed column (e.g., updating `qc_flag` when only `station_id` and `obs_time` are indexed) *and* the new tuple fits on the **same 8 KB page**, PostgreSQL creates a **HOT chain** inside the page—requiring **zero index writes**!
 
-#### MVCC Snapshot Visibility, HOT Update Chain & First-Touch Full-Page Write (FPW) Sequence
+#### 3.2.1 MVCC Snapshot Visibility, HOT Update Chain & First-Touch Full-Page Write (FPW) Sequence
 
 ```mermaid
 sequenceDiagram
@@ -856,7 +861,7 @@ sequenceDiagram
     SB-->>TB: Follows HOT chain (0,1) -> (0,2) and returns 'VALID'
 ```
 
-### 5.3 Standard `VACUUM` vs. `VACUUM FULL` vs. `pg_repack`
+### 3.3 Standard `VACUUM` vs. `VACUUM FULL` vs. `pg_repack`
 
 ```
                     The MVCC Bloat & Vacuuming Spectrum
@@ -887,7 +892,7 @@ sequenceDiagram
 | **Extra Disk Space Needed** | $\approx 0\text{ bytes}$ | **$\ge 100\%$ of table + indexes** (Fails if disk > 50% full!) | $\ge 100\%$ of table + indexes |
 | **Transaction ID Wraparound Defense** | **Yes** (Freezes tuples older than `vacuum_freeze_min_age` so 32-bit XIDs don't wrap past $2^{31} \approx 2.14\text{B}$) | **Yes** | **Yes** |
 
-### 5.4 Autovacuum Formula & Tuning for High-Churn Weather Tables
+### 3.4 Autovacuum Formula & Tuning for High-Churn Weather Tables
 PostgreSQL triggers `autovacuum` on a table when dead tuples exceed:
 
 $$
@@ -906,7 +911,7 @@ $$
 
 ---
 
-### Lab 3A & 3B Walkthrough: Two-Terminal MVCC/Locking, `pageinspect` Tuple Chains & Bloat Reclamation
+### 3.5 Lab 3A & 3B Walkthrough: Two-Terminal MVCC/Locking, `pageinspect` Tuple Chains & Bloat Reclamation
 > [!TIP]
 > **Hands-On Verification Tip — Standalone Two-Terminal ACID Lab Script:**  
 > You can also open [day2_two_terminal_acid_lab.sql](./day2_two_terminal_acid_lab.sql) side-by-side in two terminal windows (`Terminal A` and `Terminal B`) to run 4 additional concurrency experiments: (1) Invisible Uncommitted Updates (`ctid` & `xmin`), (2) Exclusive Row Lock Waits + live `pg_blocking_pids()` inspection, (3) Circular Deadlock (`ERROR: 40P01 deadlock detected` after `1000ms`), and (4) `READ COMMITTED` vs. `REPEATABLE READ` snapshot pinning.
@@ -1004,9 +1009,9 @@ WHERE relname IN ('observations', 'forecasts');
 
 ---
 
-## 6. Module 4: Write-Ahead Logging (`pg_wal`), Checkpoint Smoothing & High-Speed Bulk Ingestion (`COPY`)
+## 4. Module 4: Write-Ahead Logging (`pg_wal`), Checkpoint Smoothing & High-Speed Bulk Ingestion (`COPY`)
 
-### 6.1 The ARIES Recovery Matrix (`Steal / No-Force`) & The WAL Invariant
+### 4.1 The ARIES Recovery Matrix (`Steal / No-Force`) & The WAL Invariant
 Why don't databases just write modified 8 KB pages directly to the table files on every `COMMIT`? Because random 8 KB disk seeks across millions of rows would drop throughput to $< 100\text{ commits/sec}$ and leave corrupted pages on power loss.
 
 ```
@@ -1065,7 +1070,7 @@ $$
  └───────────────────────────┘             └───────────────────────────┘
 ```
 
-### 6.2 Checkpoint Smoothing for 00Z / 12Z NWP Ingestion Spikes
+### 4.2 Checkpoint Smoothing for 00Z / 12Z NWP Ingestion Spikes
 Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMWF-HRES`, `GFS`, `AROME`).
 * **The Default Checkpoint Stall:** With default `max_wal_size = 1GB` and `checkpoint_timeout = 5min`, a single NWP bulk load consumes 1 GB of WAL in seconds. PostgreSQL forces back-to-back emergency checkpoints, dumping gigabytes of dirty buffers to disk and freezing incoming synoptic station connections.
 * **Production Checkpoint Smoothing Profile (`postgresql.conf`):**
@@ -1075,7 +1080,7 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
   - `wal_compression = lz4` (or `zstd`) — Compresses full-page writes (`full_page_writes`) inside `pg_wal`, cutting WAL disk volume by **$40\%\text{–}60\%$**!
   - `log_checkpoints = on` — Logs every checkpoint's duration and buffers written so engineers can verify checkpoints are triggered by `time` (`checkpoint_timeout`) rather than `wal` (`max_wal_size`).
 
-### 6.3 High-Throughput Ingestion Protocols: Individual `INSERT` vs. Batched `INSERT` vs. `COPY`
+### 4.3 High-Throughput Ingestion Protocols: Individual `INSERT` vs. Batched `INSERT` vs. `COPY`
 
 | Ingestion Method | Transport & Engine Mechanics | Network Round-Trips per 10k Rows | Typical Ingestion Rate |
 | :--- | :--- | :--- | :--- |
@@ -1087,7 +1092,7 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
 > **Production Engineering Pitfall — Server-Side `COPY` vs. Client-Side `\copy` Permission Errors:**  
 > Running SQL `COPY synoptic.observations FROM '/path/to/obs.csv'` often triggers `ERROR: must be superuser or have privileges of the pg_read_server_files role` or `No such file or directory`. This happens because SQL `COPY` executes inside the **PostgreSQL server process** looking at the database server's local filesystem, whereas `psql`'s **`\copy`** meta-command streams the file from the **client workstation** over the TCP connection!
 
-### 6.4 Engineering Escape Hatches: `UNLOGGED` Tables & `synchronous_commit = off`
+### 4.4 Engineering Escape Hatches: `UNLOGGED` Tables & `synchronous_commit = off`
 
 ```
                             PostgreSQL Table Logging Tiers
@@ -1106,7 +1111,7 @@ Every 6 or 12 hours, weather centers ingest millions of NWP forecast rows (`ECMW
 
 ---
 
-### Lab 4 Walkthrough: Tuning Checkpoints, Tracking WAL Volume (`LSN`) & Benchmarking `\copy`
+### 4.5 Lab 4 Walkthrough: Tuning Checkpoints, Tracking WAL Volume (`LSN`) & Benchmarking `\copy`
 
 ```sql
 -- TARGET DATABASE: PostgreSQL 'weather_ops' (psql -d weather_ops)
@@ -1162,9 +1167,9 @@ DROP TABLE synoptic.observations_staging;
 
 ---
 
-## 7. Module 5: Query Optimizer Pipeline, Cost Math, `EXPLAIN (ANALYZE, BUFFERS)` & The Row-Store Bottleneck
+## 5. Module 5: Query Optimizer Pipeline, Cost Math, `EXPLAIN (ANALYZE, BUFFERS)` & The Row-Store Bottleneck
 
-### 7.1 The Query Optimizer Pipeline & Mathematical Cost Model
+### 5.1 The Query Optimizer Pipeline & Mathematical Cost Model
 
 ```
                             The Relational Engine Pipeline
@@ -1189,7 +1194,7 @@ DROP TABLE synoptic.observations_staging;
  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### Deconstructing the Cost Formula (`cost=startup..total`)
+#### 5.1.1 Deconstructing the Cost Formula (`cost=startup..total`)
 Cost in PostgreSQL is **not measured in milliseconds**; it is anchored to a single sequential 8 KB page fetch (`seq_page_cost = 1.0`):
 
 $$
@@ -1204,7 +1209,7 @@ $$
 
 * **Why Default `random_page_cost = 4.0` Sabotages NVMe Servers:** PostgreSQL's default cost model assumes 1990s spinning hard drives where random seeks are $4\times$ slower than sequential reads. On modern NVMe SSDs, setting **`random_page_cost = 1.1`** and **`effective_io_concurrency = 200`** makes the planner accurately favor **Index Scans** and **Bitmap Heap Scans**!
 
-### 7.2 Physical Access Paths, Join Strategies & The 7 Deadly Sins of Execution Plans
+### 5.2 Physical Access Paths, Join Strategies & The 7 Deadly Sins of Execution Plans
 
 ```
                       The 5 Physical Access Paths in PostgreSQL
@@ -1227,8 +1232,8 @@ $$
 
 ---
 
-### Lab 5A & 5B Walkthrough (Capstone): Accelerating NWP Forecast Verification & Proving the Row-Store Scan Penalty
-#### Lab 5A: NWP Forecast Verification (`weather_ops` Database — `nwp.forecasts` $\bowtie$ `synoptic.observations`)
+### 5.3 Lab 5A & 5B Walkthrough (Capstone): Accelerating NWP Forecast Verification & Proving the Row-Store Scan Penalty
+#### 5.3.1 Lab 5A: NWP Forecast Verification (`weather_ops` Database — `nwp.forecasts` $\bowtie$ `synoptic.observations`)
 Run in `psql -d weather_ops` (requires [`day2/weather_ops_pg.sql`](./weather_ops_pg.sql)):
 
 ```sql
@@ -1287,7 +1292,7 @@ WHERE f.station_id = 60390
   AND f.valid_time BETWEEN '2026-10-01 00:00:00+00' AND '2026-10-06 23:59:59+00';
 ```
 
-#### Lab 5B: Mathematical Proof of the Row-Store Analytical Scan Penalty (`public.plan_lab` — 1,000,000 to 2,000,000 Rows)
+#### 5.3.2 Lab 5B: Mathematical Proof of the Row-Store Analytical Scan Penalty (`public.plan_lab` — 1,000,000 to 2,000,000 Rows)
 > [!IMPORTANT]
 > ** Which Script & Table Does Lab 5B Use?**
 > - Lab 5B uses the **`public.plan_lab`** table created in **Lab 4 of [`day2/day2_pageinspect_and_storage_lab.sql`](./day2_pageinspect_and_storage_lab.sql)** (NOT Day 1's SQLite `raw_telemetry` table!).
@@ -1357,26 +1362,26 @@ Planning Time: 0.142 ms
 Execution Time: 112.540 ms
 ```
 
-#### The Mathematical Proof of Row-Store I/O Waste (`plan_lab` 1M Rows & 2M-Row Scale):
-1. **On `plan_lab` (`1,000,000` rows):**
-   - **Total 8 KB Blocks Fetched:** $11,236\text{ blocks} \times 8\text{ KB} = \mathbf{92.05\text{ MB}}$ (`87.78 MiB`).
-   - **Actual Payload Needed (`station_id` + `temperature`):** $\approx \mathbf{9.6\text{–}11.4\text{ MB}}$ $\implies$ **$\approx 9.5\times$ I/O amplification!**
-2. **At `2,000,000` Rows ($18,520$ blocks):**
-   - **Total Data Transferred from Memory/Disk:** $18,520 \times 8\text{ KB} = 148,160\text{ KB} \approx \mathbf{144.69\text{ MB}}$.
-   - **Actual Mathematical Payload Needed (`4B` ID + `4B` `temperature`):** $2,000,000 \times 8\text{ bytes} \approx \mathbf{15.25\text{ MB}}$.
-   - **The Row-Store I/O Amplification Factor:**
-     $$\text{I/O Waste Factor} = \frac{144.69\text{ MB}}{15.25\text{ MB}} = \mathbf{9.48\times}$$
+#### 5.3.3 The Mathematical Proof of Row-Store I/O Waste (`plan_lab` 1M Rows & 2M-Row Scale):
+##### 5.3.3.1 On `plan_lab` (`1,000,000` rows)
+- **Total 8 KB Blocks Fetched:** $11,236\text{ blocks} \times 8\text{ KB} = \mathbf{92.05\text{ MB}}$ (`87.78 MiB`).
+- **Actual Payload Needed (`station_id` + `temperature`):** $\approx \mathbf{9.6\text{–}11.4\text{ MB}}$ $\implies$ **$\approx 9.5\times$ I/O amplification!**
+##### 5.3.3.2 At `2,000,000` Rows ($18,520$ blocks)
+- **Total Data Transferred from Memory/Disk:** $18,520 \times 8\text{ KB} = 148,160\text{ KB} \approx \mathbf{144.69\text{ MB}}$.
+- **Actual Mathematical Payload Needed (`4B` ID + `4B` `temperature`):** $2,000,000 \times 8\text{ bytes} \approx \mathbf{15.25\text{ MB}}$.
+- **The Row-Store I/O Amplification Factor:**
+  $$\text{I/O Waste Factor} = \frac{144.69\text{ MB}}{15.25\text{ MB}} = \mathbf{9.48\times}$$
 
 > **Architectural Synthesis:**  
 > Because PostgreSQL is a row-store engine, it cannot fetch only the `temperature` column from the heap; it must pull the entire 8 KB page containing timestamps, pressure, wind vectors, rainfall, payload, and 23-byte MVCC headers for every row. On 500 million rows, that single scan pulls **36 GB** through the buffer pool! *(See [day2_pageinspect_and_storage_lab_course_walkthrough.md](./day2_pageinspect_and_storage_lab_course_walkthrough.md) Phases 4B–4D for how a Composite Covering Index `ON plan_lab (station_id, recorded_at) INCLUDE (temperature)` + `VACUUM ANALYZE plan_lab` drops selective station range scans from `11,236` buffers down to **`3` buffers** with `Heap Fetches: 0`!)*
 
 ---
 
-### 7.3 Advanced Production Performance Engineering: JIT Compilation Traps, Parallel Bulk Index Builds, Prepared Plan Modes & The 10-Layer Master Optimization Matrix
+### 5.4 Advanced Production Performance Engineering: JIT Compilation Traps, Parallel Bulk Index Builds, Prepared Plan Modes & The 10-Layer Master Optimization Matrix
 
 Beyond memory and index selection, senior PostgreSQL DBAs optimize three subtle engine behaviors—**LLVM JIT compilation**, **Parallel Bulk Index Builds**, and **Prepared Statement Plan Caching**—and combine all 10 physical layers into a unified production checklist:
 
-#### 1. The LLVM JIT Compilation Latency Trap (`jit = on` vs. `jit_above_cost`)
+#### 5.4.1 The LLVM JIT Compilation Latency Trap (`jit = on` vs. `jit_above_cost`)
 PostgreSQL 11+ ships with **Just-In-Time (JIT) expression compilation** (`jit = on` by default). When the planner estimates a query's cost exceeds `jit_above_cost` (default `100,000`), PostgreSQL invokes LLVM at query execution time to compile tuple-deforming and `WHERE` / `AVG()` evaluation loops into native CPU machine code.
 - **When JIT Helps:** On a 50-million-row CPU-bound climatological aggregation taking `4,000 ms`, spending `100 ms` on LLVM JIT compilation shaves `800 ms` off CPU tuple evaluation (a net **15%–25% speedup**).
 - **When JIT Backfires Catastrophically (The OLTP / Partitioned Query Trap):** On a partitioned table with 36 monthly partitions or a wide `IN (...)` list, the *estimated* planner cost can easily exceed `100,000` even though partition pruning or an index scan finishes the actual data lookup in **`3 ms`**! PostgreSQL then spends **`80 ms–180 ms` compiling LLVM bytecode** for a `3 ms` query—making the query **$30\times\text{–}50\times$ slower**!
@@ -1391,7 +1396,7 @@ PostgreSQL 11+ ships with **Just-In-Time (JIT) expression compilation** (`jit = 
   ```
   - **Production Fix:** Raise `jit_above_cost = 500000` and `jit_inline_above_cost = 1000000` in `postgresql.conf` so JIT only triggers on genuinely massive analytical queries, or disable JIT inside low-latency FastAPI/dashboard sessions via `SET LOCAL jit = off;`.
 
-#### 2. Fast Bulk Loading: The Drop-Load-Rebuild Pattern & Parallel B-Tree Construction (`max_parallel_maintenance_workers`)
+#### 5.4.2 Fast Bulk Loading: The Drop-Load-Rebuild Pattern & Parallel B-Tree Construction (`max_parallel_maintenance_workers`)
 When backfilling 50 million historical WMO synoptic observations into a table:
 - **Anti-Pattern (Loading with Secondary Indexes Active):** If 4 secondary B-Tree indexes exist during `COPY`, PostgreSQL must descend and update 4 separate B-Tree structures on every tuple, split leaf pages incrementally, and write gigabytes of index WAL records.
 - **Production Pattern ($5\times\text{–}8\times$ Faster):**
@@ -1409,17 +1414,20 @@ When backfilling 50 million historical WMO synoptic observations into a table:
      INCLUDE (temp_c, pressure_hpa);
      ```
 
-#### 3. Prepared Statements (`PREPARE`) & The "6th Execution" Generic vs. Custom Plan Switch (`plan_cache_mode`)
+#### 5.4.3 Prepared Statements (`PREPARE`) & The "6th Execution" Generic vs. Custom Plan Switch (`plan_cache_mode`)
 When your Python daemon uses prepared statements (such as `psycopg` v3 with `prepare_threshold = 5`), how does PostgreSQL decide between a **Custom Plan** (compiled for the exact parameter literal, e.g., `qc_flag = 'ERRONEOUS'`) and a **Generic Plan** (compiled once for placeholder `$1`)?
-1. **Executions 1 to 5 (Custom Plans):** For the first 5 executions of a prepared statement, PostgreSQL generates a **Custom Plan** using the actual parameter values (`$1 = 'ERRONEOUS'`) and records the average custom cost.
-2. **Execution 6+ (The Switch):** On the **6th execution**, PostgreSQL builds a parameter-agnostic **Generic Plan**. If the Generic Plan's estimated cost is not significantly worse than the average of the first 5 Custom Plans, PostgreSQL freezes and reuses the Generic Plan for all future executions (eliminating planning CPU overhead!).
-3. **The Skewed Data Trap & Fix (`plan_cache_mode`):** Suppose your first 5 executions queried `WHERE qc_flag = 'VALID'` ($98\%$ of the table $\rightarrow$ `Seq Scan` is optimal). On execution 6, PostgreSQL locks in the `Seq Scan` as the Generic Plan. On execution 7, a forecaster queries `WHERE qc_flag = 'ERRONEOUS'` ($0.1\%$ of rows)—and instead of using the Partial Index, PostgreSQL executes the cached Generic `Seq Scan` across 100 million rows!
-   - **Production Fix for Skewed Columns or Partitioned Queries:** Force custom planning where parameter selectivity varies wildly:
-     ```sql
-     SET LOCAL plan_cache_mode = 'force_custom_plan';
-     ```
+##### 5.4.3.1 Executions 1 to 5 (Custom Plans)
+For the first 5 executions of a prepared statement, PostgreSQL generates a **Custom Plan** using the actual parameter values (`$1 = 'ERRONEOUS'`) and records the average custom cost.
+##### 5.4.3.2 Execution 6+ (The Switch)
+On the **6th execution**, PostgreSQL builds a parameter-agnostic **Generic Plan**. If the Generic Plan's estimated cost is not significantly worse than the average of the first 5 Custom Plans, PostgreSQL freezes and reuses the Generic Plan for all future executions (eliminating planning CPU overhead!).
+##### 5.4.3.3 The Skewed Data Trap & Fix (`plan_cache_mode`)
+Suppose your first 5 executions queried `WHERE qc_flag = 'VALID'` ($98\%$ of the table $\rightarrow$ `Seq Scan` is optimal). On execution 6, PostgreSQL locks in the `Seq Scan` as the Generic Plan. On execution 7, a forecaster queries `WHERE qc_flag = 'ERRONEOUS'` ($0.1\%$ of rows)—and instead of using the Partial Index, PostgreSQL executes the cached Generic `Seq Scan` across 100 million rows!
+- **Production Fix for Skewed Columns or Partitioned Queries:** Force custom planning where parameter selectivity varies wildly:
+  ```sql
+  SET LOCAL plan_cache_mode = 'force_custom_plan';
+  ```
 
-#### 4. The Unified 10-Layer PostgreSQL Performance Optimization Master Matrix
+#### 5.4.4 The Unified 10-Layer PostgreSQL Performance Optimization Master Matrix
 
 | Layer | Optimization Lever | Default / Anti-Pattern | Production Weather Tuning | Typical Speedup / Savings |
 | :---: | :--- | :--- | :--- | :--- |
@@ -1436,7 +1444,7 @@ When your Python daemon uses prepared statements (such as `psycopg` v3 with `pre
 
 ---
 
-## 8. Bridge to Day 3: Time-Series Partitioning, BRIN Indexes, PostGIS & JSONB
+## 6. Bridge to Day 3: Time-Series Partitioning, BRIN Indexes, PostGIS & JSONB
 
 Tomorrow on **Day 3**, we solve these exact time-series and spatial scale challenges in PostgreSQL:
 1. **Declarative Time-Series Range Partitioning (`PARTITION BY RANGE (obs_time)`):** Splitting billions of synoptic observations into monthly child tables so partition pruning skips 99% of historical data and dropping old runs (`DETACH` + `DROP`) takes $O(1)$ time with **zero dead tuples and zero `VACUUM` overhead**.

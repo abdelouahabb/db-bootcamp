@@ -4,7 +4,9 @@
 
 ---
 
-## 1. Purpose of This Dedicated MongoDB NoSQL Basics Guide
+## 0. Orientation & SQL-to-MongoDB Translator
+
+### 0.1 Purpose of This Dedicated MongoDB NoSQL Basics Guide
 
 Before diving into BSON binary encoding, `$jsonSchema` validation traps, Time-Series bucket internals, or 3-node Replica Set elections, every attendee needs **100% fluency in the core daily MongoDB (`mongosh`) commands to inspect databases, query documents, filter nested objects and arrays, insert, update, delete, and aggregate data (`CRUD`)** on the exact MongoDB databases used on Day 4 of this bootcamp.
 
@@ -14,7 +16,7 @@ Every single `mongosh` block in this guide is **copy-and-paste runnable** agains
 
 ---
 
-## 2. Master MongoDB Orientation Map: Which Database, JS Script & Collections Am I Using?
+### 0.2 Master MongoDB Orientation Map: Which Database, JS Script & Collections Am I Using?
 
 | Day 4 JS Seed Script | How to Seed & Connect from Terminal | Target MongoDB Database | Exact Collections & Document Fields Inside |
 | :--- | :--- | :--- | :--- |
@@ -24,7 +26,7 @@ Every single `mongosh` block in this guide is **copy-and-paste runnable** agains
 
 ---
 
-## 3. SQL-to-MongoDB (`mongosh`) Side-by-Side Translator Table
+### 0.3 SQL-to-MongoDB (`mongosh`) Side-by-Side Translator Table
 
 | Database Operation | SQL (`SQLite` / `PostgreSQL`) | MongoDB NoSQL (`mongosh`) |
 | :--- | :--- | :--- |
@@ -50,9 +52,9 @@ Every single `mongosh` block in this guide is **copy-and-paste runnable** agains
 
 ---
 
-# PART I: MongoDB NoSQL Basics on `weather_nosql` (`day4_weather_ops_mongo.js`)
+## 1. Part I: MongoDB NoSQL Basics on `weather_nosql` (`day4_weather_ops_mongo.js`)
 
-## 1.1 Connecting & Inspecting Collections in `mongosh` ("Show Me the Documents!")
+### 1.1 Connecting & Inspecting Collections in `mongosh` ("Show Me the Documents!")
 
 First, seed `weather_nosql` (if you haven't already) and open `mongosh`:
 
@@ -92,7 +94,7 @@ db.cap_alerts.findOne();
 
 ---
 
-## 1.2 Basic Read (`find()` & `findOne()`) — Filtering, Projection, Nested Fields, Arrays & Sorting
+### 1.2 Basic Read (`find()` & `findOne()`) — Filtering, Projection, Nested Fields, Arrays & Sorting
 
 In MongoDB:
 - `db.collection.find(<filter>, <projection>)` is the equivalent of `SELECT <projection> FROM collection WHERE <filter>`.
@@ -206,7 +208,7 @@ db.stations.find(
 
 ---
 
-## 1.3 Basic Create (`insertOne()` & `insertMany()`) in MongoDB
+### 1.3 Basic Create (`insertOne()` & `insertMany()`) in MongoDB
 
 > [!IMPORTANT]
 > **Schema Validation Note on `db.stations`:** Recall from [`day4/day4_weather_ops_mongo.js`](./day4/day4_weather_ops_mongo.js) that `db.stations` has a `$jsonSchema` validator requiring `_id` (`Int32`), `station_name` (`string`), `station_type` (`"SURFACE_AWS"`, `"COASTAL_BUOY"`, `"UPPER_AIR_RADIOSONDE"`, or `"AGRO_SOIL"`), `is_active` (`bool`), and `location` (`{ type: "Point", coordinates: [lon, lat] }`).
@@ -269,7 +271,7 @@ db.synoptic_timeseries.find({ "station_meta.station_id": 60580 }).toArray();
 
 ---
 
-## 1.4 Basic Update (`updateOne()`, `updateMany()`, Upsert — `$set`, `$inc`, `$addToSet`, `$push`, `$pull`)
+### 1.4 Basic Update (`updateOne()`, `updateMany()`, Upsert — `$set`, `$inc`, `$addToSet`, `$push`, `$pull`)
 
 > [!WARNING]
 > **Critical MongoDB Rule:** Always use atomic update operators (`$set`, `$inc`, `$push`, `$addToSet`, `$pull`) inside `updateOne()` / `updateMany()`!
@@ -340,7 +342,7 @@ db.cap_alerts.findOne({ _id: "DZ-ONM-2026-10-06-TEST" });
 
 ---
 
-## 1.5 Basic Delete (`deleteOne()` & `deleteMany()`) in MongoDB
+### 1.5 Basic Delete (`deleteOne()` & `deleteMany()`) in MongoDB
 
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
@@ -366,7 +368,7 @@ printjson({
 
 ---
 
-## 1.6 Basic Aggregation Pipeline (`$match` -> `$group` -> `$sort`) — MongoDB's `GROUP BY` & `JOIN`
+### 1.6 Basic Aggregation Pipeline (`$match` -> `$group` -> `$sort`) — MongoDB's `GROUP BY` & `JOIN`
 
 In SQL, you write `SELECT climate_zone, COUNT(*), AVG(elevation_m) FROM stations WHERE is_active = 1 GROUP BY climate_zone ORDER BY count DESC;`.  
 In MongoDB, you pass an array of pipeline stages to `db.collection.aggregate([ ... ])`:
@@ -452,7 +454,9 @@ db.synoptic_timeseries.aggregate([
 
 ---
 
-# PART II: Exploring the 50,000-Document Polymorphic Database (`weather_telemetry_db`)
+## 2. Part II: Exploring the 50,000-Document Polymorphic Database (`weather_telemetry_db`)
+
+### 2.1 Querying All 4 Polymorphic Sensor Classes & Pre-Aggregated Hourly Buckets
 
 When you run [`day4/day4_mongo_50k_polymorphic_benchmark.js`](./day4/day4_mongo_50k_polymorphic_benchmark.js), MongoDB creates a second database named **`weather_telemetry_db`** containing `50,000` polymorphic sensor documents across 4 instrument types (`METAR_STANDARD`, `ULTRASONIC_3D`, `PRESENT_WEATHER_OPTICAL`, `ROAD_SURFACE_RADAR`).
 

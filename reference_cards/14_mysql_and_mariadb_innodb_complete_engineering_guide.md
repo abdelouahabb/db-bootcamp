@@ -123,12 +123,12 @@ While PostgreSQL uses **8 KB Unclustered Heap pages**, InnoDB formats every `.ib
 
 Because **the Primary Key B+Tree IS the physical table** in InnoDB, choosing the wrong Primary Key destroys both write throughput and RAM capacity:
 
-#### Rule 1: What Happens If You Omit a Primary Key?
+#### 3.2.1 Rule 1: What Happens If You Omit a Primary Key?
 If you create an InnoDB table without a `PRIMARY KEY`:
 1. InnoDB first looks for the first `UNIQUE NOT NULL` index and promotes it to the Clustered Index.
 2. If none exists, InnoDB silently generates a hidden **6-byte `DB_ROW_ID`** clustered index protected by a **single global mutex (`dict_sys->mutex`)**—creating a severe concurrency bottleneck under parallel inserts! **Always define an explicit `PRIMARY KEY` on every InnoDB table** (enforce this in production with `SET GLOBAL sql_generate_invisible_primary_key = ON;` in MySQL 8.0.30+ or `innodb_force_primary_key = ON`).
 
-#### Rule 2: Keep Primary Keys Narrow (Why Secondary Indexes Duplicate the PK!)
+#### 3.2.2 Rule 2: Keep Primary Keys Narrow (Why Secondary Indexes Duplicate the PK!)
 In PostgreSQL, a secondary index points to a fixed **6-byte `ctid` `(block, offset)`** regardless of how wide your Primary Key is.  
 In **MySQL InnoDB**, because rows move between 16 KB pages whenever a B+Tree page splits, **secondary indexes CANNOT store physical page pointers**! Instead, **every secondary index leaf entry stores a full copy of the row's Primary Key**:
 
@@ -148,19 +148,19 @@ In **MySQL InnoDB**, because rows move between 16 KB pages whenever a B+Tree pag
     $$100,000,000 \times 4\text{ indexes} \times 36\text{ bytes} = \mathbf{14.4\text{ GB of wasted secondary index overhead!}}$$
   - Using an `INT UNSIGNED` ($4\text{ bytes}$) or `BIGINT UNSIGNED` ($8\text{ bytes}$) cuts that secondary index footprint to **$1.6\text{ GB}$–$3.2\text{ GB}$** (saving $>11\text{ GB}$ of Buffer Pool RAM!).
 
-#### Rule 3: Always Insert Monotonically Increasing Keys (Avoid Random UUIDv4 Page Splits!)
+#### 3.2.3 Rule 3: Always Insert Monotonically Increasing Keys (Avoid Random UUIDv4 Page Splits!)
 * **Sequential Inserts (`AUTO_INCREMENT` or Time-Ordered Keys):** InnoDB fills each 16 KB leaf page to **$15/16$ ($93.75\%$ full)** and cleanly allocates the next 16 KB page.
 * **Random Inserts (`UUIDv4` or out-of-order keys):** InnoDB must insert into the middle of already-full 16 KB pages. It is forced to **split the 16 KB page into two pages**, copy $50\%$ of the rows to a newly allocated page, update parent pointers, and leave both pages half-empty ($\approx 50\%\text{–}65\%$ page fill factor)—**doubling disk consumption and slashing insert IOPS by $5\times\text{–}10\times$**!
 * **If You Must Use UUIDs in MySQL 8.0+ or PostgreSQL:** Use **RFC 9562 `UUIDv7`** (48-bit big-endian Unix ms timestamp prefix — see [Day 2 Coursebook — Black Box 2D](../day2/day2_master_coursebook.md) for the bit-level diagram and `pg_wal` Full-Page Write amplification math) or MySQL 8.0's native **`UUID_TO_BIN(uuid, 1)`** (which swaps the timestamp bits of a UUIDv1 to the front and packs it into **16 binary bytes** `BINARY(16)` instead of 36 ASCII bytes!).
 
-#### Rule 4: Composite Clustered PK `PRIMARY KEY (station_id, obs_time)` vs. Surrogate `BIGINT AUTO_INCREMENT`
+#### 3.2.4 Rule 4: Composite Clustered PK `PRIMARY KEY (station_id, obs_time)` vs. Surrogate `BIGINT AUTO_INCREMENT`
 In meteorological time-series tables in InnoDB, you have two choices:
-1. **Option A: `PRIMARY KEY (station_id, obs_time)` (With NO secondary indexes, or minimal secondary indexes):**
-   - **Pros:** All observations for `station_id = 60390` are stored **physically adjacent on disk in chronological order**! A query for `WHERE station_id = 60390 AND obs_time BETWEEN '2026-10-01' AND '2026-10-07'` reads a handful of contiguous 16 KB pages with **zero secondary index overhead** and saves the 8-byte `obs_id` column.
-   - **Cons:** Inserting observations for 50 stations concurrently appends to 50 different "hot spots" in the B+Tree (1 active 16 KB leaf page per station—which easily fits in RAM (`50 * 16 KB = 800 KB`)!).
-2. **Option B: `obs_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY` + `UNIQUE KEY (station_id, obs_time)`:**
-   - **Pros:** 100% strictly append-only at the right-most edge of the Clustered B+Tree; secondary indexes store only an 8-byte `obs_id`.
-   - **Cons:** Queries filtering by `WHERE station_id = 60390 AND obs_time BETWEEN ...` must traverse the secondary `UNIQUE KEY` and then perform random Clustered PK lookups unless covered by the index.
+##### 3.2.4.1 Option A: `PRIMARY KEY (station_id, obs_time)` (With NO secondary indexes, or minimal secondary indexes)
+- **Pros:** All observations for `station_id = 60390` are stored **physically adjacent on disk in chronological order**! A query for `WHERE station_id = 60390 AND obs_time BETWEEN '2026-10-01' AND '2026-10-07'` reads a handful of contiguous 16 KB pages with **zero secondary index overhead** and saves the 8-byte `obs_id` column.
+- **Cons:** Inserting observations for 50 stations concurrently appends to 50 different "hot spots" in the B+Tree (1 active 16 KB leaf page per station—which easily fits in RAM (`50 * 16 KB = 800 KB`)!).
+##### 3.2.4.2 Option B: `obs_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY` + `UNIQUE KEY (station_id, obs_time)`
+- **Pros:** 100% strictly append-only at the right-most edge of the Clustered B+Tree; secondary indexes store only an 8-byte `obs_id`.
+- **Cons:** Queries filtering by `WHERE station_id = 60390 AND obs_time BETWEEN ...` must traverse the secondary `UNIQUE KEY` and then perform random Clustered PK lookups unless covered by the index.
 
 ---
 
@@ -206,12 +206,12 @@ While PostgreSQL dedicates only $\approx 25\%$ of RAM to `shared_buffers` and re
 
 Compare what happens when station `60390` updates its live telemetry row (`UPDATE station_live_status SET temp_c = 24.8, last_seen = NOW() WHERE station_id = 60390`) 86,400 times a day:
 
-1. **In PostgreSQL (Out-of-Place Heap MVCC):**
-   - PostgreSQL marks the old tuple's `t_xmax` and writes a **complete copy of the entire row** at a new `ctid`. If any indexed column changed—or if the 8 KB page is full (preventing a `HOT` update)—PostgreSQL must insert new entries into **every index on the table**.
-2. **In MySQL InnoDB (In-Place Clustered Page Mutation + Undo Log Delta):**
-   - Because `station_id` (the Primary Key) did not change and `temp_c` is not indexed, InnoDB **overwrites `temp_c` directly in place** inside the 16 KB Clustered Index page!
-   - Prior to overwriting, InnoDB writes only the **old delta** (`temp_c = 24.6`) into the **Undo Log** and updates the row's 7-byte `DB_ROLL_PTR` to point to that Undo record.
-   - **Zero secondary indexes are touched**, and the 16 KB table page never grows or fragments!
+#### 5.1.1 In PostgreSQL (Out-of-Place Heap MVCC)
+- PostgreSQL marks the old tuple's `t_xmax` and writes a **complete copy of the entire row** at a new `ctid`. If any indexed column changed—or if the 8 KB page is full (preventing a `HOT` update)—PostgreSQL must insert new entries into **every index on the table**.
+#### 5.1.2 In MySQL InnoDB (In-Place Clustered Page Mutation + Undo Log Delta)
+- Because `station_id` (the Primary Key) did not change and `temp_c` is not indexed, InnoDB **overwrites `temp_c` directly in place** inside the 16 KB Clustered Index page!
+- Prior to overwriting, InnoDB writes only the **old delta** (`temp_c = 24.6`) into the **Undo Log** and updates the row's 7-byte `DB_ROLL_PTR` to point to that Undo record.
+- **Zero secondary indexes are touched**, and the 16 KB table page never grows or fragments!
 
 ### 5.2 The InnoDB "History List Length" (`HLL`) Trap (MySQL's Equivalent of Unvacuumed Bloat)
 Just as an uncommitted `idle in transaction` session in PostgreSQL blocks `VACUUM` from reclaiming dead heap tuples, a long-running uncommitted transaction (or an open `REPEATABLE READ` snapshot) in MySQL **blocks InnoDB's background Purge Threads** from freeing old Undo Log records!
@@ -248,18 +248,18 @@ One of the most important operational differences between PostgreSQL and MySQL I
 ```
 
 ### 6.1 The 3 InnoDB Locking Rules Every Engineer Must Know
-1. **Plain `SELECT` Statements Never Lock Anything:**
-   - `SELECT * FROM observations WHERE station_id = 60419;` is a **Consistent Non-Locking Read**. It reads the MVCC snapshot via Undo Logs and ignores all Record/Gap locks.
-2. **Why `REPEATABLE READ` Uses Next-Key Locks on `UPDATE` / `DELETE` / `FOR UPDATE`:**
-   - To prevent **Phantom Reads** (and ensure statement-based binlog safety), when Transaction A runs:
-     ```sql
-     BEGIN;
-     SELECT * FROM observations WHERE station_id BETWEEN 60400 AND 60500 FOR UPDATE;
-     ```
-     InnoDB places **Next-Key Locks** across the entire index range `[60400, 60500]` plus the gap above it. If Transaction B tries to `INSERT` a new observation for `station_id = 60402` (`Bejaia`), Transaction B **blocks on an Insert Intention Lock** until Transaction A commits!
-   - *Tip:* If you do not need Gap Locks and want PostgreSQL-style row-only locking in MySQL, set **`transaction_isolation = 'READ-COMMITTED'`** (in `READ COMMITTED`, InnoDB disables Gap Locks for searches/scans, using them only for foreign-key and duplicate-key checks!).
-3. **The Unindexed `WHERE` Clause Disaster in InnoDB:**
-   - Because InnoDB locks **index records**, if you run `UPDATE observations SET qc_flag = 'VALID' WHERE wind_speed_kt > 50.0;` and `wind_speed_kt` **has no index**, InnoDB must scan the entire Clustered Primary Key and place **Next-Key Locks on EVERY SINGLE ROW AND GAP IN THE TABLE**—freezing all concurrent inserts and updates across the entire table! **Always verify that `UPDATE` and `DELETE` predicates in MySQL use an index!**
+#### 6.1.1 Plain `SELECT` Statements Never Lock Anything
+- `SELECT * FROM observations WHERE station_id = 60419;` is a **Consistent Non-Locking Read**. It reads the MVCC snapshot via Undo Logs and ignores all Record/Gap locks.
+#### 6.1.2 Why `REPEATABLE READ` Uses Next-Key Locks on `UPDATE` / `DELETE` / `FOR UPDATE`
+- To prevent **Phantom Reads** (and ensure statement-based binlog safety), when Transaction A runs:
+  ```sql
+  BEGIN;
+  SELECT * FROM observations WHERE station_id BETWEEN 60400 AND 60500 FOR UPDATE;
+  ```
+  InnoDB places **Next-Key Locks** across the entire index range `[60400, 60500]` plus the gap above it. If Transaction B tries to `INSERT` a new observation for `station_id = 60402` (`Bejaia`), Transaction B **blocks on an Insert Intention Lock** until Transaction A commits!
+- *Tip:* If you do not need Gap Locks and want PostgreSQL-style row-only locking in MySQL, set **`transaction_isolation = 'READ-COMMITTED'`** (in `READ COMMITTED`, InnoDB disables Gap Locks for searches/scans, using them only for foreign-key and duplicate-key checks!).
+#### 6.1.3 The Unindexed `WHERE` Clause Disaster in InnoDB
+- Because InnoDB locks **index records**, if you run `UPDATE observations SET qc_flag = 'VALID' WHERE wind_speed_kt > 50.0;` and `wind_speed_kt` **has no index**, InnoDB must scan the entire Clustered Primary Key and place **Next-Key Locks on EVERY SINGLE ROW AND GAP IN THE TABLE**—freezing all concurrent inserts and updates across the entire table! **Always verify that `UPDATE` and `DELETE` predicates in MySQL use an index!**
 
 ---
 
@@ -267,7 +267,7 @@ One of the most important operational differences between PostgreSQL and MySQL I
 
 ### 7.1 Complete 4-Engine SQL `JOIN` Compatibility Matrix
 
-Connecting directly to our [Day 1 SQL `JOIN` Taxonomy](../day1/day1_master_coursebook.md#73-complete-taxonomy-of-sql-joins--sqlite-compatibility-matrix), here is how **MySQL 8.0 / 8.4** compares against **SQLite**, **PostgreSQL 16**, and **DuckDB**:
+Connecting directly to our [Day 1 SQL `JOIN` Taxonomy](../day1/day1_master_coursebook.md#53-complete-taxonomy-of-sql-joins--sqlite-compatibility-matrix), here is how **MySQL 8.0 / 8.4** compares against **SQLite**, **PostgreSQL 16**, and **DuckDB**:
 
 | SQL `JOIN` Type / Algorithm | SQLite `< 3.39` | SQLite `3.39+` | **MySQL 8.0 / 8.4** | PostgreSQL 16 | DuckDB | MySQL Engineering Notes |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -530,16 +530,16 @@ flowchart LR
     DumpThread ==>|"Async / Semi-Sync TCP Stream\n(SOURCE_AUTO_POSITION = 1)"| IOThread
 ```
 
-1. **Thread 1 — Primary `Binlog Dump Thread` (`Binlog Dump GTID`):**
-   - Spawned on the Primary for each connected Replica. It reads committed `GTID` transactions from `mysql-bin.000042` and pushes them over TCP to the Replica.
-2. **Thread 2 — Replica `I/O Receiver Thread` (`Replica_IO_Running: Yes`) + `Relay Log`:**
-   - Receives binlog events from the Primary and appends them sequentially into the Replica's local **`Relay Log` (`relay-bin.000019`)** on disk, updating `Retrieved_Gtid_Set`.
-   - **Why does the `Relay Log` exist?** It decouples **network receipt** from **storage engine execution**! Even if the Replica's InnoDB Buffer Pool is busy running a heavy analytical query (delaying replay), the `I/O Thread` still captures every transaction onto the Replica's disk in sub-milliseconds so zero data is lost if the Primary catches fire!
-3. **Thread 3 — Replica `SQL Applier Coordinator` + Parallel Worker Threads (`Replica_SQL_Running: Yes`):**
-   - **The Historical MySQL Bottleneck:** Before MySQL 5.7/8.0, the Primary executed writes across **64 concurrent CPU threads**, while the Replica had only **1 single-threaded SQL Applier**—causing massive replication lag (`Seconds_Behind_Source` climbing to hours) during burst weather ingestion!
-   - **The Modern Fix (`WRITESET` Multi-Threaded Applier — Default in MySQL 8.0.27+ / 8.4):**
-     - By setting `replica_parallel_workers = 8` (or `16`), `binlog_transaction_dependency_tracking = WRITESET`, and `replica_preserve_commit_order = ON`, the Primary hashes the Primary Keys modified by each transaction (`WriteSet`).
-     - Any two transactions touching **different weather stations (`station_id = 60390` vs. `station_id = 60580`)** have non-overlapping WriteSets and are replayed **in parallel across all 8 worker threads on the Replica** while preserving exact commit order for readers!
+#### 9.3.1 Thread 1 — Primary `Binlog Dump Thread` (`Binlog Dump GTID`)
+- Spawned on the Primary for each connected Replica. It reads committed `GTID` transactions from `mysql-bin.000042` and pushes them over TCP to the Replica.
+#### 9.3.2 Thread 2 — Replica `I/O Receiver Thread` (`Replica_IO_Running: Yes`) + `Relay Log`
+- Receives binlog events from the Primary and appends them sequentially into the Replica's local **`Relay Log` (`relay-bin.000019`)** on disk, updating `Retrieved_Gtid_Set`.
+- **Why does the `Relay Log` exist?** It decouples **network receipt** from **storage engine execution**! Even if the Replica's InnoDB Buffer Pool is busy running a heavy analytical query (delaying replay), the `I/O Thread` still captures every transaction onto the Replica's disk in sub-milliseconds so zero data is lost if the Primary catches fire!
+#### 9.3.3 Thread 3 — Replica `SQL Applier Coordinator` + Parallel Worker Threads (`Replica_SQL_Running: Yes`)
+- **The Historical MySQL Bottleneck:** Before MySQL 5.7/8.0, the Primary executed writes across **64 concurrent CPU threads**, while the Replica had only **1 single-threaded SQL Applier**—causing massive replication lag (`Seconds_Behind_Source` climbing to hours) during burst weather ingestion!
+- **The Modern Fix (`WRITESET` Multi-Threaded Applier — Default in MySQL 8.0.27+ / 8.4):**
+  - By setting `replica_parallel_workers = 8` (or `16`), `binlog_transaction_dependency_tracking = WRITESET`, and `replica_preserve_commit_order = ON`, the Primary hashes the Primary Keys modified by each transaction (`WriteSet`).
+  - Any two transactions touching **different weather stations (`station_id = 60390` vs. `station_id = 60580`)** have non-overlapping WriteSets and are replayed **in parallel across all 8 worker threads on the Replica** while preserving exact commit order for readers!
 
 ---
 
@@ -808,25 +808,25 @@ GROUP BY s.station_id, s.station_name;
 
 Just as PostgreSQL has non-obvious performance levers (`jit_above_cost`, `max_parallel_maintenance_workers`, `plan_cache_mode`), senior MySQL / MariaDB DBAs tune **7 high-impact InnoDB & optimizer subsystems** to squeeze maximum throughput out of NVMe hardware:
 
-#### 1. Automatic Buffer Pool Warmup Across Restarts (`innodb_buffer_pool_dump_at_shutdown` & `load_at_startup`)
+#### 10.3.1 Automatic Buffer Pool Warmup Across Restarts (`innodb_buffer_pool_dump_at_shutdown` & `load_at_startup`)
 - **The Problem:** Because MySQL InnoDB opens `.ibd` files with **`O_DIRECT`** (bypassing the Linux OS Page Cache completely), restarting `mysqld` wipes the entire `24 GB` Buffer Pool! Unlike PostgreSQL (where the Linux OS Page Cache still holds warm pages after a `postgres` service restart), a restarted MySQL server suffers a brutal 20–30 minute "cold-cache IOPS storm" while queries hit raw disk.
 - **The Fix:** Enable `innodb_buffer_pool_dump_at_shutdown = ON`, `innodb_buffer_pool_load_at_startup = ON`, and `innodb_buffer_pool_dump_pct = 50` (or `100`). On clean shutdown, InnoDB writes only the compact **8-byte `(space_id, page_no)` coordinates** (a few megabytes!) to `ib_buffer_pool` on disk, and on startup a background thread sorts those page IDs and sequentially pre-fetches them back into RAM in seconds!
 
-#### 2. The Adaptive Hash Index (`AHI`) Contention Trap (`innodb_adaptive_hash_index = OFF`)
+#### 10.3.2 The Adaptive Hash Index (`AHI`) Contention Trap (`innodb_adaptive_hash_index = OFF`)
 - **The Problem:** By default (`innodb_adaptive_hash_index = ON`), InnoDB monitors B+Tree lookups and automatically builds an in-memory hash table (`AHI`) pointing directly to 16 KB leaf pages. While `AHI` speeds up single-row primary key point lookups in RAM, **every range scan (`WHERE obs_time BETWEEN ...`), page split, or bulk `DELETE`/`DROP` must acquire global `btr_search_latch` read/write locks** on the AHI! Under 64+ concurrent weather station threads, `btr_search_latch` contention (visible in `SHOW ENGINE INNODB STATUS` under `SEMAPHORES`) frequently stalls CPU cores!
 - **The Fix:** On modern NVMe servers running mixed time-range and high-concurrency telemetry workloads, set **`SET GLOBAL innodb_adaptive_hash_index = OFF;`**—eliminating `btr_search_latch` spinlocks and improving tail latency by **15%–35%**.
 
-#### 3. Group Commit Batching (`binlog_group_commit_sync_delay`) for `Dual-1` Durability
+#### 10.3.3 Group Commit Batching (`binlog_group_commit_sync_delay`) for `Dual-1` Durability
 - **The Problem:** As shown in Section 9.1, enforcing zero data loss (`Dual-1`: `innodb_flush_log_at_trx_commit = 1` + `sync_binlog = 1`) requires two disk `fsync()` barriers per commit. If transactions arrive slightly staggered, each transaction triggers its own individual NVMe `fsync()`.
 - **The Fix:** Set **`binlog_group_commit_sync_delay = 100`** ($100\ \mu\text{s} = 0.1\text{ ms}$) and `binlog_group_commit_sync_no_delay_count = 32`. The Group Commit leader waits up to `0.1 ms` (or until 32 transactions queue up) before issuing **1 shared `fsync()`** to the Redo Log and **1 shared `fsync()`** to the `binlog`—multiplying `Dual-1` commit throughput by **$3\times\text{–}6\times$** while keeping commit latency under `1 ms`!
 
-#### 4. High-Speed Bulk Ingestion: `LOAD DATA INFILE`, Parallel DDL (`innodb_ddl_threads`) & Redo Log Bypass
+#### 10.3.4 High-Speed Bulk Ingestion: `LOAD DATA INFILE`, Parallel DDL (`innodb_ddl_threads`) & Redo Log Bypass
 When backfilling 50 million historical WMO synoptic observations into MySQL 8.0.27+:
 1. **Use `LOAD DATA INFILE` (MySQL's equivalent of PostgreSQL `COPY`):** Streams CSV/TSV files directly into InnoDB at **80,000–120,000 rows/sec** (especially when rows are pre-sorted by the Clustered Primary Key `(station_id, obs_time)`!).
 2. **Parallel Sorted B+Tree Index Creation (`innodb_ddl_threads` & `innodb_ddl_buffer_size`):** Just like PostgreSQL's `max_parallel_maintenance_workers`, MySQL 8.0.27+ builds secondary B+Tree indexes in parallel! Set `SET SESSION innodb_ddl_threads = 4;` and `SET SESSION innodb_ddl_buffer_size = 1073741824;` (`1 GB`) before running `ALTER TABLE ... ADD INDEX`.
 3. **Initial Load Redo-Log Bypass (MySQL 8.0.21+ equivalent of PG `UNLOGGED`):** When initializing a brand-new standalone server before putting it into production (never on a live production primary!), you can temporarily run `ALTER INSTANCE DISABLE INNODB REDO_LOG;`, load 100M rows at $3\times$ speed without Redo Log writes or Doublewrite Buffer overhead, and immediately run `ALTER INSTANCE ENABLE INNODB REDO_LOG;`.
 
-#### 5. Zero-Downtime Online DDL (`ALGORITHM=INSTANT` vs. `INPLACE` vs. `COPY`)
+#### 10.3.5 Zero-Downtime Online DDL (`ALGORITHM=INSTANT` vs. `INPLACE` vs. `COPY`)
 In legacy MySQL 5.5, running `ALTER TABLE observations ADD COLUMN wind_gust_kt DECIMAL(4,1);` copied the entire 100 GB table and locked out writers for hours. In **MySQL 8.0.12+ / 8.0.29+**, always specify the explicit Online DDL clauses so a slow table copy never surprises you in production:
 ```sql
 -- 1. Metadata-Only Column Add/Drop (< 5 milliseconds, zero table rebuild!):
@@ -840,7 +840,7 @@ ALTER TABLE observations
     ALGORITHM=INPLACE, LOCK=NONE;
 ```
 
-#### 6. Optimizer Column Histograms (`ANALYZE TABLE ... UPDATE HISTOGRAM`)
+#### 10.3.6 Optimizer Column Histograms (`ANALYZE TABLE ... UPDATE HISTOGRAM`)
 - **The Hidden Optimizer Difference vs. PostgreSQL:** In PostgreSQL, running `ANALYZE` automatically collects 100-bucket histograms (`pg_stats`) on **every column** of a table. In **MySQL 8.0+**, `ANALYZE TABLE` only updates **index cardinality statistics**—it collects **zero histograms on non-indexed columns** unless you explicitly ask for them!
 - **The Fix:** Whenever queries filter or join on skewed meteorological columns (`qc_flag`, `temp_c`, `wind_speed_kt`) that are not the leading column of an index, build persistent 100-bucket Equi-Height / Singleton histograms stored in `information_schema.COLUMN_STATISTICS`:
   ```sql
@@ -854,7 +854,7 @@ ALTER TABLE observations
   WHERE SCHEMA_NAME = 'weather_ops_mysql';
   ```
 
-#### 7. Safe Index Retirement with **Invisible Indexes** (`INVISIBLE` / `VISIBLE`)
+#### 10.3.7 Safe Index Retirement with **Invisible Indexes** (`INVISIBLE` / `VISIBLE`)
 - **The Problem:** `sys.schema_unused_indexes` shows a 15 GB secondary index hasn't been used this week. If you `DROP INDEX` and a critical end-of-month WMO climatology script suddenly runs a full 200M-row table scan, rebuilding that 15 GB index takes 30 minutes of emergency I/O!
 - **The Fix (MySQL 8.0+ Superpower):** Make the index **`INVISIBLE`** first:
   ```sql
@@ -884,7 +884,7 @@ ALTER TABLE observations
 
 ---
 
-### Reference Library Navigation
+### 10.5 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html) | [Day 2 PG vs. MySQL Guide](../day2/day2_postgres_vs_mysql_mvcc_guide.md)  
 > **Card Sequence:** [⬅ Previous Card](./13_database_observability_prometheus_grafana_and_alerts.md) | **Card 14 of 14** | *Last Card* | [⬆ Back to Top](#reference-card-14-mysql-8084--mariadb-complete-engineering-guide--innodb-internals-pluggable-engines-next-key-locking-spatial-sql-gtid-ha--production-tuning)

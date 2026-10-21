@@ -331,7 +331,7 @@ print(f"[+] Compaction complete in {duration:.2f}s. Storage reduced by {((mb_bef
 ```
 ---
 
-### Reference Library Navigation
+### 7.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./02_duckdb_vectorized_olap_vs_sqlite.md) | **Card 03 of 14** | [Next Card](./04_meteorological_gridded_formats_cog_zarr_netcdf_grib_bufr.md) | [⬆ Back to Top](#hive-partitioning--data-lakehouse-architecture-reference-card)

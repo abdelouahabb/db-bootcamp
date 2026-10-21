@@ -111,7 +111,7 @@ When you pass parameters as a **separate second argument** (`cur.execute(sql, pa
 1. **The SQL structure is compiled first:** The database parses the SQL AST (`SELECT * FROM stations WHERE station_name = ?`) before looking at the parameter bytes. A quote or `; DROP TABLE stations;` inside `station_name` is treated strictly as literal data bytes—making SQL injection mathematically impossible.
 2. **Prepared Statement Reuse:** Because the SQL string stays identical across 100,000 station pings, the engine can reuse the compiled bytecode (`sqlite3_stmt` in SQLite / Prepared Plan in `psycopg3`).
 
-#### Cross-Driver Parameter Placeholder Styles (`paramstyle`)
+#### 1.3.1 Cross-Driver Parameter Placeholder Styles (`paramstyle`)
 
 | Driver | PEP 249 `paramstyle` | Positional Syntax (Tuple) | Named Syntax (Dict) | Single-Parameter Tuple Gotcha! |
 | :--- | :---: | :--- | :--- | :--- |
@@ -171,7 +171,7 @@ Look at the exact implementation difference between `sqlite3` and `psycopg3`:
 | **Exception raised inside block** | Calls `conn.rollback()` and re-raises exception | Calls `conn.rollback()` **AND `conn.close()`** | Calls `ROLLBACK` (or `ROLLBACK TO SAVEPOINT`) |
 | **Is the database connection closed after the `with` block?** | **NO! Connection stays OPEN!** (Holds `.db-wal` / `.db-shm` file handles open until Python garbage collection runs!) | **YES! Socket is closed deterministically.** | Connection stays open (only the transaction block ends). |
 
-#### How to Write Leak-Free `sqlite3` Context Managers (`contextlib.closing`)
+#### 2.3.1 How to Write Leak-Free `sqlite3` Context Managers (`contextlib.closing`)
 
 In `sqlite3`, always combine **`contextlib.closing()`** (which guarantees `conn.close()` on exit) with **`with conn:`** (which guarantees `conn.commit()` on success or `conn.rollback()` on exception):
 
@@ -219,7 +219,7 @@ Python has **two** mature C-extension drivers for SQLite:
 | **Virtual Tables & Custom VFS (`sqlite3_vfs`)** | Not exposed. | Full Python **Virtual Table (`VTModule`)** and **Custom VFS (`apsw.VFS`)** support (e.g., querying raw WMO BUFR/CSV directories as SQL tables or encrypting page I/O). |
 | **Execution Speed (Micro-queries & Iteration)** | Baseline ($1\times$) | **$\approx 2\text{--}3.5\times$ faster** on high-frequency cursor loops due to zero DB-API layer overhead. |
 
-#### When to Choose `sqlite3` vs. `APSW` in Meteorological Engineering
+#### 3.1.1 When to Choose `sqlite3` vs. `APSW` in Meteorological Engineering
 - **Use Standard Library `sqlite3` when:** You want zero `pip` dependencies (like our [`day1/generate_weather_db.py`](../day1/generate_weather_db.py)), you are passing the connection to `pandas.read_sql_query()` or `SQLAlchemy`, or you are writing standard SQL scripts.
 - **Use `APSW` when:** You are building a high-frequency **edge weather station data logger**, need a newer SQLite engine than the host OS provides, need **nestable `with conn:` savepoints**, need **`set_wal_hook()`** to schedule custom WAL checkpoints between 20Hz ultrasonic sensor bursts, or want to expose raw binary telemetry files as SQLite Virtual Tables.
 
@@ -624,12 +624,12 @@ Unlike relational engines, MongoDB uses a binary BSON wire protocol (`OP_MSG` ov
 
 ### 6.1 How `MongoClient` Discovers Replica Sets & Routes Reads/Writes
 
-1. **`MongoClient` Is Already a Thread-Safe Connection Pool:**
-   - **Never create a new `MongoClient()` per request!** Instantiate **one** global `MongoClient` per process. Internally, `MongoClient` spawns background topology-monitoring threads (`hello` heartbeats) and maintains a socket pool (`maxPoolSize=100` by default) to every node in the Replica Set.
-2. **Automatic Failover & Topology Discovery:**
-   - When you pass `replicaSet=rs_meteo` in the URI, `MongoClient` automatically discovers all Primary and Secondary nodes. If the Primary steps down during a storm, `retryWrites=true` instructs `PyMongo` to wait for the Raft election (1–3 seconds) and transparently retry your write against the new Primary!
-3. **Critical Timezone Rule (`tz_aware=True`):**
-   - MongoDB stores BSON `Date` as a 64-bit UTC millisecond integer, but by default `PyMongo` decodes BSON dates into **naive** Python `datetime` objects (`tzinfo=None`)! Always obtain your database handle with **`CodecOptions(tz_aware=True)`** so Python receives timezone-aware UTC `datetime` objects.
+#### 6.1.1 `MongoClient` Is Already a Thread-Safe Connection Pool
+- **Never create a new `MongoClient()` per request!** Instantiate **one** global `MongoClient` per process. Internally, `MongoClient` spawns background topology-monitoring threads (`hello` heartbeats) and maintains a socket pool (`maxPoolSize=100` by default) to every node in the Replica Set.
+#### 6.1.2 Automatic Failover & Topology Discovery
+- When you pass `replicaSet=rs_meteo` in the URI, `MongoClient` automatically discovers all Primary and Secondary nodes. If the Primary steps down during a storm, `retryWrites=true` instructs `PyMongo` to wait for the Raft election (1–3 seconds) and transparently retry your write against the new Primary!
+#### 6.1.3 Critical Timezone Rule (`tz_aware=True`)
+- MongoDB stores BSON `Date` as a 64-bit UTC millisecond integer, but by default `PyMongo` decodes BSON dates into **naive** Python `datetime` objects (`tzinfo=None`)! Always obtain your database handle with **`CodecOptions(tz_aware=True)`** so Python receives timezone-aware UTC `datetime` objects.
 
 ### 6.2 Production `PyMongo` Pattern: Unordered Bulk Upserts, `WriteConcern` & Aggregation Cursors
 
@@ -721,7 +721,7 @@ with analytics_coll.aggregate(pipeline, batch_size=1000) as cursor:
 
 ---
 
-### Reference Library Navigation
+### 7.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./10_query_execution_plan_forensics_and_explain.md) | **Card 11 of 14** | [Next Card](./12_dbeaver_and_mongodb_compass_gui_workflows.md) | [⬆ Back to Top](#python-database-drivers-pep-249-db-api-20-internals--engine-integration-guide-sqlite3-vs-apsw-psycopg3-duckdb-geopandas-pymongo)

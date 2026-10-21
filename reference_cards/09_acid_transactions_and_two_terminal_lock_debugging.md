@@ -10,22 +10,22 @@
 - [Executive Summary: The Two-Terminal Mental Model](#executive-summary-the-two-terminal-mental-model)
 - [1. Quick Lab Setup: The Weather Station Registry](#1-quick-lab-setup-the-weather-station-registry)
 - [2. Lab 1: The Invisible Update (Snapshot Isolation & Atomicity)](#2-lab-1-the-invisible-update-snapshot-isolation--atomicity)
-  - [Objective](#objective)
-  - [Step-by-Step Terminal Commands](#step-by-step-terminal-commands)
+  - [2.1 Objective](#21-objective)
+  - [2.2 Step-by-Step Terminal Commands](#22-step-by-step-terminal-commands)
 - [3. Lab 2: Row Locks & Lock Contention (Writers Block Writers)](#3-lab-2-row-locks--lock-contention-writers-block-writers)
-  - [Objective](#objective-1)
-  - [Step-by-Step Terminal Commands](#step-by-step-terminal-commands-1)
+  - [3.1 Objective](#31-objective)
+  - [3.2 Step-by-Step Terminal Commands](#32-step-by-step-terminal-commands)
 - [4. Lab 3: The Deadlock Dilemma (Circular Wait)](#4-lab-3-the-deadlock-dilemma-circular-wait)
-  - [Objective](#objective-2)
-  - [Step-by-Step Terminal Commands](#step-by-step-terminal-commands-2)
+  - [4.1 Objective](#41-objective)
+  - [4.2 Step-by-Step Terminal Commands](#42-step-by-step-terminal-commands)
 - [5. Lab 4: Read Committed vs. Repeatable Read](#5-lab-4-read-committed-vs-repeatable-read)
-  - [Objective](#objective-3)
-  - [Step-by-Step Terminal Commands](#step-by-step-terminal-commands-3)
+  - [5.1 Objective](#51-objective)
+  - [5.2 Step-by-Step Terminal Commands](#52-step-by-step-terminal-commands)
 - [6. Two-Terminal Emergency Diagnostic Commands](#6-two-terminal-emergency-diagnostic-commands)
-  - [1. View All Active Transactions and Durations (PostgreSQL)](#1-view-all-active-transactions-and-durations-postgresql)
-  - [2. Spot Idle In Transaction Sessions (The Bloat Culprits)](#2-spot-idle-in-transaction-sessions-the-bloat-culprits)
-  - [3. Terminate a Stuck Blocking Session](#3-terminate-a-stuck-blocking-session)
-  - [4. MySQL InnoDB Lock Monitoring Equivalent](#4-mysql-innodb-lock-monitoring-equivalent)
+  - [6.1 View All Active Transactions and Durations (PostgreSQL)](#61-view-all-active-transactions-and-durations-postgresql)
+  - [6.2 Spot Idle In Transaction Sessions (The Bloat Culprits)](#62-spot-idle-in-transaction-sessions-the-bloat-culprits)
+  - [6.3 Terminate a Stuck Blocking Session](#63-terminate-a-stuck-blocking-session)
+  - [6.4 MySQL InnoDB Lock Monitoring Equivalent](#64-mysql-innodb-lock-monitoring-equivalent)
 - [7. Summary Checklist: Transaction Debugging Rules](#7-summary-checklist-transaction-debugging-rules)
 
 ---
@@ -84,7 +84,7 @@ VALUES
 
 ## 2. Lab 1: The Invisible Update (Snapshot Isolation & Atomicity)
 
-### Objective
+### 2.1 Objective
 
 Prove that uncommitted changes in one session are completely invisible to other sessions, and verify that `ROLLBACK` leaves zero trace on disk.
 
@@ -113,9 +113,9 @@ Prove that uncommitted changes in one session are completely invisible to other 
 
 ```
 
-### Step-by-Step Terminal Commands
+### 2.2 Step-by-Step Terminal Commands
 
-#### Step 1: Terminal A opens a transaction and updates a row
+#### 2.2.1 Step 1: Terminal A opens a transaction and updates a row
 
 ```
 -- In Terminal A:
@@ -131,7 +131,7 @@ SELECT station_id, temp_offset FROM station_calibration WHERE station_id = 'AWS-
 
 ```
 
-#### Step 2: Terminal B reads the same row
+#### 2.2.2 Step 2: Terminal B reads the same row
 
 ```
 -- In Terminal B:
@@ -142,7 +142,7 @@ SELECT station_id, temp_offset FROM station_calibration WHERE station_id = 'AWS-
 
 *Why?* Terminal B does **not** see `5.50`. Because Terminal A has not committed, Multi-Version Concurrency Control (MVCC) serves Terminal B the consistent snapshot from before Terminal A started. Dirty Reads ($G_1$) are prevented.
 
-#### Step 3: Terminal A aborts the transaction
+#### 2.2.3 Step 3: Terminal A aborts the transaction
 
 ```
 -- In Terminal A:
@@ -150,7 +150,7 @@ ROLLBACK;
 
 ```
 
-#### Step 4: Terminal B verifies baseline consistency
+#### 2.2.4 Step 4: Terminal B verifies baseline consistency
 
 ```
 -- In Terminal B:
@@ -163,7 +163,7 @@ SELECT station_id, temp_offset FROM station_calibration WHERE station_id = 'AWS-
 
 ## 3. Lab 2: Row Locks & Lock Contention (Writers Block Writers)
 
-### Objective
+### 3.1 Objective
 
 Demonstrate what happens when two transactions attempt to update the **exact same row** concurrently. Prove how relational engines enforce mutual exclusion using Exclusive Row Locks (`X-Locks`).
 
@@ -196,9 +196,9 @@ Demonstrate what happens when two transactions attempt to update the **exact sam
 
 ```
 
-### Step-by-Step Terminal Commands
+### 3.2 Step-by-Step Terminal Commands
 
-#### Step 1: Terminal A locks row `AWS-002`
+#### 3.2.1 Step 1: Terminal A locks row `AWS-002`
 
 ```
 -- In Terminal A:
@@ -211,7 +211,7 @@ WHERE station_id = 'AWS-002';
 
 ```
 
-#### Step 2: Terminal B attempts to mutate the same physical row
+#### 3.2.2 Step 2: Terminal B attempts to mutate the same physical row
 
 ```
 -- In Terminal B:
@@ -225,7 +225,7 @@ WHERE station_id = 'AWS-002';
 
 ```
 
-#### Step 3: Inspect the Lock in a 3rd Terminal (Forensic Diagnosis)
+#### 3.2.3 Step 3: Inspect the Lock in a 3rd Terminal (Forensic Diagnosis)
 
 While Terminal B is blocked, open **Terminal C** or query PostgreSQL to see the lock wait in real time:
 
@@ -255,7 +255,7 @@ WHERE NOT blocked_locks.granted;
 
 ```
 
-#### Step 4: Release the lock in Terminal A
+#### 3.2.4 Step 4: Release the lock in Terminal A
 
 ```
 -- In Terminal A:
@@ -267,7 +267,7 @@ COMMIT;
 
 ## 4. Lab 3: The Deadlock Dilemma (Circular Wait)
 
-### Objective
+### 4.1 Objective
 
 Create a classic circular wait deadlock and observe how database engines detect the cycle and abort one transaction.
 
@@ -288,9 +288,9 @@ Create a classic circular wait deadlock and observe how database engines detect 
 
 ```
 
-### Step-by-Step Terminal Commands
+### 4.2 Step-by-Step Terminal Commands
 
-#### Step 1: Open transactions in both terminals
+#### 4.2.1 Step 1: Open transactions in both terminals
 
 ```
 -- Terminal A:
@@ -303,7 +303,7 @@ UPDATE station_calibration SET temp_offset = 0.80 WHERE station_id = 'AWS-002';
 
 ```
 
-#### Step 2: Create the circular lock dependency
+#### 4.2.2 Step 2: Create the circular lock dependency
 
 ```
 -- In Terminal A (attempts to lock Row 2, held by B):
@@ -315,7 +315,7 @@ UPDATE station_calibration SET temp_offset = 0.99 WHERE station_id = 'AWS-001';
 
 ```
 
-#### The Engine's Resolution:
+#### 4.2.3 The Engine's Resolution:
 
 Within 1 second (`deadlock_timeout = 1s`), the database background engine traverses the wait-for graph, detects the cycle, and terminates one session:
 
@@ -331,7 +331,7 @@ HINT:  See server log for query details.
 
 ## 5. Lab 4: Read Committed vs. Repeatable Read
 
-### Objective
+### 5.1 Objective
 
 Observe how transaction isolation levels change what a query sees when another transaction commits data midway through.
 
@@ -342,9 +342,9 @@ Observe how transaction isolation levels change what a query sees when another t
 
 ```
 
-### Step-by-Step Terminal Commands
+### 5.2 Step-by-Step Terminal Commands
 
-#### Test A: Default `READ COMMITTED`
+#### 5.2.1 Test A: Default `READ COMMITTED`
 
 ```
 -- In Terminal B:
@@ -363,7 +363,7 @@ COMMIT;
 
 ```
 
-#### Test B: `REPEATABLE READ` Isolation
+#### 5.2.2 Test B: `REPEATABLE READ` Isolation
 
 ```
 -- In Terminal B:
@@ -390,7 +390,7 @@ SELECT temp_offset FROM station_calibration WHERE station_id = 'AWS-003';
 
 Keep these commands handy when debugging stuck sessions during development or incident response:
 
-### 1. View All Active Transactions and Durations (PostgreSQL)
+### 6.1 View All Active Transactions and Durations (PostgreSQL)
 
 ```
 SELECT 
@@ -407,7 +407,7 @@ ORDER BY txn_duration DESC NULLS LAST;
 
 ```
 
-### 2. Spot Idle In Transaction Sessions (The Bloat Culprits)
+### 6.2 Spot Idle In Transaction Sessions (The Bloat Culprits)
 
 ```
 SELECT 
@@ -422,7 +422,7 @@ ORDER BY idle_duration DESC;
 
 ```
 
-### 3. Terminate a Stuck Blocking Session
+### 6.3 Terminate a Stuck Blocking Session
 
 ```
 -- Graceful cancel of current query (sends SIGINT):
@@ -433,7 +433,7 @@ SELECT pg_terminate_backend(12345);
 
 ```
 
-### 4. MySQL InnoDB Lock Monitoring Equivalent
+### 6.4 MySQL InnoDB Lock Monitoring Equivalent
 
 > **Deep-Dive Reference:** For a complete explanation of InnoDB `Record Locks`, `Gap Locks`, `Next-Key Locks` (under `REPEATABLE READ`), and why unindexed `WHERE` updates lock every gap in the table, see **[Reference Card 14: MySQL 8.0/8.4 & MariaDB Complete Engineering Guide (Sections 6 & 10)](./14_mysql_and_mariadb_innodb_complete_engineering_guide.md#6-innodb-concurrency--locking-record-gap-next-key--insert-intention-locks)**.
 
@@ -476,7 +476,7 @@ JOIN information_schema.innodb_trx r
 ```
 ---
 
-### Reference Library Navigation
+### 7.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | **Card 09 of 14** | [Next Card](./10_query_execution_plan_forensics_and_explain.md) | [⬆ Back to Top](#database-transactions--acid-internals-two-terminal-debugging-reference-card)

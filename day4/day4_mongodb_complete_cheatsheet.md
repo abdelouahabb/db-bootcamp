@@ -16,7 +16,7 @@
 
 ## 1. Installing MongoDB Community Server & `mongosh`
 
-### Option A: Ubuntu / Debian (Official MongoDB 7.0+ APT Repo)
+### 1.1 Option A: Ubuntu / Debian (Official MongoDB 7.0+ APT Repo)
 ```bash
 sudo apt-get install -y gnupg curl
 curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
@@ -32,7 +32,7 @@ sudo systemctl enable --now mongod
 sudo systemctl status mongod
 ```
 
-### Option B: Docker (Fastest Local Lab Setup)
+### 1.2 Option B: Docker (Fastest Local Lab Setup)
 ```bash
 docker run -d \
   --name weather-mongo \
@@ -42,7 +42,7 @@ docker run -d \
   mongo:7.0
 ```
 
-### Running the Day 4 Seed & Benchmark Scripts
+### 1.3 Running the Day 4 Seed & Benchmark Scripts
 ```bash
 # 1. Operational stations, radiosonde soundings, time-series & CAP alerts
 mongosh weather_nosql day4_weather_ops_mongo.js
@@ -230,7 +230,7 @@ db.storm_polygons.find({
 
 ## 7. Indexing Strategy: The `ESR` Rule & `explain("executionStats")`
 
-### The `ESR` (Equality $\rightarrow$ Sort $\rightarrow$ Range) Compound Index Rule
+### 7.1 The `ESR` (Equality $\rightarrow$ Sort $\rightarrow$ Range) Compound Index Rule
 When indexing a query like:
 *"Find soundings for **`station_id = 60390`** (Equality), ordered by **`launch_time DESC`** (Sort), where **`cape_j_kg >= 500`** (Range)"*
 
@@ -246,7 +246,7 @@ db.radiosonde_soundings.createIndex({
 db.cap_alerts.createIndex({ affected_stations: 1 });
 ```
 
-### Reading `.explain("executionStats")`
+### 7.2 Reading `.explain("executionStats")`
 | Metric / Stage | PostgreSQL (`EXPLAIN ANALYZE`) | MongoDB (`explain("executionStats")`) |
 | :--- | :--- | :--- |
 | Full Table / Collection Scan | `Seq Scan` | `COLLSCAN` (missing index!) |

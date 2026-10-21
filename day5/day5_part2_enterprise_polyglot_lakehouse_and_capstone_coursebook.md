@@ -344,16 +344,16 @@ Data should not be forced into a single database format. A streaming router insp
          └─────────────────────────┘           └─────────────────────────┘
 ```
 
-1. **Structured Synoptic Observations (`METAR_STANDARD`):**
-   * Emitted to **PostgreSQL 16**.
-   * Written to `raw_telemetry_partitioned`.
-   * Directly linkable via relational foreign keys to the PostGIS `stations` registry.
-2. **Polymorphic / Dynamic Sensor Payloads (`ULTRASONIC_3D`):**
-   * Emitted to **MongoDB 7.0**.
-   * Written to the native `weather_stream` time-series collection.
-   * Leverages internal columnar bucketing without schema migration overhead.
-3. **Dead-Letter Queue (DLQ):**
-   * Any corrupted, malformed, or unparseable packets are routed to a dead-letter topic (`weather.telemetry.dlq`) for forensic audit without stalling the primary ingestion thread.
+#### 2.1.1 Structured Synoptic Observations (`METAR_STANDARD`)
+* Emitted to **PostgreSQL 16**.
+* Written to `raw_telemetry_partitioned`.
+* Directly linkable via relational foreign keys to the PostGIS `stations` registry.
+#### 2.1.2 Polymorphic / Dynamic Sensor Payloads (`ULTRASONIC_3D`)
+* Emitted to **MongoDB 7.0**.
+* Written to the native `weather_stream` time-series collection.
+* Leverages internal columnar bucketing without schema migration overhead.
+#### 2.1.3 Dead-Letter Queue (DLQ)
+* Any corrupted, malformed, or unparseable packets are routed to a dead-letter topic (`weather.telemetry.dlq`) for forensic audit without stalling the primary ingestion thread.
 
 ### 2.2 The Production Polyglot Router Script ([stream_router.py](./stream_router.py))
 
@@ -805,7 +805,7 @@ if __name__ == "__main__":
                                   • Instant Alert Bus             • Parquet Lake archived
 ```
 
-#### Objective
+#### 5.1.1 Objective
 Attendees execute an end-to-end operational disaster scenario:
 1. Ingest simulated squall line telemetry through MQTT.
 2. Route the data concurrently to PostgreSQL (`METAR_STANDARD`) and MongoDB (`ULTRASONIC_3D`).
@@ -818,20 +818,20 @@ Attendees execute an end-to-end operational disaster scenario:
 
 ### 5.2 Capstone Execution Runbook
 
-#### Step 1: Run the Edge Simulator
+#### 5.2.1 Step 1: Run the Edge Simulator
 Open Terminal 1 and start the edge simulator:
 ```bash
 python3 simulate_edge_sensors.py
 ```
 
-#### Step 2: Start the Polyglot Router
+#### 5.2.2 Step 2: Start the Polyglot Router
 Open Terminal 2 and launch the stream router:
 ```bash
 python3 stream_router.py
 ```
 *Observe:* The router receives packets from MQTT, batching METAR observations into PostgreSQL and 3D turbulence observations into MongoDB simultaneously.
 
-#### Step 3: Execute the Severe Storm Detection Query
+#### 5.2.3 Step 3: Execute the Severe Storm Detection Query
 Open Terminal 3, connect to PostgreSQL, and run the real-time barometric drop detector:
 ```bash
 psql -U postgres -h localhost -d weather_ops_db -c "
@@ -863,7 +863,7 @@ LIMIT 5;
 "
 ```
 
-#### Step 4: Dispatch PostGIS Evacuation Geofence
+#### 5.2.4 Step 4: Dispatch PostGIS Evacuation Geofence
 For every station detected in Step 3, identify all adjacent coastal ports and infrastructure within a $40\text{ km}$ geodetic buffer of Dellys Cape (`3.9130, 36.9172`):
 ```bash
 psql -U postgres -h localhost -d weather_ops_db -c "
@@ -879,13 +879,13 @@ ORDER BY dist_to_squall_center_km ASC;
 "
 ```
 
-#### Step 5: Execute Automated Lakehouse Compaction
+#### 5.2.5 Step 5: Execute Automated Lakehouse Compaction
 Archive the completed storm dataset into the columnar lakehouse:
 ```bash
 python3 compact_hot_to_cold.py
 ```
 
-#### Step 6: Verify Serving via the FastAPI Gateway
+#### 5.2.6 Step 6: Verify Serving via the FastAPI Gateway
 Launch the unified serving API:
 ```bash
 python3 serving_api.py
@@ -938,7 +938,7 @@ Over the past five days, we deconstructed and rebuilt the complete data architec
 ================================================================================
 ```
 
-### Architectural Synthesis & Engineering Mandate
+### 6.1 Architectural Synthesis & Engineering Mandate
 
 > *"By mastering these five days of meteorological data engineering, you have transitioned from viewing databases as generic storage boxes to understanding their physical reality: disk blocks, CPU vector registers, memory caches, and network consensus.*
 >

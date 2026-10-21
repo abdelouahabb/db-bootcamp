@@ -36,14 +36,14 @@ This directory provides **two turnkey Docker Compose topologies** so you can lau
 
 ### 2.2 Step-by-Step Quick Start (Stack A)
 
-#### Step 1: Start All Containers
+#### 2.2.1 Step 1: Start All Containers
 ```bash
 cd docker
 docker compose -f docker-compose.ha-replicaset.yml up -d
 docker compose -f docker-compose.ha-replicaset.yml ps
 ```
 
-#### Step 2: Load Days 2 & 3 PostgreSQL + PostGIS Labs
+#### 2.2.2 Step 2: Load Days 2 & 3 PostgreSQL + PostGIS Labs
 ```bash
 # 1. Load Day 2 Multi-Schema Architecture & Synoptic Rows
 docker exec -i weather-pg-primary psql -U postgres -d weather_ops -f /workspace/day2/weather_ops_pg.sql
@@ -55,7 +55,7 @@ docker exec -i weather-pg-primary psql -U postgres -d weather_ops -f /workspace/
 docker exec -it weather-pg-primary psql -U postgres -d weather_ops
 ```
 
-#### Step 3: Initialize the 3-Node MongoDB Replica Set (`rs_meteo`) & Load Day 4 Labs
+#### 2.2.3 Step 3: Initialize the 3-Node MongoDB Replica Set (`rs_meteo`) & Load Day 4 Labs
 ```bash
 # 1. Initialize the 3-node Replica Set (mongo-node1, mongo-node2, mongo-node3)
 docker exec -it weather-mongo-node1 mongosh --eval '
@@ -114,7 +114,7 @@ docker start weather-mongo-node1
 
 ### 3.2 Step-by-Step Quick Start (Stack B — Day 5 Capstone)
 
-#### Step 1: Switch from Stack A to Stack B
+#### 3.2.1 Step 1: Switch from Stack A to Stack B
 ```bash
 cd docker
 
@@ -126,7 +126,7 @@ docker compose -f docker-compose.polyglot-lakehouse.yml up -d
 docker compose -f docker-compose.polyglot-lakehouse.yml ps
 ```
 
-#### Step 2: Run the End-to-End Day 5 Streaming, Compaction & FastAPI Pipeline
+#### 3.2.2 Step 2: Run the End-to-End Day 5 Streaming, Compaction & FastAPI Pipeline
 ```bash
 cd ../day5
 

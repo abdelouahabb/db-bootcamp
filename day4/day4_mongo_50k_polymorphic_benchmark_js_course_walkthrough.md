@@ -4,7 +4,7 @@
 
 ---
 
-## Architectural Overview
+## 1. Architectural Overview
 
 [`day4_mongo_50k_polymorphic_benchmark.js`](./day4_mongo_50k_polymorphic_benchmark.js) is a self-contained performance engineering and physical storage benchmark script targeting the **`weather_telemetry_db`** database. It synthesizes **50,000 polymorphic weather telemetry documents** across 50 Automated Weather Stations (`AWS-001` through `AWS-050`) spanning three Algerian climate regions (`COASTAL_MED`, `TELL_ATLAS`, `SAHARA_PLATEAU`) and four fundamentally different instrument classes.
 
@@ -30,9 +30,9 @@ flowchart TD
 
 ---
 
-## Section 1: 50,000-Document Polymorphic Telemetry Generator & Dual-Collection Ingestion (Lines 1–147)
+## 2. Section 1: 50,000-Document Polymorphic Telemetry Generator & Dual-Collection Ingestion (Lines 1–147)
 
-### 1.1 Database Initialization, Dual-Collection Setup & Index Definitions (Lines 1–35)
+### 2.1 Database Initialization, Dual-Collection Setup & Index Definitions (Lines 1–35)
 
 ```javascript
 // ============================================================================
@@ -71,7 +71,7 @@ dbTarget.sensor_payloads.createIndex({ "metadata.sensor_type": 1 });
 dbTarget.sensor_payloads.createIndex({ "hardware_faults": 1 });
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.1.1 Deep-Dive Architectural Explanation
 
 * **Lines 8–12 (Constants & Database Handle):**
   * Defines `DB_NAME = "weather_telemetry_db"`, `TOTAL_DOCUMENTS = 50000`, and `BATCH_SIZE = 5000`.
@@ -90,7 +90,7 @@ dbTarget.sensor_payloads.createIndex({ "hardware_faults": 1 });
 
 ---
 
-### 1.2 Station Topology, Fault Catalog & 4-Class Polymorphic Payload Synthesis (Lines 36–128)
+### 2.2 Station Topology, Fault Catalog & 4-Class Polymorphic Payload Synthesis (Lines 36–128)
 
 ```javascript
 const stationList = [];
@@ -187,7 +187,7 @@ for (let i = 1; i <= TOTAL_DOCUMENTS; i++) {
   batchTimeSeries.push(payload);
 ```
 
-#### Deep-Dive Breakdown of the 4 Polymorphic Instrument Payloads
+#### 2.2.1 Deep-Dive Breakdown of the 4 Polymorphic Instrument Payloads
 
 * **Lines 36–42 (Regional Station Allocation):**
   * Generates 50 stations (`AWS-001` to `AWS-050`) partitioned into 3 Algerian physiographic zones:
@@ -210,7 +210,7 @@ for (let i = 1; i <= TOTAL_DOCUMENTS; i++) {
 
 ---
 
-### 1.3 High-Throughput Unordered Batch Ingestion (Lines 129–147)
+### 2.3 High-Throughput Unordered Batch Ingestion (Lines 129–147)
 
 ```javascript
   if (batchStandard.length >= BATCH_SIZE) {
@@ -233,17 +233,18 @@ const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(2);
 print(`[+] Complete! ${totalInserted.toLocaleString()} documents ingested in ${elapsedSec}s.`);
 ```
 
-#### Why `BATCH_SIZE = 5000` with `{ ordered: false }` Maximizes WiredTiger Throughput
-1. **Amortizing Network Round-Trip Latency:** Calling `insertOne()` 50,000 times inside a loop forces 50,000 synchronous TCP round-trips between `mongosh` and `mongod`. Buffering 5,000 documents per `insertMany()` call reduces the entire 50,000-document load to just **10 bulk wire-protocol batches** per collection.
-2. **Parallel Bucket & Shard Routing (`{ ordered: false }`):**
-   * By default, `insertMany()` executes with `{ ordered: true }`, which requires MongoDB to process documents strictly sequentially and abort on the first error.
-   * Passing **`{ ordered: false }`** allows the MongoDB server (and `mongos` routers in sharded clusters) to reorder and group documents by `metaField` (`metadata`) when writing to the `weather_stream` Time-Series collection, packing measurements for the same station into the same in-memory bucket in a single lock acquisition.
+#### 2.3.1 Why `BATCH_SIZE = 5000` with `{ ordered: false }` Maximizes WiredTiger Throughput
+##### 2.3.1.1 Amortizing Network Round-Trip Latency
+Calling `insertOne()` 50,000 times inside a loop forces 50,000 synchronous TCP round-trips between `mongosh` and `mongod`. Buffering 5,000 documents per `insertMany()` call reduces the entire 50,000-document load to just **10 bulk wire-protocol batches** per collection.
+##### 2.3.1.2 Parallel Bucket & Shard Routing (`{ ordered: false }`)
+* By default, `insertMany()` executes with `{ ordered: true }`, which requires MongoDB to process documents strictly sequentially and abort on the first error.
+* Passing **`{ ordered: false }`** allows the MongoDB server (and `mongos` routers in sharded clusters) to reorder and group documents by `metaField` (`metadata`) when writing to the `weather_stream` Time-Series collection, packing measurements for the same station into the same in-memory bucket in a single lock acquisition.
 
 ---
 
-## Section 2: Manual Bucket Pattern Atomic Upsert — `hourly_sensor_buckets` (Lines 148–181)
+## 3. Section 2: Manual Bucket Pattern Atomic Upsert — `hourly_sensor_buckets` (Lines 148–181)
 
-### Code Block
+### 3.1 Code Block
 
 ```javascript
 // ============================================================================
@@ -281,25 +282,25 @@ sampleReadings.forEach(r => {
 printjson(dbTarget.hourly_sensor_buckets.findOne({ _id: "AWS-001_2026-10-04_H12" }));
 ```
 
-### Deep-Dive Architectural Explanation: How the Manual Bucket Pattern Works
+### 3.2 Deep-Dive Architectural Explanation: How the Manual Bucket Pattern Works
 
 While native Time-Series collections handle bucketing automatically, engineers frequently implement the **Manual Bucket Pattern** when they need custom deterministic `_id` keys, real-time pre-aggregated `summary` sub-documents updated on every write, or strict sub-document array size governance.
 
 Every single 1-second sensor reading (`r`) executes the exact same idempotent `updateOne(filter, update, { upsert: true })` statement:
 
-1. **The Filter Predicate (`_id` + Capacity Guard, Lines 161–164):**
-   * `_id: "AWS-001_2026-10-04_H12"`: Deterministic composite primary key encoding `<station_id>_<YYYY-MM-DD>_H<hour>`.
-   * `sample_count: { $lt: 3600 }`: **Bounded Array Guard**. Because 1 hour contains $3,600\text{ seconds}$, this predicate guarantees that `measurements` never grows beyond 3,600 elements—preventing unbounded document growth toward MongoDB's 16 MB BSON limit.
-2. **`$setOnInsert` (Lines 166–170):**
-   * On the very first reading of the hour (`sec: 0`), no document matches `_id: "AWS-001_2026-10-04_H12"`. Because `{ upsert: true }` is enabled, MongoDB creates the bucket document and executes `$setOnInsert` once to initialize immutable header fields (`station_id`, `bucket_start`, `bucket_end`). On all subsequent 3,599 readings (`sec: 1..3599`), `$setOnInsert` is skipped.
-3. **`$push: { measurements: r }` (Line 171):**
-   * Appends the raw 1-second reading sub-document `{ sec, w, temp }` to the `measurements` array in $O(1)$ amortized memory time.
-4. **`$inc: { sample_count: 1, "summary.sum_w": r.w }` (Line 172):**
-   * Atomically increments the document counter `sample_count` by `1` and adds the current wind speed `r.w` to the running sum `summary.sum_w`. Why maintain both `sample_count` and `summary.sum_w`? Because any dashboard can compute the exact hourly mean wind speed on read ($\text{mean} = \text{sum\_w} / \text{sample\_count} = 17.8 / 4 = 4.45\text{ m/s}$) without scanning the `measurements` array!
-5. **`$min: { "summary.min_w": r.w }` & `$max: { "summary.max_w": r.w }` (Lines 173–174):**
-   * Compares `r.w` against the existing `summary.min_w` and `summary.max_w` values inside WiredTiger and updates them only if `r.w` sets a new hourly minimum (`3.9`) or peak gust (`5.2`). On initial upsert (`sec: 0`), both initialize to `4.1`.
+#### 3.2.1 The Filter Predicate (`_id` + Capacity Guard, Lines 161–164)
+* `_id: "AWS-001_2026-10-04_H12"`: Deterministic composite primary key encoding `<station_id>_<YYYY-MM-DD>_H<hour>`.
+* `sample_count: { $lt: 3600 }`: **Bounded Array Guard**. Because 1 hour contains $3,600\text{ seconds}$, this predicate guarantees that `measurements` never grows beyond 3,600 elements—preventing unbounded document growth toward MongoDB's 16 MB BSON limit.
+#### 3.2.2 `$setOnInsert` (Lines 166–170)
+* On the very first reading of the hour (`sec: 0`), no document matches `_id: "AWS-001_2026-10-04_H12"`. Because `{ upsert: true }` is enabled, MongoDB creates the bucket document and executes `$setOnInsert` once to initialize immutable header fields (`station_id`, `bucket_start`, `bucket_end`). On all subsequent 3,599 readings (`sec: 1..3599`), `$setOnInsert` is skipped.
+#### 3.2.3 `$push: { measurements: r }` (Line 171)
+* Appends the raw 1-second reading sub-document `{ sec, w, temp }` to the `measurements` array in $O(1)$ amortized memory time.
+#### 3.2.4 `$inc: { sample_count: 1, "summary.sum_w": r.w }` (Line 172)
+* Atomically increments the document counter `sample_count` by `1` and adds the current wind speed `r.w` to the running sum `summary.sum_w`. Why maintain both `sample_count` and `summary.sum_w`? Because any dashboard can compute the exact hourly mean wind speed on read ($\text{mean} = \text{sum\_w} / \text{sample\_count} = 17.8 / 4 = 4.45\text{ m/s}$) without scanning the `measurements` array!
+#### 3.2.5 `$min: { "summary.min_w": r.w }` & `$max: { "summary.max_w": r.w }` (Lines 173–174)
+* Compares `r.w` against the existing `summary.min_w` and `summary.max_w` values inside WiredTiger and updates them only if `r.w` sets a new hourly minimum (`3.9`) or peak gust (`5.2`). On initial upsert (`sec: 0`), both initialize to `4.1`.
 
-#### Resulting Pre-Aggregated Bucket Document (Line 180 Output)
+#### 3.2.6 Resulting Pre-Aggregated Bucket Document (Line 180 Output)
 
 ```javascript
 {
@@ -320,9 +321,9 @@ Every single 1-second sensor reading (`r`) executes the exact same idempotent `u
 
 ---
 
-## Section 3: Multi-Stage Aggregation — Road Safety & Reduced Grip Analytics (Lines 182–213)
+## 4. Section 3: Multi-Stage Aggregation — Road Safety & Reduced Grip Analytics (Lines 182–213)
 
-### Code Block
+### 4.1 Code Block
 
 ```javascript
 // ============================================================================
@@ -359,26 +360,26 @@ const roadSafetyReport = dbTarget.sensor_payloads.aggregate([
 printjson(roadSafetyReport);
 ```
 
-### Stage-by-Stage Technical Breakdown
+### 4.2 Stage-by-Stage Technical Breakdown
 
-1. **Stage 1 — `$match` (Lines 187–192):**
-   * Filters the 50,000 polymorphic documents down to only `metadata.sensor_type: "ROAD_SURFACE_RADAR"` (12,500 documents, leveraging the `{ "metadata.sensor_type": 1 }` B-Tree index created on Line 33) and further restricts to wet-pavement observations where `water_film_height_mm: { $gt: 0.5 }` (~8,333 documents, since `water_film_height_mm` is uniformly distributed across $[0.0, 1.5]\text{ mm}$).
-   * Placing `$match` as the very first stage reduces the number of documents flowing into `$group` by **~83%**.
-2. **Stage 2 — `$group` with `$addToSet` Distinct Set Accumulation (Lines 193–201):**
-   * Groups by `_id: "$metadata.region"` (`"COASTAL_MED"`, `"TELL_ATLAS"`, `"SAHARA_PLATEAU"`).
-   * **`stations_reporting: { $addToSet: "$metadata.station_id" }`:** MongoDB's `$group` stage does not have a SQL `COUNT(DISTINCT station_id)` accumulator. Instead, `$addToSet` collects unique `station_id` strings into an in-memory mathematical set array (ignoring duplicates), which is then counted in the next stage using `$size`.
-   * Computes `avg_grip_factor` (`$avg`), `min_road_temp` (`$min`), and wet-observation `sample_count` (`$sum: 1`).
-3. **Stage 3 — `$project` with `$size` and `$round` (Lines 202–210):**
-   * `total_stations: { $size: "$stations_reporting" }`: Converts the deduplicated array of station IDs into an integer count (`15` for `COASTAL_MED`, `20` for `TELL_ATLAS`, `15` for `SAHARA_PLATEAU`) and drops the bulky `stations_reporting` array from the final output.
-   * Rounds `avg_grip_factor` and `min_road_temp` to 2 decimal places (`$round: [..., 2]`).
-4. **Stage 4 — `$sort: { avg_grip_factor: 1 }` (Line 211):**
-   * Sorts ascending (`1`) so the region with the lowest tire-pavement friction (`avg_grip_factor`) appears first.
+#### 4.2.1 Stage 1 — `$match` (Lines 187–192)
+* Filters the 50,000 polymorphic documents down to only `metadata.sensor_type: "ROAD_SURFACE_RADAR"` (12,500 documents, leveraging the `{ "metadata.sensor_type": 1 }` B-Tree index created on Line 33) and further restricts to wet-pavement observations where `water_film_height_mm: { $gt: 0.5 }` (~8,333 documents, since `water_film_height_mm` is uniformly distributed across $[0.0, 1.5]\text{ mm}$).
+* Placing `$match` as the very first stage reduces the number of documents flowing into `$group` by **~83%**.
+#### 4.2.2 Stage 2 — `$group` with `$addToSet` Distinct Set Accumulation (Lines 193–201)
+* Groups by `_id: "$metadata.region"` (`"COASTAL_MED"`, `"TELL_ATLAS"`, `"SAHARA_PLATEAU"`).
+* **`stations_reporting: { $addToSet: "$metadata.station_id" }`:** MongoDB's `$group` stage does not have a SQL `COUNT(DISTINCT station_id)` accumulator. Instead, `$addToSet` collects unique `station_id` strings into an in-memory mathematical set array (ignoring duplicates), which is then counted in the next stage using `$size`.
+* Computes `avg_grip_factor` (`$avg`), `min_road_temp` (`$min`), and wet-observation `sample_count` (`$sum: 1`).
+#### 4.2.3 Stage 3 — `$project` with `$size` and `$round` (Lines 202–210)
+* `total_stations: { $size: "$stations_reporting" }`: Converts the deduplicated array of station IDs into an integer count (`15` for `COASTAL_MED`, `20` for `TELL_ATLAS`, `15` for `SAHARA_PLATEAU`) and drops the bulky `stations_reporting` array from the final output.
+* Rounds `avg_grip_factor` and `min_road_temp` to 2 decimal places (`$round: [..., 2]`).
+#### 4.2.4 Stage 4 — `$sort: { avg_grip_factor: 1 }` (Line 211)
+* Sorts ascending (`1`) so the region with the lowest tire-pavement friction (`avg_grip_factor`) appears first.
 
 ---
 
-## Section 4: Multi-Stage Aggregation — `$unwind` Hardware Fault Diagnostics (Lines 215–246)
+## 5. Section 4: Multi-Stage Aggregation — `$unwind` Hardware Fault Diagnostics (Lines 215–246)
 
-### Code Block
+### 5.1 Code Block
 
 ```javascript
 // ============================================================================
@@ -415,26 +416,26 @@ const faultDiagnostics = dbTarget.sensor_payloads.aggregate([
 printjson(faultDiagnostics);
 ```
 
-### Stage-by-Stage Technical Breakdown
+### 5.2 Stage-by-Stage Technical Breakdown
 
-1. **Stage 1 — Sparse Array Filter (`$match`, Line 220):**
-   * `{ hardware_faults: { $exists: true, $not: { $size: 0 } } }` filters out the ~94% (~47,000) of healthy telemetry documents that do not carry a `hardware_faults` field (or have an empty array), passing only the ~3,000 faulted documents into `$unwind`.
-2. **Stage 2 — `{ $unwind: "$hardware_faults" }` (Line 221):**
-   * For documents with 1 fault code, `$unwind` emits 1 document where `hardware_faults` is now a scalar string (e.g., `"ERR_BATTERY_UNDERVOLT"`).
-   * For the ~25% of faulted documents carrying 2 fault codes, `$unwind` emits 2 separate documents—one for each fault code—yielding ~3,750 unwound fault event records.
-3. **Stage 3 — Composite Key Grouping (`$group`, Lines 222–231):**
-   * Groups by a **composite sub-document key**: `_id: { region: "$metadata.region", fault_code: "$hardware_faults" }` ($3\text{ regions} \times 5\text{ fault codes} = 15\text{ composite groups}$).
-   * Accumulates total fault `occurrences: { $sum: 1 }`, unique impacted stations via `affected_stations: { $addToSet: "$metadata.station_id" }`, and the most recent failure timestamp via `latest_occurrence: { $max: "$timestamp" }`.
-4. **Stage 4 — Flattening Composite `_id` (`$project`, Lines 232–241):**
-   * Suppresses `_id: 0`, promotes `"$_id.region"` and `"$_id.fault_code"` to top-level keys, and computes `affected_station_count: { $size: "$affected_stations" }`.
-5. **Stages 5 & 6 — Top-N Ranking (`$sort` + `$limit: 10`, Lines 243–244):**
-   * Sorts by `occurrences: -1` (descending) and limits the cursor to the top 10 regional fault hotspots. When `$sort` immediately precedes `$limit`, MongoDB's aggregation optimizer coalesces them into a bounded **Top-K Heap Sort**, maintaining only 10 documents in memory during sorting.
+#### 5.2.1 Stage 1 — Sparse Array Filter (`$match`, Line 220)
+* `{ hardware_faults: { $exists: true, $not: { $size: 0 } } }` filters out the ~94% (~47,000) of healthy telemetry documents that do not carry a `hardware_faults` field (or have an empty array), passing only the ~3,000 faulted documents into `$unwind`.
+#### 5.2.2 Stage 2 — `{ $unwind: "$hardware_faults" }` (Line 221)
+* For documents with 1 fault code, `$unwind` emits 1 document where `hardware_faults` is now a scalar string (e.g., `"ERR_BATTERY_UNDERVOLT"`).
+* For the ~25% of faulted documents carrying 2 fault codes, `$unwind` emits 2 separate documents—one for each fault code—yielding ~3,750 unwound fault event records.
+#### 5.2.3 Stage 3 — Composite Key Grouping (`$group`, Lines 222–231)
+* Groups by a **composite sub-document key**: `_id: { region: "$metadata.region", fault_code: "$hardware_faults" }` ($3\text{ regions} \times 5\text{ fault codes} = 15\text{ composite groups}$).
+* Accumulates total fault `occurrences: { $sum: 1 }`, unique impacted stations via `affected_stations: { $addToSet: "$metadata.station_id" }`, and the most recent failure timestamp via `latest_occurrence: { $max: "$timestamp" }`.
+#### 5.2.4 Stage 4 — Flattening Composite `_id` (`$project`, Lines 232–241)
+* Suppresses `_id: 0`, promotes `"$_id.region"` and `"$_id.fault_code"` to top-level keys, and computes `affected_station_count: { $size: "$affected_stations" }`.
+#### 5.2.5 Stages 5 & 6 — Top-N Ranking (`$sort` + `$limit: 10`, Lines 243–244)
+* Sorts by `occurrences: -1` (descending) and limits the cursor to the top 10 regional fault hotspots. When `$sort` immediately precedes `$limit`, MongoDB's aggregation optimizer coalesces them into a bounded **Top-K Heap Sort**, maintaining only 10 documents in memory during sorting.
 
 ---
 
-## Section 5: Physical Storage Compression Audit — `stats()` (Lines 248–268)
+## 6. Section 5: Physical Storage Compression Audit — `stats()` (Lines 248–268)
 
-### Code Block
+### 6.1 Code Block
 
 ```javascript
 // ============================================================================
@@ -459,7 +460,7 @@ if (tsStats.storageSize > 0) {
 print("================================================================\n");
 ```
 
-### Deep-Dive Breakdown of WiredTiger Storage Metrics
+### 6.2 Deep-Dive Breakdown of WiredTiger Storage Metrics
 
 Understanding the difference between `size`, `storageSize`, and `totalIndexSize` returned by `.stats()` (bytes divided by $1024 \times 1024$ to convert to MiB/MB) is critical for capacity planning:
 
@@ -473,7 +474,7 @@ Understanding the difference between `size`, `storageSize`, and `totalIndexSize`
 
 ---
 
-## Expected Terminal Output
+## 7. Expected Terminal Output
 
 Executing `mongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js` produces the following output:
 

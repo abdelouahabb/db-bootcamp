@@ -27,11 +27,11 @@
   - [6.1 Strategy A: Native Declarative Partitioning (The Cleanest Solution)](#61-strategy-a-native-declarative-partitioning-the-cleanest-solution)
   - [6.2 Strategy B: `pg_repack` (Online Table Compaction)](#62-strategy-b-pg_repack-online-table-compaction)
 - [7. Hands-On Forensics & Diagnostic SQL Lab](#7-hands-on-forensics--diagnostic-sql-lab)
-  - [Step 1: Install `pgstattuple` for Physical Bloat Inspection](#step-1-install-pgstattuple-for-physical-bloat-inspection)
-  - [Step 2: Create a Demo Table and Synthesize 500,000 Rows](#step-2-create-a-demo-table-and-synthesize-500000-rows)
-  - [Step 3: Generate Severe Table Bloat (Update 80% of Rows)](#step-3-generate-severe-table-bloat-update-80-of-rows)
-  - [Step 4: Run Standard `VACUUM` and Observe Disk Footprint](#step-4-run-standard-vacuum-and-observe-disk-footprint)
-  - [Step 5: Run `VACUUM FULL` and Observe Disk Compaction](#step-5-run-vacuum-full-and-observe-disk-compaction)
+  - [Step 1: Install `pgstattuple` for Physical Bloat Inspection](#71-step-1-install-pgstattuple-for-physical-bloat-inspection)
+  - [Step 2: Create a Demo Table and Synthesize 500,000 Rows](#72-step-2-create-a-demo-table-and-synthesize-500000-rows)
+  - [Step 3: Generate Severe Table Bloat (Update 80% of Rows)](#73-step-3-generate-severe-table-bloat-update-80-of-rows)
+  - [Step 4: Run Standard `VACUUM` and Observe Disk Footprint](#74-step-4-run-standard-vacuum-and-observe-disk-footprint)
+  - [Step 5: Run `VACUUM FULL` and Observe Disk Compaction](#75-step-5-run-vacuum-full-and-observe-disk-compaction)
 - [8. Summary Checklist: Production Vacuum Rules](#8-summary-checklist-production-vacuum-rules)
 
 ---
@@ -285,7 +285,7 @@ DROP TABLE telemetry_y2026m09;
 
 ```
 
-#### How to Run `pg_repack`:
+#### 6.2.1 How to Run `pg_repack`:
 
 ```
 # Repack a specific table online with zero downtime
@@ -297,14 +297,14 @@ pg_repack -h localhost -U postgres -d weather_ops_db -t raw_telemetry
 
 Run this reproducible laboratory in `psql` to measure the physical difference between `VACUUM` and `VACUUM FULL`.
 
-### Step 1: Install `pgstattuple` for Physical Bloat Inspection
+### 7.1 Step 1: Install `pgstattuple` for Physical Bloat Inspection
 
 ```
 CREATE EXTENSION IF NOT EXISTS pgstattuple;
 
 ```
 
-### Step 2: Create a Demo Table and Synthesize 500,000 Rows
+### 7.2 Step 2: Create a Demo Table and Synthesize 500,000 Rows
 
 ```
 DROP TABLE IF EXISTS bloat_lab;
@@ -329,7 +329,7 @@ SELECT pg_size_pretty(pg_total_relation_size('bloat_lab')) AS initial_size;
 
 ```
 
-### Step 3: Generate Severe Table Bloat (Update 80% of Rows)
+### 7.3 Step 3: Generate Severe Table Bloat (Update 80% of Rows)
 
 ```
 -- Updating rows creates 400,000 DEAD tuples!
@@ -348,7 +348,7 @@ FROM pgstattuple('bloat_lab');
 
 *Notice:* The table file has expanded to $\approx 185\text{ MB}$, and `dead_pct` reports over $40\%\text{--}50\%$.
 
-### Step 4: Run Standard `VACUUM` and Observe Disk Footprint
+### 7.4 Step 4: Run Standard `VACUUM` and Observe Disk Footprint
 
 ```
 \timing on
@@ -364,7 +364,7 @@ SELECT pg_size_pretty(pg_total_relation_size('bloat_lab')) AS size_after_vacuum;
 
 * Run `SELECT * FROM pgstattuple('bloat_lab');` again: `dead_tuples` is now 0, but `free_percent` has jumped to $\approx 45\%$. The space is freed inside the $8\text{ KB}$ pages and registered in the `_fsm`, but the file remains inflated on the Linux filesystem.
 
-### Step 5: Run `VACUUM FULL` and Observe Disk Compaction
+### 7.5 Step 5: Run `VACUUM FULL` and Observe Disk Compaction
 
 ```
 \timing on
@@ -401,7 +401,7 @@ SELECT pg_size_pretty(pg_total_relation_size('bloat_lab')) AS size_after_vacuum_
 ```
 ---
 
-### Reference Library Navigation
+### 8.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./07_wal_crash_recovery_sqlite_postgres_mysql.md) | **Card 08 of 14** | [Next Card](./09_acid_transactions_and_two_terminal_lock_debugging.md) | [⬆ Back to Top](#postgresql-vacuum-mechanics-vacuum-vs-vacuum-full-reference-card)

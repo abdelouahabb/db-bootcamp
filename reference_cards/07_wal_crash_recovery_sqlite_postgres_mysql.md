@@ -27,9 +27,9 @@
   - [4.4 MyRocks (RocksDB): Log-Structured Merge (LSM) Architecture](#44-myrocks-rocksdb-log-structured-merge-lsm-architecture)
 - [5. Master Comparative Architecture Matrix](#5-master-comparative-architecture-matrix)
 - [6. Hands-On Operational Profiling Labs](#6-hands-on-operational-profiling-labs)
-  - [Lab 1: SQLite Journal Mode Benchmark (100,000 Ingest Rows)](#lab-1-sqlite-journal-mode-benchmark-100000-ingest-rows)
-  - [Lab 2: PostgreSQL Ingestion Stress (Logged vs. Unlogged vs. Async Commit)](#lab-2-postgresql-ingestion-stress-logged-vs-unlogged-vs-async-commit)
-  - [Lab 3: Inspecting SQLite Shared Memory & WAL Checkpoint State](#lab-3-inspecting-sqlite-shared-memory--wal-checkpoint-state)
+  - [Lab 1: SQLite Journal Mode Benchmark (100,000 Ingest Rows)](#61-lab-1-sqlite-journal-mode-benchmark-100000-ingest-rows)
+  - [Lab 2: PostgreSQL Ingestion Stress (Logged vs. Unlogged vs. Async Commit)](#62-lab-2-postgresql-ingestion-stress-logged-vs-unlogged-vs-async-commit)
+  - [Lab 3: Inspecting SQLite Shared Memory & WAL Checkpoint State](#63-lab-3-inspecting-sqlite-shared-memory--wal-checkpoint-state)
 - [7. Summary Checklist for Systems & Weather Telemetry Architects](#7-summary-checklist-for-systems--weather-telemetry-architects)
 
 ---
@@ -130,7 +130,7 @@ SQLite is unique: it is an in-process, serverless library operating over a singl
 
 Before SQLite 3.7.0, all crash safety relied on **Rollback Journals**.
 
-#### How a Rollback Write Transaction Works:
+#### 2.1.1 How a Rollback Write Transaction Works:
 
 1. **Acquire Shared Lock:** SQLite establishes a shared read lock on `weather.db`.
 
@@ -146,7 +146,7 @@ Before SQLite 3.7.0, all crash safety relied on **Rollback Journals**.
 
 7. **Commit & Cleanup:** The journal file is deleted or truncated. Once the journal is gone, the transaction is permanently committed. If the system crashes mid-write, the next boot sees `weather.db-journal` on disk, copies the old pages back into `weather.db`, and restores pre-crash state.
 
-#### Rollback Journal Pragmas & Variants:
+#### 2.1.2 Rollback Journal Pragmas & Variants:
 
 | PRAGMA Setting | Mechanics & Disk Behavior | Failure Risk Profile | Use Case | 
 | ----- | ----- | ----- | ----- | 
@@ -164,7 +164,7 @@ $$
 \text{Concurrency Rule in WAL Mode} \implies \text{Readers do not block Writers} \land \text{Writers do not block Readers}
 $$
 
-#### The Physical File Topology:
+#### 2.2.1 The Physical File Topology:
 
 When WAL is enabled, SQLite creates two auxiliary files alongside `weather.db`:
 
@@ -172,7 +172,7 @@ When WAL is enabled, SQLite creates two auxiliary files alongside `weather.db`:
 
 * **`weather.db-shm`:** The **Shared Memory Index**. A memory-mapped file used as an index into the WAL so reader processes can locate the newest version of any page without scanning the `.db-wal` file sequentially.
 
-#### The Transaction Execution Flow in WAL:
+#### 2.2.2 The Transaction Execution Flow in WAL:
 
 1. **Append-Only Write:** When writing, the original `weather.db` file is left completely untouched. The new 4 KB page is appended as a **frame** to `weather.db-wal`.
 
@@ -197,7 +197,7 @@ When WAL is enabled, SQLite creates two auxiliary files alongside `weather.db`:
 
 ```
 
-#### Checkpointing (`PRAGMA wal_checkpoint`) & Companion WAL Pragmas
+#### 2.2.3 Checkpointing (`PRAGMA wal_checkpoint`) & Companion WAL Pragmas
 
 Because appending to the WAL causes `.db-wal` to grow continuously, SQLite periodically migrates committed 4 KB frames back into the master `weather.db` file via **checkpointing**. Every execution of `PRAGMA wal_checkpoint(<MODE>);` returns a single diagnostic row with **three integers** `(busy, log, checkpointed)`:
 - **`busy` (`0` or `1`):** `0` if the checkpoint completed without blocking; `1` if an active concurrent reader or writer prevented completion.
@@ -213,14 +213,14 @@ Because appending to the WAL causes `.db-wal` to grow continuously, SQLite perio
 | **`wal_autocheckpoint`** | `PRAGMA wal_autocheckpoint = 1000;` | — | Triggers `PASSIVE` at $N$ pages | — | Default `1000` pages (`4 MB`). Set to `<= 0` only if managing checkpoints manually via a dedicated thread. |
 | **`journal_size_limit`** | `PRAGMA journal_size_limit = 67108864;` | — | — | Truncates `.db-wal` to cap (`64 MiB`) on rewind | Prevents a temporary burst spike from leaving a multi-GB `.db-wal` file allocated on disk forever. |
 
-#### Production WAL Pitfalls: "WAL Starvation" & `SQLITE_BUSY_SNAPSHOT`
+#### 2.2.4 Production WAL Pitfalls: "WAL Starvation" & `SQLITE_BUSY_SNAPSHOT`
 
-1. **"WAL Starvation" (Unbounded `.db-wal` Growth From Unclosed Read Cursors):**
-   - SQLite can only rewind `.db-wal` to frame 1 when *all* frames are checkpointed and no connection holds a Read-Mark on an earlier snapshot. If a Python script or GUI leaves an unfinished `SELECT` cursor open without closing it, `checkpointed < log` forever and `.db-wal` grows to gigabytes! Always close read cursors promptly and configure `PRAGMA journal_size_limit = 67108864;`.
-2. **Why `PRAGMA busy_timeout = 5000;` Requires `BEGIN IMMEDIATE;` on Concurrent Writers:**
-   - If Connection A starts a deferred `BEGIN;`, runs a `SELECT` (acquiring a read snapshot), and later executes `INSERT` after Connection B has committed a newer WAL frame, SQLite **immediately aborts with `SQLITE_BUSY_SNAPSHOT` (`0 ms`)—ignoring `busy_timeout`**—because upgrading a stale read snapshot would violate serializability. Always start write transactions with **`BEGIN IMMEDIATE;`** so the write lock is acquired up front and `busy_timeout` is respected!
+##### 2.2.4.1 "WAL Starvation" (Unbounded `.db-wal` Growth From Unclosed Read Cursors)
+- SQLite can only rewind `.db-wal` to frame 1 when *all* frames are checkpointed and no connection holds a Read-Mark on an earlier snapshot. If a Python script or GUI leaves an unfinished `SELECT` cursor open without closing it, `checkpointed < log` forever and `.db-wal` grows to gigabytes! Always close read cursors promptly and configure `PRAGMA journal_size_limit = 67108864;`.
+##### 2.2.4.2 Why `PRAGMA busy_timeout = 5000;` Requires `BEGIN IMMEDIATE;` on Concurrent Writers
+- If Connection A starts a deferred `BEGIN;`, runs a `SELECT` (acquiring a read snapshot), and later executes `INSERT` after Connection B has committed a newer WAL frame, SQLite **immediately aborts with `SQLITE_BUSY_SNAPSHOT` (`0 ms`)—ignoring `busy_timeout`**—because upgrading a stale read snapshot would violate serializability. Always start write transactions with **`BEGIN IMMEDIATE;`** so the write lock is acquired up front and `busy_timeout` is respected!
 
-#### When SQLite WAL Must NOT Be Used:
+#### 2.2.5 When SQLite WAL Must NOT Be Used:
 
 * **Network Filesystems (NFS, SMB, CIFS):** WAL requires shared memory mapping (`mmap()`) via the `.db-shm` file across processes. POSIX advisory locking and shared memory over network shares are notoriously buggy and will cause silent database corruption.
 
@@ -263,7 +263,7 @@ Every byte written to the PostgreSQL WAL is assigned a strictly monotonic 64-bit
 
 * Every 8 KB page header in PostgreSQL contains a field: `pd_lsn` (Page LSN).
 
-#### The Fundamental Invariant of PostgreSQL Recovery:
+#### 3.1.1 The Fundamental Invariant of PostgreSQL Recovery:
 
 A dirty page in `shared_buffers` **cannot be written to disk** by the checkpointer or background writer until the WAL record describing that change has been pushed and synced to `pg_wal/`:
 
@@ -277,7 +277,7 @@ If this invariant were violated, a crash would leave a disk page containing chan
 
 A PostgreSQL **checkpoint** is the point in the transaction log stream where the database guarantees that all dirty memory pages up to that LSN have been flushed to the physical table heap on disk.
 
-#### The Telemetry Ingestion Stall (Under Default Checkpoints):
+#### 3.2.1 The Telemetry Ingestion Stall (Under Default Checkpoints):
 
 * Default `max_wal_size` is $1\text{ GB}$.
 
@@ -287,7 +287,7 @@ A PostgreSQL **checkpoint** is the point in the transaction log stream where the
 
 * NVMe/SSD controllers exhaust their internal queues; application client connections freeze, waiting for WAL writes to unblock.
 
-#### The Production Checkpoint Formula:
+#### 3.2.2 The Production Checkpoint Formula:
 
 ```
 # /etc/postgresql/16/main/postgresql.conf
@@ -337,7 +337,7 @@ PostgreSQL provides explicit engineering escape hatches to bypass WAL logging wh
 
 ```
 
-#### 1. Unlogged Tables (`CREATE UNLOGGED TABLE`)
+#### 3.4.1 Unlogged Tables (`CREATE UNLOGGED TABLE`)
 
 For staging high-frequency sensor ingest where raw pings are immediately downsampled into clean tables:
 
@@ -355,7 +355,7 @@ CREATE UNLOGGED TABLE raw_telemetry_staging (
 
 * **The Penalty:** If the database host crashes or loses power, PostgreSQL **automatically truncates (empties) all unlogged tables on reboot** to prevent torn/corrupted pages from poisoning the cluster.
 
-#### 2. Relaxed Commit Durability (`synchronous_commit`)
+#### 3.4.2 Relaxed Commit Durability (`synchronous_commit`)
 
 You can tune WAL commit durability at the session, transaction, or database level without modifying physical table architecture:
 
@@ -393,7 +393,7 @@ In MySQL and MariaDB, storage engines are pluggable. Consequently, logging and c
 
 InnoDB does not use a single WAL stream for both recovery and MVCC. It divides these duties across three distinct storage structures:
 
-#### 1. The Redo Log (`innodb_redo_log_capacity`)
+#### 4.1.1 The Redo Log (`innodb_redo_log_capacity`)
 
 * **Role:** Pure crash-recovery REDO mechanism.
 
@@ -407,7 +407,7 @@ InnoDB does not use a single WAL stream for both recovery and MVCC. It divides t
   
   ```
 
-#### 2. The Doublewrite Buffer (`innodb_doublewrite`)
+#### 4.1.2 The Doublewrite Buffer (`innodb_doublewrite`)
 
 InnoDB handles torn 16 KB pages differently than PostgreSQL:
 
@@ -423,13 +423,13 @@ InnoDB handles torn 16 KB pages differently than PostgreSQL:
 
 * **Recovery:** If an OS crash fractures a 16 KB page mid-write inside `sensor_data.ibd`, InnoDB reads the intact 16 KB page from the doublewrite buffer and repairs the corrupted block during recovery.
 
-#### 3. The Undo Tablespace (MVCC & Rollback)
+#### 4.1.3 The Undo Tablespace (MVCC & Rollback)
 
 * While PostgreSQL creates new row versions directly inside the table heap (`t_xmin`/`t_xmax`), InnoDB mutates data pages **in-place** and writes reverse differential deltas into the **Undo Log**.
 
 * When a transaction rolls back or an older transaction needs a past snapshot, InnoDB traverses the undo log chain backward to reconstruct past states.
 
-#### 4. Ingestion Tuning: `innodb_flush_log_at_trx_commit`
+#### 4.1.4 Ingestion Tuning: `innodb_flush_log_at_trx_commit`
 
 ```
 [mysqld]
@@ -444,13 +444,13 @@ innodb_flush_log_at_trx_commit = 2
 
 MyISAM was MySQL's default storage engine for over a decade. Understanding its failure modes highlights why WAL is essential.
 
-#### The Physical Structure of MyISAM:
+#### 4.2.1 The Physical Structure of MyISAM:
 
 * `.MYD`: The raw data file (heap records).
 
 * `.MYI`: The index file (B-Trees storing file offsets).
 
-#### How MyISAM Handles Writes (The Crash Trap):
+#### 4.2.2 How MyISAM Handles Writes (The Crash Trap):
 
 * **No Redo Log:** When an `INSERT` executes, MyISAM writes directly to the `.MYD` and `.MYI` file buffers and lets the operating system flush whenever it wants.
 
@@ -474,7 +474,7 @@ aria_log_purge_type = immediate
 
 ```
 
-#### How Aria Fixes MyISAM:
+#### 4.3.1 How Aria Fixes MyISAM:
 
 * **The Aria Transaction Log (`aria_log.00000001`):** Aria logs all page updates into a sequential log file prior to writing dirty pages.
 
@@ -529,11 +529,11 @@ MyRocks (integrated into MariaDB and Percona Server) replaces B-Trees with a **L
 
 Run these hands-on benchmarks to observe the mechanical throughput and latency differences across WAL implementations.
 
-### Lab 1: SQLite Journal Mode Benchmark (100,000 Ingest Rows)
+### 6.1 Lab 1: SQLite Journal Mode Benchmark (100,000 Ingest Rows)
 
 Compare the raw throughput of classical rollback journaling versus modern WAL mode.
 
-#### Execution Script (`sqlite_wal_benchmark.sh`):
+#### 6.1.1 Execution Script (`sqlite_wal_benchmark.sh`):
 
 ```
 #!/usr/bin/env bash
@@ -576,7 +576,7 @@ EOF
 
 ```
 
-#### Typical Benchmark Results:
+#### 6.1.2 Typical Benchmark Results:
 
 ```
 Mode: ROLLBACK_DELETE | 1,000 Transactions:  14.21s | Speed:    70.4 txn/sec
@@ -588,11 +588,11 @@ Mode: JOURNAL_OFF     | 1,000 Transactions:   0.18s | Speed:  5555.5 txn/sec
 
 * **Key Takeaway:** SQLite in `DELETE` rollback mode crawls at $\approx 70\text{ txn/sec}$ due to continuous filesystem file creation, synchronization, and deletion. Switching to **WAL mode accelerates commit throughput by over** $25\times$ while maintaining ACID durability.
 
-### Lab 2: PostgreSQL Ingestion Stress (Logged vs. Unlogged vs. Async Commit)
+### 6.2 Lab 2: PostgreSQL Ingestion Stress (Logged vs. Unlogged vs. Async Commit)
 
 Measure the write amplification overhead of the PostgreSQL monolithic WAL stream.
 
-#### Setup Script in `psql`:
+#### 6.2.1 Setup Script in `psql`:
 
 ```
 -- 1. Create a Standard Logged Table
@@ -629,7 +629,7 @@ FROM generate_series(1, 1000000) AS g;
 
 ```
 
-#### Expected Timing Differences Across 1 Million Rows:
+#### 6.2.2 Expected Timing Differences Across 1 Million Rows:
 
 ```
 Standard Synchronous WAL  : 1,840 ms
@@ -638,7 +638,7 @@ UNLOGGED Table            : 510 ms  (3.6x faster; zero pg_wal I/O)
 
 ```
 
-### Lab 3: Inspecting SQLite Shared Memory & WAL Checkpoint State
+### 6.3 Lab 3: Inspecting SQLite Shared Memory & WAL Checkpoint State
 
 Demonstrate how SQLite coordinates concurrent reads and writes across files.
 
@@ -660,7 +660,7 @@ ls -la weather_monitoring.db*
 
 ```
 
-#### Force a Checkpoint and Truncate:
+#### 6.3.1 Force a Checkpoint and Truncate:
 
 ```
 sqlite3 weather_monitoring.db "PRAGMA wal_checkpoint(TRUNCATE);"
@@ -708,7 +708,7 @@ ls -la weather_monitoring.db*
 ```
 ---
 
-### Reference Library Navigation
+### 7.1 Reference Library Navigation
 
 > **Navigation:** [Bootcamp Home](../README.md) | [Reference Cards Index](./README.md) | [Interactive Portal](../bootcamp_portal.html)  
 > **Card Sequence:** [⬅ Previous Card](./06_dbt_for_meteorological_telemetry_engineering.md) | **Card 07 of 14** | [Next Card](./08_postgresql_vacuum_vs_vacuum_full_and_bloat.md) | [⬆ Back to Top](#deep-dive-engineering-guide-write-ahead-logging-wal--crash-recovery-mechanics)

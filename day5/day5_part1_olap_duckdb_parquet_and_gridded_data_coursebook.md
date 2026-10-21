@@ -52,7 +52,7 @@
 
 The analytical stack relies on vectorized CPU execution libraries and ECMWF meteorological decoding engines.
 
-#### Step 1: Install System Libraries (Ubuntu / Debian Host)
+#### 0.1.1 Step 1: Install System Libraries (Ubuntu / Debian Host)
 ```bash
 # 1. Update system index and install compilation headers and ecCodes
 sudo apt-get update
@@ -62,7 +62,7 @@ sudo apt-get install -y libeccodes-dev libeccodes-tools libnetcdf-dev libhdf5-de
 grib_ls -v
 ```
 
-#### Step 2: Configure Python Virtual Environment
+#### 0.1.2 Step 2: Configure Python Virtual Environment
 ```bash
 # Create dedicated virtual environment
 python3 -m venv ~/weather_olap_env
@@ -73,7 +73,7 @@ pip install --upgrade pip
 pip install duckdb pyarrow pandas polars connectorx "psycopg[binary]" numpy xarray netCDF4 zarr eccodes cfgrib pdbufr pymongo
 ```
 
-#### Step 3: Install DuckDB Standalone CLI
+#### 0.1.3 Step 3: Install DuckDB Standalone CLI
 ```bash
 # Download and install DuckDB CLI (Linux x86_64)
 curl -L -o duckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.1.1/duckdb_cli-linux-amd64.zip
@@ -266,7 +266,7 @@ The performance ceiling of relational databases (PostgreSQL, MySQL, SQLite) on a
    └─────────────────────────────────────┘        └─────────────────────────────────────┘
 ```
 
-#### The Four Mechanics of the Volcano Bottleneck:
+#### 1.1.1 The Four Mechanics of the Volcano Bottleneck:
 1. **Virtual Function Call Overhead:** Every relational operator exposes a `.next()` method. To evaluate 100 million rows through a pipeline of Scan $\to$ Filter $\to$ Project $\to$ Aggregate, the CPU must resolve **400 million indirect virtual function calls**, evicting branch prediction buffers.
 2. **CPU Instruction Cache Thrashing:** In a row-store, the CPU alternates instructions between parsing column 1, then column 2, then column 3 on every single row.
 3. **Data Cache Misses (L1/L2):** Fetching an 8-byte temperature float requires loading an entire 8 KB heap page with all adjacent unwanted columns and 23-byte MVCC headers.
@@ -322,9 +322,9 @@ SELECT AVG(temperature) FROM observations WHERE year = 2026;
 ```
 * **Row-Store (Heap / CSV):** Must scan and deserialize every single byte on disk, including station IDs, timestamps, and pressures.
 * **Columnar Storage:** The disk controller reads **only the byte offsets containing the temperature column**. All other columns are physically bypassed at the operating system storage layer.
-* **Why Columnar Parquet Makes Denormalization Almost Free (Connecting Back to [Day 1 Section 7.2](../day1/day1_master_coursebook.md#72-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems)):**
+* **Why Columnar Parquet Makes Denormalization Almost Free (Connecting Back to [Day 1 Section 5.2](../day1/day1_master_coursebook.md#52-normalization-1nf-rightarrow-2nf-rightarrow-3nf-vs-deliberate-denormalization-in-weather-systems)):**
   - In a **Row Store (`SQLite` on Day 1 / `PostgreSQL` on Days 2–3)**, repeating `region = 'Mediterranean'` or `station_name = 'Algiers - Dar El Beida'` across 10,000,000 observation rows is an anti-pattern that wastes `>130 MB` of disk and buffer pool RAM.
-  - In **Apache Parquet**, notice line 185 of `seed_olap_data.py` above: `use_dictionary=["station_id", "region"]`. Parquet stores the string `'Mediterranean'` **only once** inside the Column Chunk Dictionary and compresses millions of contiguous integer IDs using **Run-Length Encoding (RLE)** into a few kilobytes—allowing **DuckDB** to scan wide, denormalized flat tables at AVX-512 SIMD speed with **zero runtime `JOIN` overhead** (and when you *do* join asynchronous sensor streams with NWP forecasts in DuckDB, you can use DuckDB's native **`ASOF JOIN`** introduced in our [Day 1 JOIN Compatibility Matrix](../day1/day1_master_coursebook.md#73-complete-taxonomy-of-sql-joins--sqlite-compatibility-matrix) and [Reference Card 02](../reference_cards/02_duckdb_vectorized_olap_vs_sqlite.md))!
+  - In **Apache Parquet**, notice line 185 of `seed_olap_data.py` above: `use_dictionary=["station_id", "region"]`. Parquet stores the string `'Mediterranean'` **only once** inside the Column Chunk Dictionary and compresses millions of contiguous integer IDs using **Run-Length Encoding (RLE)** into a few kilobytes—allowing **DuckDB** to scan wide, denormalized flat tables at AVX-512 SIMD speed with **zero runtime `JOIN` overhead** (and when you *do* join asynchronous sensor streams with NWP forecasts in DuckDB, you can use DuckDB's native **`ASOF JOIN`** introduced in our [Day 1 JOIN Compatibility Matrix](../day1/day1_master_coursebook.md#53-complete-taxonomy-of-sql-joins--sqlite-compatibility-matrix) and [Reference Card 02](../reference_cards/02_duckdb_vectorized_olap_vs_sqlite.md))!
 
 ---
 
@@ -351,18 +351,18 @@ climatology_lake/
 > **Production Pitfall (The "Small Files Problem" on S3 / Ceph RGW):**  
 > Never configure an MQTT or Kafka consumer to flush a new Parquet file every 5 seconds or partition by `day/hour/minute`! Writing 200,000 tiny `10 KB` Parquet files destroys RLE/Dictionary compression, exhausts filesystem inodes, and causes DuckDB/Spark to spend $99\%$ of query time on HTTP `GET` handshakes and Thrift footer parsing. Run `./compact_small_parquet_files.py` to see how compacting 200 tiny files into 1 ZSTD Row Group cuts scan latency by $10\times$!
 
-#### Black Box 5A Demystified: How DuckDB Scans 100M Parquet Rows in Milliseconds *Without Any B-Tree Index!*
+#### 2.2.1 Black Box 5A Demystified: How DuckDB Scans 100M Parquet Rows in Milliseconds *Without Any B-Tree Index!*
 
 In Days 2–3, we learned that querying an unindexed relational table forces a slow `Seq Scan`. Yet Apache Parquet has **no external B-Tree index files at all**, and DuckDB queries 100 million Parquet rows in `< 15 ms`! How does that "black box" work—and when does it silently break?
 
-1. **The 3-Level Pruning & Skipping Hierarchy in Parquet + DuckDB:**
-   Every DuckDB query over a Hive-partitioned Parquet lake applies three progressive filters **before decompressing a single data page**:
-   - **Gate 1 — Hive Directory Pruning (OS / S3 Prefix Level):** A filter on `WHERE year = 2026 AND month = 10` skips all other directory prefixes (`year=2024/`, `year=2025/`) without even opening those files.
-   - **Gate 2 — Parquet Footer Zone Maps (Row Group `min`/`max` Metadata):** At the very end of every `.parquet` file lives a compact binary **File Footer** containing exact `min_value`, `max_value`, and `null_count` statistics for every column in every **Row Group** (typically `100,000`–`250,000` rows per Row Group)—acting like a **built-in PostgreSQL BRIN index inside the file**!
-   - **Gate 3 — Column Chunk Projection Pushdown:** For the surviving Row Groups, DuckDB issues byte-range reads (`HTTP Range GET` on S3/Ceph) for **only the columns named in the query** (e.g., reading `temperature` while physically skipping `pressure`, `wind_speed`, `humidity`, and `solar_rad` on disk).
+##### 2.2.1.1 The 3-Level Pruning & Skipping Hierarchy in Parquet + DuckDB
+Every DuckDB query over a Hive-partitioned Parquet lake applies three progressive filters **before decompressing a single data page**:
+- **Gate 1 — Hive Directory Pruning (OS / S3 Prefix Level):** A filter on `WHERE year = 2026 AND month = 10` skips all other directory prefixes (`year=2024/`, `year=2025/`) without even opening those files.
+- **Gate 2 — Parquet Footer Zone Maps (Row Group `min`/`max` Metadata):** At the very end of every `.parquet` file lives a compact binary **File Footer** containing exact `min_value`, `max_value`, and `null_count` statistics for every column in every **Row Group** (typically `100,000`–`250,000` rows per Row Group)—acting like a **built-in PostgreSQL BRIN index inside the file**!
+- **Gate 3 — Column Chunk Projection Pushdown:** For the surviving Row Groups, DuckDB issues byte-range reads (`HTTP Range GET` on S3/Ceph) for **only the columns named in the query** (e.g., reading `temperature` while physically skipping `pressure`, `wind_speed`, `humidity`, and `solar_rad` on disk).
 
-2. **The Hidden Trap: Why Unsorted Parquet Files Destroy Row Group Zone Maps!**
-   Compare what happens inside the Parquet File Footer when you export 1,000,000 rows **unsorted** vs. **sorted (`ORDER BY obs_time, station_id`)**:
+##### 2.2.1.2 The Hidden Trap: Why Unsorted Parquet Files Destroy Row Group Zone Maps!
+Compare what happens inside the Parquet File Footer when you export 1,000,000 rows **unsorted** vs. **sorted (`ORDER BY obs_time, station_id`)**:
 
 | Parquet Export Method | Row Group 0 `obs_time` `[min, max]` | Row Group 9 `obs_time` `[min, max]` | Query: `WHERE obs_time BETWEEN '2026-10-15' AND '2026-10-16'` |
 | :--- | :--- | :--- | :--- |
@@ -375,13 +375,16 @@ In Days 2–3, we learned that querying an unindexed relational table forces a s
 
 In production meteorology, keeping **Hot Data** (last 3–12 months of live synoptic observations and active NWP runs) in **PostgreSQL** gives you fast ACID transactions, `UPSERT`s, and PostGIS queries, while exporting older detached partitions into **Zstandard-compressed Apache Parquet files** cuts disk footprint by **80–90%** and eliminates MVCC/Vacuum overhead:
 
-1. **Pattern A — Chunked Streaming with `psycopg` + `PyArrow` ([`day5/export_pg_to_parquet.py`](./export_pg_to_parquet.py)):** Streams a server-side cursor in `50,000`-row chunks with explicit `pa.schema` (`dictionary(int8, string)` for `qc_flag`) using `< 200 MB` RAM:
-   ```bash
-   cd day5
-   python3 export_pg_to_parquet.py
-   ```
-2. **Pattern B — Zero-Python Direct Export via DuckDB (`postgres_scanner`):** Attach live PostgreSQL inside `duckdb` (`INSTALL postgres; LOAD postgres; ATTACH 'dbname=weather_ops ...' AS pg (TYPE POSTGRES, READ_ONLY);`) and run `COPY (SELECT *, YEAR(obs_time) AS year, MONTH(obs_time) AS month FROM pg.synoptic.observations ORDER BY obs_time, station_id) TO 'weather_lake/observations' (FORMAT PARQUET, PARTITION_BY (year, month), COMPRESSION ZSTD);`.
-3. **Pattern C — Native PostgreSQL `pg_parquet` Extension:** `COPY (SELECT * FROM synoptic.obs_y2026m06 ORDER BY obs_time, station_id) TO '/var/lib/postgresql/archive/obs_y2026m06.parquet' WITH (FORMAT parquet, COMPRESSION zstd);`.
+#### 2.3.1 Pattern A — Chunked Streaming with `psycopg` + `PyArrow` ([`day5/export_pg_to_parquet.py`](./export_pg_to_parquet.py))
+Streams a server-side cursor in `50,000`-row chunks with explicit `pa.schema` (`dictionary(int8, string)` for `qc_flag`) using `< 200 MB` RAM:
+```bash
+cd day5
+python3 export_pg_to_parquet.py
+```
+#### 2.3.2 Pattern B — Zero-Python Direct Export via DuckDB (`postgres_scanner`)
+Attach live PostgreSQL inside `duckdb` (`INSTALL postgres; LOAD postgres; ATTACH 'dbname=weather_ops ...' AS pg (TYPE POSTGRES, READ_ONLY);`) and run `COPY (SELECT *, YEAR(obs_time) AS year, MONTH(obs_time) AS month FROM pg.synoptic.observations ORDER BY obs_time, station_id) TO 'weather_lake/observations' (FORMAT PARQUET, PARTITION_BY (year, month), COMPRESSION ZSTD);`.
+#### 2.3.3 Pattern C — Native PostgreSQL `pg_parquet` Extension
+`COPY (SELECT * FROM synoptic.obs_y2026m06 ORDER BY obs_time, station_id) TO '/var/lib/postgresql/archive/obs_y2026m06.parquet' WITH (FORMAT parquet, COMPRESSION zstd);`.
 
 *(For the complete architecture diagram, full Python/Polars/DuckDB scripts, and 4-step monthly partition offload checklist, see **[Reference Card 01: Apache Parquet & Columnar Architecture — Section 8](../reference_cards/01_apache_parquet_and_columnar_architecture.md)**.)*
 
@@ -432,7 +435,7 @@ $$\text{Atmospheric State Space} = \mathbf{\Psi}(x, y, z, t) \implies (\text{Lon
                                     ▼ T: Forecast Time Steps (t+0h, t+1h ... t+240h)
 ```
 
-#### Why Relational Tables Collapse on 4D Grids:
+#### 4.1.1 Why Relational Tables Collapse on 4D Grids:
 A regional weather forecast (e.g., Algeria at $0.05^\circ$ resolution, 60 vertical pressure levels, 24 hourly time steps, 8 physical variables):
 
 $$800 \times 600 \times 60 \times 24 \times 8 = \mathbf{5,529,600,000\text{ data points per daily run}}$$
@@ -500,19 +503,19 @@ Multidimensional arrays are stored on disk in rectangular blocks called **Chunks
 
 > **The Architectural Rule of Gridded Storage:** You cannot optimize a single gridded file for both 2D horizontal spatial maps and long-term 1D station time-series simultaneously. Storage chunking must reflect the primary analytical query path.
 
-#### Black Box 5B Demystified: `NetCDF4` / `COG` Integer Quantization (`scale_factor`, `add_offset`, and `_FillValue` Masking Order)
+#### 4.3.1 Black Box 5B Demystified: `NetCDF4` / `COG` Integer Quantization (`scale_factor`, `add_offset`, and `_FillValue` Masking Order)
 
 When satellite imagery (`MSG SEVIRI` Cloud-Optimized GeoTIFFs) or reanalysis archives (`ECMWF ERA5` NetCDF4) store brightness temperatures (`200.00 K` to `330.00 K`), they rarely store 4-byte `Float32` on disk—instead, they pack values into 2-byte **`Int16` / `UInt16` integers** (`satellite_cog_int16_quantization.py`), cutting petabyte storage by **$50\text{–}75\%$**!
 
-1. **The Packing & Unpacking Formula:**
-   - **Packing (Float32 $\rightarrow$ UInt16 on Disk):**
-     $$\text{Packed\_UInt16} = \text{ROUND}\!\left(\frac{T_{\text{physical}} - \text{add\_offset}}{\text{scale\_factor}}\right)$$
-     *(Example: With `add_offset = 150.0` K and `scale_factor = 0.01` K, a physical temperature of `295.42 K` is stored as integer `(295.42 - 150.0) / 0.01 = 14542`).*
-   - **Unpacking (UInt16 $\rightarrow$ Float32 in RAM):**
-     $$T_{\text{physical}} = (\text{Packed\_UInt16} \times \text{scale\_factor}) + \text{add\_offset}$$
+##### 4.3.1.1 The Packing & Unpacking Formula
+- **Packing (Float32 $\rightarrow$ UInt16 on Disk):**
+  $$\text{Packed\_UInt16} = \text{ROUND}\!\left(\frac{T_{\text{physical}} - \text{add\_offset}}{\text{scale\_factor}}\right)$$
+  *(Example: With `add_offset = 150.0` K and `scale_factor = 0.01` K, a physical temperature of `295.42 K` is stored as integer `(295.42 - 150.0) / 0.01 = 14542`).*
+- **Unpacking (UInt16 $\rightarrow$ Float32 in RAM):**
+  $$T_{\text{physical}} = (\text{Packed\_UInt16} \times \text{scale\_factor}) + \text{add\_offset}$$
 
-2. **The #1 Raster Bug: Applying `scale_factor` *Before* Masking `_FillValue` (`nodata = 65535`)!**
-   - Just like `-9999.0` in Day 1 SQLite tables, integer raster arrays cannot store `NaN` (`NaN` is an IEEE-754 floating-point concept—it does not exist in `Int16`/`UInt16`!). Instead, rasters reserve `65535` (`UInt16` max) or `-32768` (`Int16` min) as `_FillValue` / `nodata` for outer-space limb pixels or missing scanlines.
+##### 4.3.1.2 The #1 Raster Bug: Applying `scale_factor` *Before* Masking `_FillValue` (`nodata = 65535`)!
+- Just like `-9999.0` in Day 1 SQLite tables, integer raster arrays cannot store `NaN` (`NaN` is an IEEE-754 floating-point concept—it does not exist in `Int16`/`UInt16`!). Instead, rasters reserve `65535` (`UInt16` max) or `-32768` (`Int16` min) as `_FillValue` / `nodata` for outer-space limb pixels or missing scanlines.
 
 | Raster Reading Method | What Happens to Valid Pixel (`14542`) | What Happens to `_FillValue` (`65535` Outer Space Pixel) | Resulting Impact on Climatology Mean |
 | :--- | :--- | :--- | :--- |
@@ -532,12 +535,12 @@ When satellite imagery (`MSG SEVIRI` Cloud-Optimized GeoTIFFs) or reanalysis arc
 
 ## 5. Module 5: Hands-On OLAP & 4D NetCDF Production Engineering Labs
 
-### Lab 1: Vectorized Analytical Benchmark: PostgreSQL vs. DuckDB
+### 5.1 Lab 1: Vectorized Analytical Benchmark: PostgreSQL vs. DuckDB
 
-#### Objective
+#### 5.1.1 Objective
 Run an identical analytical aggregation across **10,000,000 rows** generated by [seed_olap_data.py](./seed_olap_data.py) to empirically measure the execution speed difference between PostgreSQL's row-store engine and DuckDB's vectorized columnar engine.
 
-#### Step 1: Execute the Aggregation in DuckDB CLI
+#### 5.1.2 Step 1: Execute the Aggregation in DuckDB CLI
 Launch DuckDB directly against our synthesized Parquet lake:
 ```bash
 duckdb
@@ -560,7 +563,7 @@ GROUP BY region
 ORDER BY mean_temp DESC;
 ```
 
-#### Verified Terminal Output (DuckDB):
+#### 5.1.3 Verified Terminal Output (DuckDB):
 ```text
 ┌──────────────────┬───────────┬───────────┬───────────┬───────────┐
 │      region      │ total_obs │ mean_temp │ mean_wind │ peak_gust │
@@ -574,18 +577,18 @@ ORDER BY mean_temp DESC;
 Run Time (real): 0.142s (user 1.082s, sys 0.041s)
 ```
 
-#### Step 2: Compare with PostgreSQL Partitioned Master
+#### 5.1.4 Step 2: Compare with PostgreSQL Partitioned Master
 Running an aggregation over 5,000,000 rows in PostgreSQL takes $\approx 850\text{ ms}$ to $1,800\text{ ms}$.
 DuckDB aggregated **10,000,000 rows in 142 milliseconds** ($\approx 10\times\text{ faster}$), utilizing all available CPU threads and processing data directly from compressed disk files without loading them into database memory first.
 
 ---
 
-### Lab 2: Parquet Forensics & Metadata Inspection via DuckDB
+### 5.2 Lab 2: Parquet Forensics & Metadata Inspection via DuckDB
 
-#### Objective
+#### 5.2.1 Objective
 Inspect the physical dictionary encoding, row groups, compression ratios, and min/max statistics embedded inside our Parquet files using DuckDB's built-in metadata functions.
 
-#### Execution Script in `duckdb`:
+#### 5.2.2 Execution Script in `duckdb`:
 ```sql
 -- 1. Inspect Parquet File Schema and Compression Details
 SELECT 
@@ -611,7 +614,7 @@ WHERE path_in_schema IN ('temperature', 'station_id', 'recorded_at')
 LIMIT 6;
 ```
 
-#### Verified Terminal Output:
+#### 5.2.3 Verified Terminal Output:
 ```text
 ┌───────────────────────┬──────────────┬────────────────────┬───────────────────────┬───────────────────┐
 │       file_name       │ row_group_id │ row_group_num_rows │ total_compressed_size │ compression_ratio │
@@ -630,14 +633,14 @@ LIMIT 6;
 
 ---
 
-### Lab 3: Interrogating 4D NetCDF Forecast Rasters via Python & DuckDB
+### 5.3 Lab 3: Interrogating 4D NetCDF Forecast Rasters via Python & DuckDB
 
-#### Objective
+#### 5.3.1 Objective
 1. Inspect the 4D atmospheric model dataset (`nwp_forecast_algeria.nc`) using `xarray`.
 2. Extract the low-level jet stream and surface temperature across Northern Algeria.
 3. Convert the multidimensional slice into an in-memory Apache Arrow table and execute SQL queries over the gridded fields using DuckDB with zero disk copies.
 
-#### Execution Script (`analyze_nwp_grid.py`):
+#### 5.3.2 Execution Script (`analyze_nwp_grid.py`):
 ```python
 #!/usr/bin/env python3
 """
@@ -694,7 +697,7 @@ result = con.execute(query).fetchdf()
 print(result.to_string(index=False))
 ```
 
-#### Verified Terminal Output:
+#### 5.3.3 Verified Terminal Output:
 ```text
 [*] Opening 4D NetCDF Dataset: nwp_forecast_algeria.nc...
 

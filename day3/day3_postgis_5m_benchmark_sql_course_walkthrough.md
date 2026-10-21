@@ -54,7 +54,7 @@ The [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) script is a
 
 ## 2. Section 0: Idempotent Database Bootstrap & Session Configuration (Lines 1–16)
 
-### Exact SQL Code (`Lines 1–16`)
+### 2.1 Exact SQL Code (`Lines 1–16`)
 
 ```sql
 -- ============================================================================
@@ -74,7 +74,7 @@ SET timezone = 'UTC';
 SET datestyle = 'iso, ymd';
 ```
 
-### Line-by-Line Architectural Breakdown
+### 2.2 Line-by-Line Architectural Breakdown
 
 - **Why `CREATE DATABASE` Cannot Use `IF NOT EXISTS` Directly (`Lines 9–10`):**
   - Unlike `CREATE TABLE IF NOT EXISTS` or `CREATE EXTENSION IF NOT EXISTS`, PostgreSQL's grammar has **no native `CREATE DATABASE IF NOT EXISTS` syntax**. Furthermore, `CREATE DATABASE` cannot be executed inside a transaction block or a PL/pgSQL `DO $$ ... $$` block (`ERROR: CREATE DATABASE cannot be executed from a function or multi-command string`).
@@ -93,7 +93,7 @@ SET datestyle = 'iso, ymd';
 
 ## 3. Section 1: Dual-Mode PostGIS Spatial Engine & WGS-84 Haversine Geodesic Fallback (Lines 17–63)
 
-### Exact SQL Code (`Lines 17–63`)
+### 3.1 Exact SQL Code (`Lines 17–63`)
 
 ```sql
 -- ============================================================================
@@ -144,12 +144,12 @@ $$;
 SELECT postgis_full_version();
 ```
 
-### Deep-Dive Architectural & Mathematical Breakdown
+### 3.2 Deep-Dive Architectural & Mathematical Breakdown
 
-#### 1. Native PostGIS Path (`Lines 22–24`)
+#### 3.2.1 Native PostGIS Path (`Lines 22–24`)
 - Queries `pg_available_extensions` for `'postgis'`. When the OS package (`postgresql-16-postgis-3`) or Docker image (`postgis/postgis:16-3.4`) is present, it executes `CREATE EXTENSION IF NOT EXISTS postgis;`, registering the C-compiled `GEOMETRY` and `GEOGRAPHY` types, `GEOS`/`PROJ` libraries, and GiST spatial operator classes.
 
-#### 2. Bare-Host Geodesic Fallback Path (`Lines 25–57`)
+#### 3.2.2 Bare-Host Geodesic Fallback Path (`Lines 25–57`)
 - If an engineer runs this script on a bare Linux/macOS/Windows PostgreSQL host before installing the PostGIS OS package, the `ELSE` branch constructs an API-compatible **WGS-84 Geodesic Fallback Engine** using PostgreSQL's native 16-byte geometric `point` type (`(x, y)` = `(lon, lat)`):
   - **`CREATE DOMAIN geometry AS point;` & `CREATE DOMAIN geography AS point;` (`Lines 27–32`):**
     - Checks `pg_type` (`WHERE typname = 'geometry'` / `'geography'`) for idempotency and creates SQL domains aliasing `geometry` and `geography` to PostgreSQL's built-in `point` data type.
@@ -159,7 +159,7 @@ SELECT postgis_full_version();
   - **`IMMUTABLE` Volatility Marking (`Lines 36, 40, 44, 51, 55`):**
     - Every function is marked `LANGUAGE sql IMMUTABLE`. In PostgreSQL's query optimizer, `IMMUTABLE` guarantees that for fixed arguments, the function always returns the exact same output with zero side effects. This allows the planner to **inline** the SQL functions and **constant-fold** expressions like `ST_SetSRID(ST_MakePoint(3.9000, 36.9500), 4326)::geography` once at query planning time rather than re-evaluating them 50 times per scan!
 
-#### 3. Mathematical Derivation of the WGS-84 Haversine Great-Circle Formula (`Lines 46–51`)
+#### 3.2.3 Mathematical Derivation of the WGS-84 Haversine Great-Circle Formula (`Lines 46–51`)
 
 Look closely at `ST_Distance(p1 point, p2 point)` on `Lines 46–51`:
 
@@ -196,7 +196,7 @@ $body$ LANGUAGE sql IMMUTABLE;
 
 ## 4. Section 2: Spatial Weather Stations Master Registry & GiST Indexing (Lines 64–129)
 
-### Exact SQL Code (`Lines 64–129`)
+### 4.1 Exact SQL Code (`Lines 64–129`)
 
 ```sql
 -- ============================================================================
@@ -266,7 +266,7 @@ END
 $$;
 ```
 
-### Line-by-Line Architectural Breakdown
+### 4.2 Line-by-Line Architectural Breakdown
 
 - **Master Station Registry (`CREATE TABLE stations`, `Lines 67–85`):**
   - Defines the dimension table for 50 Automated Weather Stations (`AWS-001` through `AWS-050`).
@@ -303,7 +303,7 @@ $$;
 
 ### 5.1 Section 3: Tuple-Tetris-Aligned Partitioned Parent Table (`Lines 130–146`)
 
-#### Exact SQL Code (`Lines 130–146`)
+#### 5.1.1 Exact SQL Code (`Lines 130–146`)
 
 ```sql
 -- ============================================================================
@@ -325,7 +325,7 @@ CREATE TABLE raw_telemetry_partitioned (
 ) PARTITION BY RANGE (recorded_at);
 ```
 
-#### Deep-Dive Architectural Breakdown: Tuple-Tetris Memory Alignment
+#### 5.1.2 Deep-Dive Architectural Breakdown: Tuple-Tetris Memory Alignment
 
 On a 64-bit CPU architecture, PostgreSQL aligns every column inside a heap tuple according to its `pg_type.typalign` requirement:
 - **`d` (`double` = 8-byte alignment):** `TIMESTAMPTZ`, `BIGINT`, `DOUBLE PRECISION` must start at a byte offset divisible by `8` (`0, 8, 16, 24, ...`).
@@ -354,7 +354,7 @@ Tuple Layout: │recorded_│station_ │temp │press│wind_│rain_│dir│p
 
 ### 5.2 Section 4: Explicit Monthly Child Partitions (`Lines 148–164`)
 
-#### Exact SQL Code (`Lines 148–164`)
+#### 5.2.1 Exact SQL Code (`Lines 148–164`)
 
 ```sql
 -- ============================================================================
@@ -375,7 +375,7 @@ CREATE TABLE telemetry_y2026m12 PARTITION OF raw_telemetry_partitioned
 CREATE TABLE telemetry_default PARTITION OF raw_telemetry_partitioned DEFAULT;
 ```
 
-#### Architectural Explanation
+#### 5.2.2 Architectural Explanation
 - Creates 4 contiguous monthly child partitions covering Q3/Q4 (`September 2026` through `December 2026`) using half-open range intervals $[T_{\text{start}}, T_{\text{end}})$, plus `telemetry_default` as the overflow safety net.
 - Notice that `raw_telemetry_partitioned` intentionally omits a `PRIMARY KEY` on `(recorded_at, station_id)` during the initial DDL so that:
   1. The 5,000,000-row bulk load in Section 5 runs at pure sequential heap-append speed ($\approx 5\text{--}8\text{ seconds}$) without maintaining a massive 110 MB B-Tree during ingestion.
@@ -385,7 +385,7 @@ CREATE TABLE telemetry_default PARTITION OF raw_telemetry_partitioned DEFAULT;
 
 ### 5.3 Section 5: The 5,000,000-Row Synthetic Telemetry Generator (`Lines 165–180`)
 
-#### Exact SQL Code (`Lines 165–180`)
+#### 5.3.1 Exact SQL Code (`Lines 165–180`)
 
 ```sql
 -- ============================================================================
@@ -405,7 +405,7 @@ SELECT
 FROM generate_series(1, 5000000) AS g;
 ```
 
-#### Mathematical & Physical Breakdown of the 5,000,000-Row Synthesizer
+#### 5.3.2 Mathematical & Physical Breakdown of the 5,000,000-Row Synthesizer
 
 - **Set-Based Series Generation (`FROM generate_series(1, 5000000) AS g`, `Line 179`):**
   - Streams integers $g \in [1, 5,000,000]$ in C memory and routes each synthesized tuple directly into its target monthly child heap.
@@ -438,7 +438,7 @@ FROM generate_series(1, 5000000) AS g;
 
 ### 5.4 Section 6: Master BRIN Index Propagation & Optimizer Statistics (`Lines 182–191`)
 
-#### Exact SQL Code (`Lines 182–191`)
+#### 5.4.1 Exact SQL Code (`Lines 182–191`)
 
 ```sql
 -- ============================================================================
@@ -453,7 +453,7 @@ ANALYZE stations;
 ANALYZE raw_telemetry_partitioned;
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 5.4.2 Deep-Dive Architectural Explanation
 
 - **Partitioned Index Propagation (`Lines 184–187`):**
   - Creating `idx_telemetry_brin_time` on the parent partitioned table `raw_telemetry_partitioned` automatically builds **5 independent physical BRIN indexes**—one on each existing child partition (`telemetry_y2026m09_recorded_at_idx`, `telemetry_y2026m10_recorded_at_idx`, `telemetry_y2026m11_recorded_at_idx`, `telemetry_y2026m12_recorded_at_idx`, and `telemetry_default_recorded_at_idx`)—and guarantees that any future partition attached or created via `PARTITION OF raw_telemetry_partitioned` automatically inherits the same BRIN index!
@@ -470,7 +470,7 @@ ANALYZE raw_telemetry_partitioned;
 
 ### 6.1 Section 7A: System Catalog Forensics (`pg_class` + `pg_inherits`) (`Lines 192–205`)
 
-#### Exact SQL Code (`Lines 192–205`)
+#### 6.1.1 Exact SQL Code (`Lines 192–205`)
 
 ```sql
 -- ============================================================================
@@ -488,7 +488,7 @@ WHERE parent.relname = 'raw_telemetry_partitioned'
 ORDER BY c.relname;
 ```
 
-#### Line-by-Line Catalog Breakdown
+#### 6.1.2 Line-by-Line Catalog Breakdown
 
 - **How PostgreSQL Tracks Partition Hierarchies in `pg_inherits` (`Lines 200–203`):**
   - Every table, index, view, and partitioned parent has an entry in `pg_catalog.pg_class` identified by its Object Identifier (`oid`).
@@ -501,7 +501,7 @@ ORDER BY c.relname;
   - `pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size`: Returns the total on-disk footprint of that child partition **including the main heap fork, Free Space Map (`_fsm`), Visibility Map (`_vm`), TOAST table (if any), and all attached local indexes**. Notice that because our only index at this stage is the `24 KB` BRIN index, `total_size` is virtually identical to `heap_size` (`81 MB` vs `81 MB`)!
   - `c.reltuples::BIGINT AS estimated_rows`: Reads the floating-point row-count estimate stored in `pg_class.reltuples` by `ANALYZE` (`Line 190`) and casts it to a 64-bit integer.
 
-#### Expected Terminal Output (`Lines 195–204`)
+#### 6.1.3 Expected Terminal Output (`Lines 195–204`)
 
 ```text
    partition_name   | heap_size | total_size | estimated_rows 
@@ -518,7 +518,7 @@ ORDER BY c.relname;
 
 ### 6.2 Section 7B: Partition Pruning Verification via `EXPLAIN (COSTS OFF)` (`Lines 206–215`)
 
-#### Exact SQL Code (`Lines 206–215`)
+#### 6.2.1 Exact SQL Code (`Lines 206–215`)
 
 ```sql
 EXPLAIN (COSTS OFF)
@@ -532,7 +532,7 @@ WHERE recorded_at >= '2026-10-15 00:00:00+00'
 GROUP BY station_id;
 ```
 
-#### Deep-Dive Architectural Breakdown
+#### 6.2.2 Deep-Dive Architectural Breakdown
 
 - **`EXPLAIN (COSTS OFF)` (`Line 206`):**
   - Instructs the query planner to output the physical execution plan tree while suppressing hardware-dependent cost numbers (`cost=0.00..1234.56 rows=... width=...`), producing clean, deterministic plan output ideal for architectural verification.
@@ -541,7 +541,7 @@ GROUP BY station_id;
   - It mathematically proves that rows in `[2026-10-15, 2026-10-16)` **cannot exist** in `telemetry_y2026m09`, `telemetry_y2026m11`, `telemetry_y2026m12`, or `telemetry_default`. Those 4 partitions (~3.72 million rows) are pruned away completely before execution starts!
   - Furthermore, inside the single surviving partition **`telemetry_y2026m10`**, the planner uses the inherited BRIN index (`telemetry_y2026m10_recorded_at_idx`) via a `Bitmap Index Scan` to read only the 24-hour slice of October 15 (`~41,142 rows`, or `< 1%` of the 5M-row table).
 
-#### Expected Terminal Output (`Lines 206–215`)
+#### 6.2.3 Expected Terminal Output (`Lines 206–215`)
 
 ```text
                                                              QUERY PLAN                                                             
@@ -558,7 +558,7 @@ GROUP BY station_id;
 
 ### 6.3 Section 8: Lab 1 Benchmark — B-Tree vs. BRIN Size & Build Speed on 1.27 Million Rows (`Lines 216–231`)
 
-#### Exact SQL Code (`Lines 216–231`)
+#### 6.3.1 Exact SQL Code (`Lines 216–231`)
 
 ```sql
 -- ============================================================================
@@ -578,7 +578,7 @@ WHERE relname IN ('idx_oct_btree', 'idx_oct_brin')
 ORDER BY pg_relation_size(c.oid) DESC;
 ```
 
-#### Deep-Dive Architectural Breakdown
+#### 6.3.2 Deep-Dive Architectural Breakdown
 
 - **`\timing on` / `\timing off` (`Lines 219, 222`):**
   - Toggles `psql`'s millisecond wall-clock timer around the two index creation statements on `telemetry_y2026m10` (`1,275,429 rows`):
@@ -587,7 +587,7 @@ ORDER BY pg_relation_size(c.oid) DESC;
 - **The Storage Audit Query (`Lines 224–230`):**
   - Queries `pg_class` for `'idx_oct_btree'` and `'idx_oct_brin'` and compares both `pg_size_pretty(pg_relation_size(c.oid))` and raw `exact_bytes`:
 
-#### Expected Terminal Output (`Lines 219–230`)
+#### 6.3.3 Expected Terminal Output (`Lines 219–230`)
 
 ```text
 Timing is on.
@@ -614,7 +614,7 @@ Timing is off.
 
 #### 6.4.1 Query 9A: 40 km Radial Search Around an Offshore Squall Line (`Lines 236–254`)
 
-##### Exact SQL Code (`Lines 236–254`)
+##### 6.4.1.1 Exact SQL Code (`Lines 236–254`)
 
 ```sql
 -- ============================================================================
@@ -642,7 +642,7 @@ WHERE is_active = TRUE
 ORDER BY distance_km ASC;
 ```
 
-##### Deep-Dive Architectural Breakdown
+##### 6.4.1.2 Deep-Dive Architectural Breakdown
 
 - **Meteorological Scenario:** Marine weather radar detects an advancing convective squall line centered offshore north-northwest of Dellys Cape at **`36.9500° N, 3.9000° E`**. Forecasters need an immediate list of all active Automated Weather Stations within a **40 km (`40,000 meter`) geodesic radius**, ordered from closest to farthest.
 - **Coordinate Construction (`ST_SetSRID(ST_MakePoint(3.9000, 36.9500), 4326)::geography`, `Lines 245, 251`):**
@@ -653,7 +653,7 @@ ORDER BY distance_km ASC;
 - **Converting Meters to Kilometers (`Lines 243–246`):**
   - `ST_Distance(geom::geography, ...)` returns the exact geodesic distance in **meters**. Dividing by `1000.0`, casting to `::numeric`, and calling `ROUND(..., 2)` converts the output into kilometers (`distance_km`) with `0.01 km` (`10 meter`) precision.
 
-##### Expected Terminal Output (`Lines 237–254`)
+##### 6.4.1.3 Expected Terminal Output (`Lines 237–254`)
 
 *(Showing our deterministic ground-truth stations `AWS-003` Dellys Cape at `3.82 km` and `AWS-004` Tizi Ouzou at `29.46 km`, plus any randomly seeded regional station falling inside the 40 km circle)*:
 
@@ -669,7 +669,7 @@ ORDER BY distance_km ASC;
 
 #### 6.4.2 Query 9B: Spatial-Temporal CTE Join (Stations Within 50 km of Boumerdes $\bowtie$ October 2026 Telemetry) (`Lines 256–285`)
 
-##### Exact SQL Code (`Lines 256–285`)
+##### 6.4.2.1 Exact SQL Code (`Lines 256–285`)
 
 ```sql
 -- 9B. Join stations within 50 km of Boumerdes (36.7664N, 3.4772E) with October 2026 telemetry
@@ -703,7 +703,7 @@ GROUP BY ns.station_id, ns.station_name, ns.dist_km
 ORDER BY ns.dist_km ASC;
 ```
 
-##### Deep-Dive Architectural Breakdown
+##### 6.4.2.2 Deep-Dive Architectural Breakdown
 
 Query 9B combines **every major Day 3 architectural pillar** in a single production query:
 
@@ -720,7 +720,7 @@ Query 9B combines **every major Day 3 architectural pillar** in a single product
 3. **Stage 3 — Hash Join & Parallel Aggregation (`Lines 272–284`):**
    - Hashes the small `nearby_stations` CTE result (`3–5 stations`) in memory, probes `telemetry_y2026m10` in parallel worker processes, and computes `ROUND(AVG(t.temperature)::numeric, 2) AS oct_mean_temp` and `MAX(t.wind_speed) AS oct_peak_gust` ordered by radial distance `ns.dist_km ASC`.
 
-##### Expected Terminal Output (`Lines 257–284`)
+##### 6.4.2.3 Expected Terminal Output (`Lines 257–284`)
 
 ```text
  station_id |      station_name       | dist_km | oct_mean_temp | oct_peak_gust 

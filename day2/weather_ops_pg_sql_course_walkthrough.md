@@ -85,23 +85,23 @@ SET datestyle = 'iso, ymd';
 SET search_path TO synoptic, nwp, alerts, public;
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.1.1 Deep-Dive Architectural Explanation
 
-1. **Why Multi-Schema Isolation Beats Dumping Everything in `public`:**
-   - In SQLite, an entire `.db` file represents a single flat namespace (`main`). In PostgreSQL, a single database cluster can host multiple databases, and each database (`weather_ops`) contains logical **schemas** (cataloged in `pg_catalog.pg_namespace`).
-   - Separating `synoptic` (surface sensor observations), `nwp` (supercomputer grid-point forecasts), and `alerts` (civil warning bulletins) into distinct schemas provides three critical production advantages:
-     1. **Role-Based Access Control (RBAC):** A station ingestion service account can be granted `USAGE, INSERT` exclusively on `SCHEMA synoptic` without having permission to overwrite `nwp.forecasts` or issue false `alerts.weather_alerts`.
-     2. **Namespace Hygiene:** Prevents table and index name collisions across teams and allows logical grouping in GUI tools (`DBeaver`, `pgAdmin`) and `\dn` / `\dt *.*` CLI inspections.
-     3. **Targeted Backup & Restore:** `pg_dump --schema=synoptic weather_ops` allows backing up or restoring individual operational domains independently.
-2. **`DROP SCHEMA IF EXISTS ... CASCADE` (Lines 8–10):**
-   - Unlike SQLite where every child table must be manually dropped in strict leaf-to-root order, PostgreSQL's `CASCADE` modifier traverses `pg_depend` (the internal object dependency graph) and automatically drops all contained tables, views, sequences, indexes, and cross-schema foreign-key constraints belonging to that schema in a single atomic DDL transaction.
-   - Dropping `alerts` and `nwp` before `synoptic` cleanly removes the child schemas before dropping the parent `synoptic` schema.
-3. **Mandatory Zulu Time & ISO-8601 Formatting (`SET timezone = 'UTC'`, `SET datestyle = 'iso, ymd'`):**
-   - World Meteorological Organization (WMO) synoptic standards require all surface observations and NWP model cycles (`00Z`, `06Z`, `12Z`, `18Z`) to be referenced strictly in **Coordinated Universal Time (`UTC`)**.
-   - While PostgreSQL physically stores `TIMESTAMPTZ` values on disk in UTC, it converts them to the session's active `timezone` setting upon display and when evaluating timezone-dependent functions like `EXTRACT(HOUR FROM obs_time)` or `TO_CHAR()`. Setting `SET timezone = 'UTC';` ensures that `EXTRACT(HOUR FROM o.obs_time) IN (0, 12)` on Line 140 filters exact `00:00 UTC` and `12:00 UTC` synoptic cycles regardless of the host OS timezone on the developer's laptop or server.
-   - `SET datestyle = 'iso, ymd';` enforces unambiguous `YYYY-MM-DD HH:MI:SS+00` output and `Year-Month-Day` input parsing.
-4. **Schema Resolution Order (`SET search_path TO synoptic, nwp, alerts, public;`):**
-   - When a query references an unqualified table name (e.g., `SELECT * FROM stations;`), PostgreSQL walks the `search_path` list from left to right (`synoptic` $\rightarrow$ `nwp` $\rightarrow$ `alerts` $\rightarrow$ `public`) until it finds a matching relation in `pg_class`. Keeping `public` last ensures that installed C extensions (like `pageinspect`, `pgstattuple`, or `postgis`) remain accessible without cluttering the meteorological schemas.
+##### 2.1.1.1 Why Multi-Schema Isolation Beats Dumping Everything in `public`
+- In SQLite, an entire `.db` file represents a single flat namespace (`main`). In PostgreSQL, a single database cluster can host multiple databases, and each database (`weather_ops`) contains logical **schemas** (cataloged in `pg_catalog.pg_namespace`).
+- Separating `synoptic` (surface sensor observations), `nwp` (supercomputer grid-point forecasts), and `alerts` (civil warning bulletins) into distinct schemas provides three critical production advantages:
+  1. **Role-Based Access Control (RBAC):** A station ingestion service account can be granted `USAGE, INSERT` exclusively on `SCHEMA synoptic` without having permission to overwrite `nwp.forecasts` or issue false `alerts.weather_alerts`.
+  2. **Namespace Hygiene:** Prevents table and index name collisions across teams and allows logical grouping in GUI tools (`DBeaver`, `pgAdmin`) and `\dn` / `\dt *.*` CLI inspections.
+  3. **Targeted Backup & Restore:** `pg_dump --schema=synoptic weather_ops` allows backing up or restoring individual operational domains independently.
+##### 2.1.1.2 `DROP SCHEMA IF EXISTS ... CASCADE` (Lines 8–10)
+- Unlike SQLite where every child table must be manually dropped in strict leaf-to-root order, PostgreSQL's `CASCADE` modifier traverses `pg_depend` (the internal object dependency graph) and automatically drops all contained tables, views, sequences, indexes, and cross-schema foreign-key constraints belonging to that schema in a single atomic DDL transaction.
+- Dropping `alerts` and `nwp` before `synoptic` cleanly removes the child schemas before dropping the parent `synoptic` schema.
+##### 2.1.1.3 Mandatory Zulu Time & ISO-8601 Formatting (`SET timezone = 'UTC'`, `SET datestyle = 'iso, ymd'`)
+- World Meteorological Organization (WMO) synoptic standards require all surface observations and NWP model cycles (`00Z`, `06Z`, `12Z`, `18Z`) to be referenced strictly in **Coordinated Universal Time (`UTC`)**.
+- While PostgreSQL physically stores `TIMESTAMPTZ` values on disk in UTC, it converts them to the session's active `timezone` setting upon display and when evaluating timezone-dependent functions like `EXTRACT(HOUR FROM obs_time)` or `TO_CHAR()`. Setting `SET timezone = 'UTC';` ensures that `EXTRACT(HOUR FROM o.obs_time) IN (0, 12)` on Line 140 filters exact `00:00 UTC` and `12:00 UTC` synoptic cycles regardless of the host OS timezone on the developer's laptop or server.
+- `SET datestyle = 'iso, ymd';` enforces unambiguous `YYYY-MM-DD HH:MI:SS+00` output and `Year-Month-Day` input parsing.
+##### 2.1.1.4 Schema Resolution Order (`SET search_path TO synoptic, nwp, alerts, public;`)
+- When a query references an unqualified table name (e.g., `SELECT * FROM stations;`), PostgreSQL walks the `search_path` list from left to right (`synoptic` $\rightarrow$ `nwp` $\rightarrow$ `alerts` $\rightarrow$ `public`) until it finds a matching relation in `pg_class`. Keeping `public` last ensures that installed C extensions (like `pageinspect`, `pgstattuple`, or `postgis`) remain accessible without cluttering the meteorological schemas.
 
 ---
 
@@ -121,7 +121,7 @@ CREATE TABLE synoptic.stations (
 );
 ```
 
-#### SQLite Dynamic Affinity vs. PostgreSQL Strict Static Typing
+#### 2.2.1 SQLite Dynamic Affinity vs. PostgreSQL Strict Static Typing
 
 | Column | Day 1 SQLite (`weather_ops_seed.sql`) | Day 2 PostgreSQL (`weather_ops_pg.sql`) | Physical Storage & Precision Upgrade |
 | :--- | :--- | :--- | :--- |
@@ -154,25 +154,25 @@ CREATE TABLE synoptic.observations (
 );
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.3.1 Deep-Dive Architectural Explanation
 
-1. **Why `BIGSERIAL PRIMARY KEY` Instead of `SERIAL` (`INTEGER`):**
-   - `SERIAL` creates a 32-bit signed `INTEGER` backed by a sequence, which overflows at $2^{31} - 1 = 2,147,483,647$ rows. A national network of $5,000$ automated weather stations reporting every minute generates $2.628 \times 10^9$ rows per year, exhausting a 32-bit `SERIAL` key in less than 10 months!
-   - `BIGSERIAL` expands the column to an 8-byte signed `BIGINT` (`int8`) backed by a 64-bit sequence (`observations_obs_id_seq`), supporting up to $9,223,372,036,854,775,807$ ($9.22 \times 10^{18}$) observations without integer wraparound.
-   - Unlike SQLite's `AUTOINCREMENT` (which locks the single `sqlite_sequence` B-Tree page on every write), PostgreSQL sequences use lock-free in-memory caching (`nextval('synoptic.observations_obs_id_seq')`) so dozens of concurrent ingestion workers can allocate `obs_id` values simultaneously without blocking each other.
-2. **How `TIMESTAMPTZ` Works Physically (`obs_time`):**
-   - In SQLite, `'2026-10-05 06:00:00'` was stored as 19 ASCII characters (`19 bytes` of `TEXT`).
-   - In PostgreSQL, `TIMESTAMPTZ` (`timestamp with time zone`) occupies **strictly 8 bytes** (`int64`), representing the number of microseconds elapsed since the PostgreSQL epoch (`2000-01-01 00:00:00 UTC`).
-   - Upon `INSERT`, PostgreSQL parses any input ISO-8601 string and its offset (e.g., `'2026-06-01 00:00:00+00'` or `'2026-06-01 01:00:00+01'`), converts it to UTC microseconds, and stores the pure 8-byte integer. It does **not** store the input timezone string on disk. This makes chronological range scans (`WHERE obs_time BETWEEN ...`), `INTERVAL` arithmetic, and B-Tree comparisons fast 64-bit integer operations.
-3. **Production Gate Against `-9999.0` Sentinels & `NOT NULL` vs. `CHECK` (`precip_1h_mm NUMERIC(5,1) CHECK (...)`):**
-   - Notice Line 45: `precip_1h_mm NUMERIC(5,1) CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)`.
-   - Both constraints now block the Day 1 `-9999.0` Fortran rain-gauge sentinel at the database boundary:
-     1. `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` rejects any negative value immediately (`FALSE`), while allowing `NULL` when a rain gauge is offline.
-     2. Even without the `CHECK` constraint, `NUMERIC(5,1)` allows at most $5 - 1 = 4$ digits to the left of the decimal point, blocking 5-digit `-99999.0` overflows.
-   - **Why `synoptic.observations` uses `CHECK (col IS NULL OR ...)` while `nwp.forecasts` uses `NOT NULL CHECK (col >= 0.0)`:**
-     - In SQL Three-Valued Logic (`3VL`), a `CHECK` constraint only rejects `FALSE` and **silently allows `UNKNOWN` (`NULL`)**.
-     - Therefore, on `synoptic.stations` (`latitude`, `longitude`, `elevation_m`) and `nwp.forecasts` (`pred_wind_kt`, `pred_precip_mm`), where `NULL` is physically invalid, we **must** combine `NOT NULL CHECK (...)`—because `CHECK (...)` alone would allow `NULL`s!
-     - On `synoptic.observations` (`humidity_pct`, `wind_speed_kt`, `precip_1h_mm`), where an offline sensor legitimately reports `NULL`, we omit `NOT NULL` and write `CHECK (col IS NULL OR (...))` so the nullable physical contract is explicit and portable to `WHERE` clauses.
+##### 2.3.1.1 Why `BIGSERIAL PRIMARY KEY` Instead of `SERIAL` (`INTEGER`)
+- `SERIAL` creates a 32-bit signed `INTEGER` backed by a sequence, which overflows at $2^{31} - 1 = 2,147,483,647$ rows. A national network of $5,000$ automated weather stations reporting every minute generates $2.628 \times 10^9$ rows per year, exhausting a 32-bit `SERIAL` key in less than 10 months!
+- `BIGSERIAL` expands the column to an 8-byte signed `BIGINT` (`int8`) backed by a 64-bit sequence (`observations_obs_id_seq`), supporting up to $9,223,372,036,854,775,807$ ($9.22 \times 10^{18}$) observations without integer wraparound.
+- Unlike SQLite's `AUTOINCREMENT` (which locks the single `sqlite_sequence` B-Tree page on every write), PostgreSQL sequences use lock-free in-memory caching (`nextval('synoptic.observations_obs_id_seq')`) so dozens of concurrent ingestion workers can allocate `obs_id` values simultaneously without blocking each other.
+##### 2.3.1.2 How `TIMESTAMPTZ` Works Physically (`obs_time`)
+- In SQLite, `'2026-10-05 06:00:00'` was stored as 19 ASCII characters (`19 bytes` of `TEXT`).
+- In PostgreSQL, `TIMESTAMPTZ` (`timestamp with time zone`) occupies **strictly 8 bytes** (`int64`), representing the number of microseconds elapsed since the PostgreSQL epoch (`2000-01-01 00:00:00 UTC`).
+- Upon `INSERT`, PostgreSQL parses any input ISO-8601 string and its offset (e.g., `'2026-06-01 00:00:00+00'` or `'2026-06-01 01:00:00+01'`), converts it to UTC microseconds, and stores the pure 8-byte integer. It does **not** store the input timezone string on disk. This makes chronological range scans (`WHERE obs_time BETWEEN ...`), `INTERVAL` arithmetic, and B-Tree comparisons fast 64-bit integer operations.
+##### 2.3.1.3 Production Gate Against `-9999.0` Sentinels & `NOT NULL` vs. `CHECK` (`precip_1h_mm NUMERIC(5,1) CHECK (...)`)
+- Notice Line 45: `precip_1h_mm NUMERIC(5,1) CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)`.
+- Both constraints now block the Day 1 `-9999.0` Fortran rain-gauge sentinel at the database boundary:
+  1. `CHECK (precip_1h_mm IS NULL OR precip_1h_mm >= 0.0)` rejects any negative value immediately (`FALSE`), while allowing `NULL` when a rain gauge is offline.
+  2. Even without the `CHECK` constraint, `NUMERIC(5,1)` allows at most $5 - 1 = 4$ digits to the left of the decimal point, blocking 5-digit `-99999.0` overflows.
+- **Why `synoptic.observations` uses `CHECK (col IS NULL OR ...)` while `nwp.forecasts` uses `NOT NULL CHECK (col >= 0.0)`:**
+  - In SQL Three-Valued Logic (`3VL`), a `CHECK` constraint only rejects `FALSE` and **silently allows `UNKNOWN` (`NULL`)**.
+  - Therefore, on `synoptic.stations` (`latitude`, `longitude`, `elevation_m`) and `nwp.forecasts` (`pred_wind_kt`, `pred_precip_mm`), where `NULL` is physically invalid, we **must** combine `NOT NULL CHECK (...)`—because `CHECK (...)` alone would allow `NULL`s!
+  - On `synoptic.observations` (`humidity_pct`, `wind_speed_kt`, `precip_1h_mm`), where an offline sensor legitimately reports `NULL`, we omit `NOT NULL` and write `CHECK (col IS NULL OR (...))` so the nullable physical contract is explicit and portable to `WHERE` clauses.
 
 ---
 
@@ -193,22 +193,22 @@ CREATE TABLE nwp.forecasts (
 );
 ```
 
-#### Deep-Dive Architectural Explanation: Why `valid_time` Uses Double `AT TIME ZONE 'UTC'`
+#### 2.4.1 Deep-Dive Architectural Explanation: Why `valid_time` Uses Double `AT TIME ZONE 'UTC'`
 
 Look closely at Line 58:
 ```sql
 valid_time TIMESTAMPTZ GENERATED ALWAYS AS (((init_time AT TIME ZONE 'UTC') + lead_interval) AT TIME ZONE 'UTC') STORED
 ```
-1. **Why Use a Stored Generated Column (`GENERATED ALWAYS AS (...) STORED`)?**
-   - In Day 1 SQLite, `forecasts` required the ingestion pipeline to manually calculate and insert both `init_time`, `lead_hours`, and `valid_time`. If a buggy script inserted `init_time = '2026-10-05 00:00:00'`, `lead_hours = 12`, and `valid_time = '2026-10-06 00:00:00'` (`+24h` instead of `+12h`), the database silently accepted the inconsistent temporal triad.
-   - By declaring `valid_time` as `GENERATED ALWAYS AS (...) STORED`, PostgreSQL computes `valid_time` automatically whenever a row is inserted or updated and persists the resulting 8-byte `TIMESTAMPTZ` on disk (allowing it to be indexed and joined directly against `synoptic.observations.obs_time` with zero runtime recomputation). Direct manual inserts into `valid_time` are forbidden.
-2. **Why `init_time + lead_interval` Alone Fails with `ERROR: generation expression is not immutable`:**
-   - PostgreSQL requires every expression inside a `GENERATED ALWAYS AS (...) STORED` column (and every functional index) to be marked **`IMMUTABLE`** in `pg_proc`—meaning the expression must always produce the exact same result for the same inputs, regardless of session configuration (`SET timezone = ...`).
-   - In PostgreSQL's type system, adding an `INTERVAL` to a `TIMESTAMPTZ` (`timestamptz_pl_interval`) is classified as **`STABLE`** (not `IMMUTABLE`)! Why? Because a PostgreSQL `INTERVAL` consists of three distinct internal components (`months`, `days`, `microseconds` — 16 bytes total). If an interval contains `'1 day'` or `'1 month'` and the session's `timezone` uses Daylight Saving Time (e.g., `'Europe/Paris'`), adding `'1 day'` across a DST transition adds either 23 hours or 25 hours depending on the active `timezone` GUC!
-   - To make the timestamp addition mathematically **`IMMUTABLE`**:
-     1. `(init_time AT TIME ZONE 'UTC')` invokes `timezone('UTC'::text, init_time::timestamptz)`, an **`IMMUTABLE`** function (since the timezone `'UTC'` is a constant literal) that strips the session timezone context and returns a timezone-naive `TIMESTAMP WITHOUT TIME ZONE` anchored at UTC.
-     2. `+ lead_interval` invokes `timestamp_pl_interval(timestamp, interval)`, which is strictly **`IMMUTABLE`** because arithmetic on `TIMESTAMP WITHOUT TIME ZONE` never consults session DST tables.
-     3. `(...) AT TIME ZONE 'UTC'` invokes `timezone('UTC'::text, timestamp)`—also **`IMMUTABLE`**—re-tagging the resulting UTC `TIMESTAMP` back into a `TIMESTAMPTZ`.
+##### 2.4.1.1 Why Use a Stored Generated Column (`GENERATED ALWAYS AS (...) STORED`)?
+- In Day 1 SQLite, `forecasts` required the ingestion pipeline to manually calculate and insert both `init_time`, `lead_hours`, and `valid_time`. If a buggy script inserted `init_time = '2026-10-05 00:00:00'`, `lead_hours = 12`, and `valid_time = '2026-10-06 00:00:00'` (`+24h` instead of `+12h`), the database silently accepted the inconsistent temporal triad.
+- By declaring `valid_time` as `GENERATED ALWAYS AS (...) STORED`, PostgreSQL computes `valid_time` automatically whenever a row is inserted or updated and persists the resulting 8-byte `TIMESTAMPTZ` on disk (allowing it to be indexed and joined directly against `synoptic.observations.obs_time` with zero runtime recomputation). Direct manual inserts into `valid_time` are forbidden.
+##### 2.4.1.2 Why `init_time + lead_interval` Alone Fails with `ERROR: generation expression is not immutable`
+- PostgreSQL requires every expression inside a `GENERATED ALWAYS AS (...) STORED` column (and every functional index) to be marked **`IMMUTABLE`** in `pg_proc`—meaning the expression must always produce the exact same result for the same inputs, regardless of session configuration (`SET timezone = ...`).
+- In PostgreSQL's type system, adding an `INTERVAL` to a `TIMESTAMPTZ` (`timestamptz_pl_interval`) is classified as **`STABLE`** (not `IMMUTABLE`)! Why? Because a PostgreSQL `INTERVAL` consists of three distinct internal components (`months`, `days`, `microseconds` — 16 bytes total). If an interval contains `'1 day'` or `'1 month'` and the session's `timezone` uses Daylight Saving Time (e.g., `'Europe/Paris'`), adding `'1 day'` across a DST transition adds either 23 hours or 25 hours depending on the active `timezone` GUC!
+- To make the timestamp addition mathematically **`IMMUTABLE`**:
+  1. `(init_time AT TIME ZONE 'UTC')` invokes `timezone('UTC'::text, init_time::timestamptz)`, an **`IMMUTABLE`** function (since the timezone `'UTC'` is a constant literal) that strips the session timezone context and returns a timezone-naive `TIMESTAMP WITHOUT TIME ZONE` anchored at UTC.
+  2. `+ lead_interval` invokes `timestamp_pl_interval(timestamp, interval)`, which is strictly **`IMMUTABLE`** because arithmetic on `TIMESTAMP WITHOUT TIME ZONE` never consults session DST tables.
+  3. `(...) AT TIME ZONE 'UTC'` invokes `timezone('UTC'::text, timestamp)`—also **`IMMUTABLE`**—re-tagging the resulting UTC `TIMESTAMP` back into a `TIMESTAMPTZ`.
 
 ---
 
@@ -226,7 +226,7 @@ CREATE TABLE alerts.weather_alerts (
 );
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.5.1 Deep-Dive Architectural Explanation
 
 - **Cross-Schema Foreign Key (`REFERENCES synoptic.stations(station_id) ON DELETE CASCADE`):** Demonstrates how a table in the `alerts` schema enforces referential integrity against a parent table in the `synoptic` schema.
 - **`DEFAULT NOW()` on `issued_at`:** Automatically stamps the current transaction start timestamp (`transaction_timestamp()`) in UTC microseconds whenever an alert is inserted without an explicit `issued_at` value.
@@ -258,19 +258,19 @@ INSERT INTO alerts.weather_alerts (station_id, issued_at, phenomenon, severity, 
 (60680, '2026-10-05 10:00:00+00', 'HEATWAVE',    'YELLOW', 'Afternoon temperatures exceeding 36°C at high elevation.');
 ```
 
-#### Deep-Dive Architectural Explanation: How Station `60390` Triggers PostgreSQL TOAST
+#### 2.6.1 Deep-Dive Architectural Explanation: How Station `60390` Triggers PostgreSQL TOAST
 
-1. **The 8 KB Heap Page Boundary & `TOAST_TUPLE_THRESHOLD`:**
-   - PostgreSQL stores all heap rows inside fixed **$8,192\text{-byte}$ (8 KB) pages** and forbids a single physical tuple from spanning across two 8 KB pages.
-   - Furthermore, to ensure that at least 4 tuples can fit on every heap page, PostgreSQL defines `TOAST_TUPLE_THRESHOLD` at approximately **$\frac{1}{4}$ of a page ($\approx 2,000\text{ bytes}$)**.
-2. **Evaluating `REPEAT('WMO_CALIBRATION_HEADER_60390;', 200)` on Line 78:**
-   - The string `'WMO_CALIBRATION_HEADER_60390;'` is **$29\text{ bytes}$** long.
-   - Repeating it 200 times produces an uncompressed string of:
-     $$\text{Uncompressed Payload Size} = 29\text{ bytes} \times 200 = 5,800\text{ bytes}$$
-   - Because $5,800\text{ bytes} > 2,000\text{ bytes}$ (`TOAST_TUPLE_THRESHOLD`), the PostgreSQL storage engine automatically invokes **TOAST (`The Oversized-Attribute Storage Technique`)** before writing the tuple to Page 0 of `synoptic.stations`:
-     - **Step 1 (In-Line Compression):** Because `TEXT` defaults to storage strategy `EXTENDED`, PostgreSQL first compresses the $5,800\text{-byte}$ repeating string using its internal `pglz` (or `lz4`) compressor. Because the string is highly repetitive, `pglz` shrinks the $5,800\text{ bytes}$ down to **`86 bytes`** on disk (`pg_column_size(raw_metadata) = 86` vs `OCTET_LENGTH(raw_metadata) = 5800` — a **$98.5\%$ compression ratio**!).
-     - **Step 2 (Out-of-Line `pg_toast` Chunking for Larger Uncompressible Payloads):** If the compressed attribute still exceeded `TOAST_TUPLE_TARGET` ($\approx 2,000\text{ bytes}$), PostgreSQL would slice the payload into $\approx 2,000\text{-byte}$ chunks (`chunk_id`, `chunk_seq`, `chunk_data`), store them in the companion `pg_toast.pg_toast_<oid>` table, and leave only an **18-byte TOAST pointer** inside the main `synoptic.stations` heap tuple.
-     - **Performance Payoff:** Queries that scan `SELECT station_id, station_name FROM synoptic.stations` never decompress or fetch `raw_metadata`.
+##### 2.6.1.1 The 8 KB Heap Page Boundary & `TOAST_TUPLE_THRESHOLD`
+- PostgreSQL stores all heap rows inside fixed **$8,192\text{-byte}$ (8 KB) pages** and forbids a single physical tuple from spanning across two 8 KB pages.
+- Furthermore, to ensure that at least 4 tuples can fit on every heap page, PostgreSQL defines `TOAST_TUPLE_THRESHOLD` at approximately **$\frac{1}{4}$ of a page ($\approx 2,000\text{ bytes}$)**.
+##### 2.6.1.2 Evaluating `REPEAT('WMO_CALIBRATION_HEADER_60390;', 200)` on Line 78
+- The string `'WMO_CALIBRATION_HEADER_60390;'` is **$29\text{ bytes}$** long.
+- Repeating it 200 times produces an uncompressed string of:
+  $$\text{Uncompressed Payload Size} = 29\text{ bytes} \times 200 = 5,800\text{ bytes}$$
+- Because $5,800\text{ bytes} > 2,000\text{ bytes}$ (`TOAST_TUPLE_THRESHOLD`), the PostgreSQL storage engine automatically invokes **TOAST (`The Oversized-Attribute Storage Technique`)** before writing the tuple to Page 0 of `synoptic.stations`:
+  - **Step 1 (In-Line Compression):** Because `TEXT` defaults to storage strategy `EXTENDED`, PostgreSQL first compresses the $5,800\text{-byte}$ repeating string using its internal `pglz` (or `lz4`) compressor. Because the string is highly repetitive, `pglz` shrinks the $5,800\text{ bytes}$ down to **`86 bytes`** on disk (`pg_column_size(raw_metadata) = 86` vs `OCTET_LENGTH(raw_metadata) = 5800` — a **$98.5\%$ compression ratio**!).
+  - **Step 2 (Out-of-Line `pg_toast` Chunking for Larger Uncompressible Payloads):** If the compressed attribute still exceeded `TOAST_TUPLE_TARGET` ($\approx 2,000\text{ bytes}$), PostgreSQL would slice the payload into $\approx 2,000\text{-byte}$ chunks (`chunk_id`, `chunk_seq`, `chunk_data`), store them in the companion `pg_toast.pg_toast_<oid>` table, and leave only an **18-byte TOAST pointer** inside the main `synoptic.stations` heap tuple.
+  - **Performance Payoff:** Queries that scan `SELECT station_id, station_name FROM synoptic.stations` never decompress or fetch `raw_metadata`.
 
 ```mermaid
 flowchart LR
@@ -315,33 +315,33 @@ CROSS JOIN generate_series(
 WHERE s.is_active = TRUE;
 ```
 
-#### Complete Mathematical & Physical Breakdown of the `generate_series()` Query
+#### 2.7.1 Complete Mathematical & Physical Breakdown of the `generate_series()` Query
 
-1. **Row Cardinality Calculation ($18,432\text{ Rows}$):**
-   - `FROM synoptic.stations s WHERE s.is_active = TRUE`: Filters the 7 stations down to the **6 active stations** (`60390`, `60490`, `60419`, `60571`, `60680`, `60531`), leaving inactive station `60402` (`Bejaia - Soummam`) with 0 observations.
-   - `CROSS JOIN generate_series('2026-06-01 00:00:00+00'::TIMESTAMPTZ, '2026-10-06 23:00:00+00'::TIMESTAMPTZ, INTERVAL '1 hour') AS ts`: Generates an inclusive hourly timestamp grid spanning June (30 days) + July (31 days) + August (31 days) + September (30 days) + October 1–6 (6 days) = **$128\text{ days}$**:
-     $$N_{\text{hours}} = 128\text{ days} \times 24\text{ hours/day} = 3,072\text{ timestamps per station}$$
-     $$N_{\text{total\_observations}} = 6\text{ active stations} \times 3,072\text{ hours} = 18,432\text{ rows}$$
-2. **Temperature Synthesis Equation (`temp_c`, Line 107):**
-   $$T(s, t) = \text{ROUND}\!\left(22.0 + \underbrace{(s.\text{latitude} - 30.0) \times (-0.5)}_{\text{Latitudinal Meridional Gradient}} + \underbrace{6.0 \times \sin\!\left(\frac{\text{epoch}(t)}{86400.0} \times 2\pi\right)}_{\text{24-Hour Diurnal Solar Cycle}} + \underbrace{(\text{RANDOM}() \times 2.0 - 1.0)}_{\text{Turbulent Micro-Fluctuation}},\ 1\right)$$
-   - **Baseline Temperature ($22.0^\circ\text{C}$):** Reference mean temperature at $30.0^\circ\text{N}$ latitude.
-   - **Latitudinal Gradient (`(s.latitude - 30.0) * -0.5`):** Applies a meridional cooling rate of $-0.5^\circ\text{C}$ per degree of latitude northward:
-     - For `Tamanrasset (60680)` at $22.8115^\circ\text{N}$: $(22.8115 - 30.0) \times (-0.5) = +3.59^\circ\text{C}$ warmer baseline ($25.59^\circ\text{C}$).
-     - For `Algiers (60390)` at $36.6910^\circ\text{N}$: $(36.6910 - 30.0) \times (-0.5) = -3.35^\circ\text{C}$ cooler baseline ($18.65^\circ\text{C}$).
-   - **24-Hour Diurnal Solar Harmonic (`6.0 * SIN(EXTRACT(EPOCH FROM ts) / 86400.0 * 2 * PI())`):**
-     - `EXTRACT(EPOCH FROM ts)` returns Unix seconds since `1970-01-01 00:00:00 UTC`.
-     - Dividing by $86,400.0\text{ seconds/day}$ and multiplying by $2\pi\text{ radians}$ creates a smooth sinusoidal wave that completes exactly one $2\pi$ period every 24 hours, oscillating with an amplitude of $\pm 6.0^\circ\text{C}$ ($12.0^\circ\text{C}$ daily peak-to-trough swing).
-   - **Stochastic Eddies (`RANDOM() * 2.0 - 1.0`):** Injects uniform white noise in $[-1.0^\circ\text{C}, +1.0^\circ\text{C}]$.
-   - **Explicit Cast (`::NUMERIC`):** Because `SIN()` and `RANDOM()` return `DOUBLE PRECISION` (`float8`), PostgreSQL's two-argument `ROUND(numeric, int)` function requires an explicit `::NUMERIC` cast.
-3. **Barometric Pressure Rossby Wave Equation (`pressure_hpa`, Line 110):**
-   $$P(t) = \text{ROUND}\!\left(1013.2 + 5.0 \times \cos\!\left(\frac{\text{epoch}(t)}{259200.0}\right) + (\text{RANDOM}() \times 1.5),\ 1\right)$$
-   - Centers pressure on standard mean sea-level pressure ($1013.2\text{ hPa}$).
-   - Divides Unix epoch seconds by $259,200.0\text{ seconds}$ ($3\text{ days} = 72\text{ hours} \times 3,600\text{ s/h}$) inside `COS(...)` with a $\pm 5.0\text{ hPa}$ amplitude, simulating multi-day synoptic high- and low-pressure Rossby wave passages across the Mediterranean basin (full $2\pi$ period $= 2\pi \times 3\text{ days} \approx 18.85\text{ days}$).
-4. **Intermittent Precipitation & Quality Control Probabilities (Lines 112–113):**
-   - `CASE WHEN RANDOM() > 0.88 THEN ROUND((RANDOM() * 12.0)::NUMERIC, 1) ELSE 0.0 END`: Models zero-inflated semi-arid/Mediterranean rainfall where $88\%$ of hours are dry (`0.0 mm`) and $12\%$ of hours record measurable precipitation between `0.0 mm` and `12.0 mm`.
-   - `CASE WHEN RANDOM() > 0.96 THEN 'SUSPECT' ELSE 'VALID' END`: Flags $\approx 4\%$ of observations as `'SUSPECT'` and $\approx 96\%$ as `'VALID'`.
-5. **Dynamic ICAO METAR String Construction (`raw_metar`, Line 114):**
-   - `'METAR DAAG ' || TO_CHAR(ts, 'DDHH24MI') || 'Z AUTO 28012KT 9999 FEW030'` formats each timestamp `ts` into the standard 6-digit ICAO day-hour-minute Zulu group (`DDHH24MIZ`, e.g., `'METAR DAAG 010000Z AUTO 28012KT 9999 FEW030'`).
+##### 2.7.1.1 Row Cardinality Calculation ($18,432\text{ Rows}$)
+- `FROM synoptic.stations s WHERE s.is_active = TRUE`: Filters the 7 stations down to the **6 active stations** (`60390`, `60490`, `60419`, `60571`, `60680`, `60531`), leaving inactive station `60402` (`Bejaia - Soummam`) with 0 observations.
+- `CROSS JOIN generate_series('2026-06-01 00:00:00+00'::TIMESTAMPTZ, '2026-10-06 23:00:00+00'::TIMESTAMPTZ, INTERVAL '1 hour') AS ts`: Generates an inclusive hourly timestamp grid spanning June (30 days) + July (31 days) + August (31 days) + September (30 days) + October 1–6 (6 days) = **$128\text{ days}$**:
+  $$N_{\text{hours}} = 128\text{ days} \times 24\text{ hours/day} = 3,072\text{ timestamps per station}$$
+  $$N_{\text{total\_observations}} = 6\text{ active stations} \times 3,072\text{ hours} = 18,432\text{ rows}$$
+##### 2.7.1.2 Temperature Synthesis Equation (`temp_c`, Line 107)
+$$T(s, t) = \text{ROUND}\!\left(22.0 + \underbrace{(s.\text{latitude} - 30.0) \times (-0.5)}_{\text{Latitudinal Meridional Gradient}} + \underbrace{6.0 \times \sin\!\left(\frac{\text{epoch}(t)}{86400.0} \times 2\pi\right)}_{\text{24-Hour Diurnal Solar Cycle}} + \underbrace{(\text{RANDOM}() \times 2.0 - 1.0)}_{\text{Turbulent Micro-Fluctuation}},\ 1\right)$$
+- **Baseline Temperature ($22.0^\circ\text{C}$):** Reference mean temperature at $30.0^\circ\text{N}$ latitude.
+- **Latitudinal Gradient (`(s.latitude - 30.0) * -0.5`):** Applies a meridional cooling rate of $-0.5^\circ\text{C}$ per degree of latitude northward:
+  - For `Tamanrasset (60680)` at $22.8115^\circ\text{N}$: $(22.8115 - 30.0) \times (-0.5) = +3.59^\circ\text{C}$ warmer baseline ($25.59^\circ\text{C}$).
+  - For `Algiers (60390)` at $36.6910^\circ\text{N}$: $(36.6910 - 30.0) \times (-0.5) = -3.35^\circ\text{C}$ cooler baseline ($18.65^\circ\text{C}$).
+- **24-Hour Diurnal Solar Harmonic (`6.0 * SIN(EXTRACT(EPOCH FROM ts) / 86400.0 * 2 * PI())`):**
+  - `EXTRACT(EPOCH FROM ts)` returns Unix seconds since `1970-01-01 00:00:00 UTC`.
+  - Dividing by $86,400.0\text{ seconds/day}$ and multiplying by $2\pi\text{ radians}$ creates a smooth sinusoidal wave that completes exactly one $2\pi$ period every 24 hours, oscillating with an amplitude of $\pm 6.0^\circ\text{C}$ ($12.0^\circ\text{C}$ daily peak-to-trough swing).
+- **Stochastic Eddies (`RANDOM() * 2.0 - 1.0`):** Injects uniform white noise in $[-1.0^\circ\text{C}, +1.0^\circ\text{C}]$.
+- **Explicit Cast (`::NUMERIC`):** Because `SIN()` and `RANDOM()` return `DOUBLE PRECISION` (`float8`), PostgreSQL's two-argument `ROUND(numeric, int)` function requires an explicit `::NUMERIC` cast.
+##### 2.7.1.3 Barometric Pressure Rossby Wave Equation (`pressure_hpa`, Line 110)
+$$P(t) = \text{ROUND}\!\left(1013.2 + 5.0 \times \cos\!\left(\frac{\text{epoch}(t)}{259200.0}\right) + (\text{RANDOM}() \times 1.5),\ 1\right)$$
+- Centers pressure on standard mean sea-level pressure ($1013.2\text{ hPa}$).
+- Divides Unix epoch seconds by $259,200.0\text{ seconds}$ ($3\text{ days} = 72\text{ hours} \times 3,600\text{ s/h}$) inside `COS(...)` with a $\pm 5.0\text{ hPa}$ amplitude, simulating multi-day synoptic high- and low-pressure Rossby wave passages across the Mediterranean basin (full $2\pi$ period $= 2\pi \times 3\text{ days} \approx 18.85\text{ days}$).
+##### 2.7.1.4 Intermittent Precipitation & Quality Control Probabilities (Lines 112–113)
+- `CASE WHEN RANDOM() > 0.88 THEN ROUND((RANDOM() * 12.0)::NUMERIC, 1) ELSE 0.0 END`: Models zero-inflated semi-arid/Mediterranean rainfall where $88\%$ of hours are dry (`0.0 mm`) and $12\%$ of hours record measurable precipitation between `0.0 mm` and `12.0 mm`.
+- `CASE WHEN RANDOM() > 0.96 THEN 'SUSPECT' ELSE 'VALID' END`: Flags $\approx 4\%$ of observations as `'SUSPECT'` and $\approx 96\%$ as `'VALID'`.
+##### 2.7.1.5 Dynamic ICAO METAR String Construction (`raw_metar`, Line 114)
+- `'METAR DAAG ' || TO_CHAR(ts, 'DDHH24MI') || 'Z AUTO 28012KT 9999 FEW030'` formats each timestamp `ts` into the standard 6-digit ICAO day-hour-minute Zulu group (`DDHH24MIZ`, e.g., `'METAR DAAG 010000Z AUTO 28012KT 9999 FEW030'`).
 
 ---
 
@@ -368,17 +368,17 @@ CROSS JOIN (VALUES ('ECMWF-HRES'), ('GFS'), ('AROME')) AS m(model_name)
 WHERE EXTRACT(HOUR FROM o.obs_time) IN (0, 12);
 ```
 
-#### Deep-Dive Architectural Explanation
+#### 2.8.1 Deep-Dive Architectural Explanation
 
-1. **Filtering Main Synoptic Cycles (`WHERE EXTRACT(HOUR FROM o.obs_time) IN (0, 12)`):**
-   - Operational global NWP centers initialize their primary deterministic runs at `00:00 UTC` (`00Z`) and `12:00 UTC` (`12Z`). Filtering `EXTRACT(HOUR FROM o.obs_time) IN (0, 12)` selects 2 timestamps per day across 128 days for 6 stations ($128 \times 2 \times 6 = 1,536$ target valid observations).
-2. **In-Memory Relation Construction (`CROSS JOIN (VALUES ('ECMWF-HRES'), ('GFS'), ('AROME')) AS m(model_name)`):**
-   - Uses an inline SQL `VALUES` table expression aliased as `m(model_name)` to fan out each of the $1,536$ synoptic observations across all 3 NWP models, generating **$1,536 \times 3 = 4,608\text{ forecast rows}$** in a single set-based `INSERT ... SELECT` statement.
-3. **Automatic Evaluation of `valid_time`:**
-   - Notice that `valid_time` is **not** listed in the `INSERT INTO nwp.forecasts (...)` column list!
-   - Instead, the query inserts `init_time = o.obs_time - INTERVAL '12 hours'` and `lead_interval = INTERVAL '12 hours'`. PostgreSQL's `GENERATED ALWAYS AS (((init_time AT TIME ZONE 'UTC') + lead_interval) AT TIME ZONE 'UTC') STORED` engine automatically computes `valid_time = o.obs_time` on every row.
-4. **Physical Clamping with `GREATEST(0.0, ...)` (Line 136):**
-   - Perturbing `o.wind_speed_kt + (RANDOM() * 4.0 - 2.0)` could theoretically produce a negative number if `o.wind_speed_kt` were below `2.0 kt`, which would violate `CHECK (pred_wind_kt >= 0.0)`. Wrapping the expression in `GREATEST(0.0, ...)` clamps the lower bound at `0.0 kt`.
+##### 2.8.1.1 Filtering Main Synoptic Cycles (`WHERE EXTRACT(HOUR FROM o.obs_time) IN (0, 12)`)
+- Operational global NWP centers initialize their primary deterministic runs at `00:00 UTC` (`00Z`) and `12:00 UTC` (`12Z`). Filtering `EXTRACT(HOUR FROM o.obs_time) IN (0, 12)` selects 2 timestamps per day across 128 days for 6 stations ($128 \times 2 \times 6 = 1,536$ target valid observations).
+##### 2.8.1.2 In-Memory Relation Construction (`CROSS JOIN (VALUES ('ECMWF-HRES'), ('GFS'), ('AROME')) AS m(model_name)`)
+- Uses an inline SQL `VALUES` table expression aliased as `m(model_name)` to fan out each of the $1,536$ synoptic observations across all 3 NWP models, generating **$1,536 \times 3 = 4,608\text{ forecast rows}$** in a single set-based `INSERT ... SELECT` statement.
+##### 2.8.1.3 Automatic Evaluation of `valid_time`
+- Notice that `valid_time` is **not** listed in the `INSERT INTO nwp.forecasts (...)` column list!
+- Instead, the query inserts `init_time = o.obs_time - INTERVAL '12 hours'` and `lead_interval = INTERVAL '12 hours'`. PostgreSQL's `GENERATED ALWAYS AS (((init_time AT TIME ZONE 'UTC') + lead_interval) AT TIME ZONE 'UTC') STORED` engine automatically computes `valid_time = o.obs_time` on every row.
+##### 2.8.1.4 Physical Clamping with `GREATEST(0.0, ...)` (Line 136)
+- Perturbing `o.wind_speed_kt + (RANDOM() * 4.0 - 2.0)` could theoretically produce a negative number if `o.wind_speed_kt` were below `2.0 kt`, which would violate `CHECK (pred_wind_kt >= 0.0)`. Wrapping the expression in `GREATEST(0.0, ...)` clamps the lower bound at `0.0 kt`.
 
 ---
 
@@ -405,16 +405,16 @@ ALTER TABLE nwp.forecasts SET (
 ANALYZE;
 ```
 
-#### Deep-Dive Architectural Explanation: Autovacuum Threshold Math
+#### 2.9.1 Deep-Dive Architectural Explanation: Autovacuum Threshold Math
 
-1. **Why PostgreSQL's Default Autovacuum Settings Fail on Large Telemetry Tables:**
-   - Under PostgreSQL's Multi-Version Concurrency Control (MVCC), every `UPDATE` (such as flagging `'SUSPECT'` rows during post-ingestion quality control) and every `DELETE` (such as purging expired NWP runs) leaves behind a physical **dead tuple** on the 8 KB heap page until `VACUUM` reclaims it.
-   - PostgreSQL triggers an automatic `VACUUM` or `ANALYZE` on a table when the number of dead/modified tuples ($N_{\text{dead}}$ or $N_{\text{mod}}$) tracked in `pg_stat_user_tables` exceeds the linear threshold formula:
-     $$\text{Vacuum Trigger Threshold} = \text{autovacuum\_vacuum\_threshold} + \left(\text{autovacuum\_vacuum\_scale\_factor} \times N_{\text{live\_tuples}}\right)$$
-     $$\text{Analyze Trigger Threshold} = \text{autovacuum\_analyze\_threshold} + \left(\text{autovacuum\_analyze\_scale\_factor} \times N_{\text{live\_tuples}}\right)$$
-   - By default in `postgresql.conf`, `autovacuum_vacuum_threshold = 50`, `autovacuum_vacuum_scale_factor = 0.20` ($20\%$), and `autovacuum_analyze_scale_factor = 0.10` ($10\%$). On a production `synoptic.observations` table with $100,000,000$ rows, a $20\%$ scale factor waits until **$20,000,050\text{ dead tuples}$** accumulate before launching a single autovacuum worker—causing gigabytes of heap bloat and stale query plans!
-2. **Comparing Default vs. Tuned Autovacuum Triggers (`ALTER TABLE ... SET (...)`):**
-   - `ALTER TABLE ... SET (...)` persists per-table `reloptions` directly inside `pg_class.reloptions`, overriding global `postgresql.conf` defaults specifically for `synoptic.observations` and `nwp.forecasts`:
+##### 2.9.1.1 Why PostgreSQL's Default Autovacuum Settings Fail on Large Telemetry Tables
+- Under PostgreSQL's Multi-Version Concurrency Control (MVCC), every `UPDATE` (such as flagging `'SUSPECT'` rows during post-ingestion quality control) and every `DELETE` (such as purging expired NWP runs) leaves behind a physical **dead tuple** on the 8 KB heap page until `VACUUM` reclaims it.
+- PostgreSQL triggers an automatic `VACUUM` or `ANALYZE` on a table when the number of dead/modified tuples ($N_{\text{dead}}$ or $N_{\text{mod}}$) tracked in `pg_stat_user_tables` exceeds the linear threshold formula:
+  $$\text{Vacuum Trigger Threshold} = \text{autovacuum\_vacuum\_threshold} + \left(\text{autovacuum\_vacuum\_scale\_factor} \times N_{\text{live\_tuples}}\right)$$
+  $$\text{Analyze Trigger Threshold} = \text{autovacuum\_analyze\_threshold} + \left(\text{autovacuum\_analyze\_scale\_factor} \times N_{\text{live\_tuples}}\right)$$
+- By default in `postgresql.conf`, `autovacuum_vacuum_threshold = 50`, `autovacuum_vacuum_scale_factor = 0.20` ($20\%$), and `autovacuum_analyze_scale_factor = 0.10` ($10\%$). On a production `synoptic.observations` table with $100,000,000$ rows, a $20\%$ scale factor waits until **$20,000,050\text{ dead tuples}$** accumulate before launching a single autovacuum worker—causing gigabytes of heap bloat and stale query plans!
+##### 2.9.1.2 Comparing Default vs. Tuned Autovacuum Triggers (`ALTER TABLE ... SET (...)`)
+- `ALTER TABLE ... SET (...)` persists per-table `reloptions` directly inside `pg_class.reloptions`, overriding global `postgresql.conf` defaults specifically for `synoptic.observations` and `nwp.forecasts`:
 
 | Table & Parameter | Global Default | `weather_ops_pg.sql` Setting | Trigger Point at $18,432$ Rows (Seed Size) | Trigger Point at $10,000,000$ Rows (Production Scale) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -423,9 +423,9 @@ ANALYZE;
 | **`nwp.forecasts` Vacuum** | `50 + 0.20 * N` | `1000 + 0.02 * N` (`2%`) | $1,000 + 92 = \mathbf{1,092\text{ dead rows}}$ | $1,000 + 200,000 = \mathbf{201,000\text{ dead rows}}$ |
 | **`nwp.forecasts` Analyze** | `50 + 0.10 * N` | `50 + 0.01 * N` (`1%`) | $50 + 46 = \mathbf{96\text{ modified rows}}$ | $50 + 100,000 = \mathbf{100,050\text{ modified rows}}$ |
 
-3. **Why `ANALYZE;` Runs Immediately at the End of the Script (Line 159):**
-   - Bulk-loading $18,432$ observations and $4,608$ forecasts via `INSERT INTO ... SELECT` populates heap pages immediately, but the background `autovacuum` daemon wakes up asynchronously (every `autovacuum_naptime = 1min`).
-   - Running `ANALYZE;` synchronously samples every table in the database, updates `pg_class.reltuples` and `pg_class.relpages`, and populates `pg_statistic` (exposed via the `pg_stats` view) with accurate column histograms, null fractions (`null_frac`), distinct counts (`n_distinct`), and Most Common Values (`most_common_vals`) so that immediate `EXPLAIN (ANALYZE, BUFFERS)` labs produce accurate cardinality estimates.
+##### 2.9.1.3 Why `ANALYZE;` Runs Immediately at the End of the Script (Line 159)
+- Bulk-loading $18,432$ observations and $4,608$ forecasts via `INSERT INTO ... SELECT` populates heap pages immediately, but the background `autovacuum` daemon wakes up asynchronously (every `autovacuum_naptime = 1min`).
+- Running `ANALYZE;` synchronously samples every table in the database, updates `pg_class.reltuples` and `pg_class.relpages`, and populates `pg_statistic` (exposed via the `pg_stats` view) with accurate column histograms, null fractions (`null_frac`), distinct counts (`n_distinct`), and Most Common Values (`most_common_vals`) so that immediate `EXPLAIN (ANALYZE, BUFFERS)` labs produce accurate cardinality estimates.
 
 ---
 
@@ -437,7 +437,7 @@ ANALYZE;
 psql -U postgres -d weather_ops -f weather_ops_pg.sql
 ```
 
-#### Expected Terminal Output
+#### 3.1.1 Expected Terminal Output
 
 ```text
 DROP SCHEMA
@@ -479,7 +479,7 @@ WHERE n.nspname IN ('synoptic', 'nwp', 'alerts')
 ORDER BY n.nspname, c.relname;
 ```
 
-#### Expected Diagnostic Output
+#### 3.2.1 Expected Diagnostic Output
 
 ```text
  schema_name |   table_name   | estimated_rows | heap_8kb_pages | total_size_with_indexes |                                       custom_autovacuum_tuning                                       
@@ -503,7 +503,7 @@ FROM synoptic.stations
 ORDER BY station_id;
 ```
 
-#### Expected Diagnostic Output
+#### 3.3.1 Expected Diagnostic Output
 
 ```text
  station_id |       station_name       | logical_uncompressed_bytes | physical_compressed_bytes_on_disk 

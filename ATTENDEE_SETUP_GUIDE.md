@@ -24,7 +24,7 @@
 
 All coursebooks (`day1/` through `day5/`) and the 13 Engineering Reference Cards (`reference_cards/`) are written in **GitHub-Flavored Markdown (`.md`)** with embedded **ASCII architecture diagrams**, **Mermaid flowcharts**, **LaTeX math formulas**, and **copyable SQL/MQL/Python code blocks**.
 
-### Option A — Built-In Web Command Center & Reader (Zero Install, Recommended)
+### 1.1 Option A — Built-In Web Command Center & Reader (Zero Install, Recommended)
 
 We include a zero-dependency launcher script (`start_bootcamp.py`) that starts a lightweight local HTTP server and opens the **Interactive Bootcamp Command Center (`bootcamp_portal.html`)** in your browser.
 
@@ -49,7 +49,7 @@ We include a zero-dependency launcher script (`start_bootcamp.py`) that starts a
 
 ---
 
-### Option B — Visual Studio Code (IDE Workflow)
+### 1.2 Option B — Visual Studio Code (IDE Workflow)
 
 If you prefer working inside an IDE with an integrated terminal right below your reading pane:
 
@@ -74,7 +74,7 @@ While every lab in this bootcamp can be executed 100% from the terminal CLI, met
 
 *(For advanced GUI pro-tips, see [reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md](./reference_cards/12_dbeaver_and_mongodb_compass_gui_workflows.md)).*
 
-### A. DB Browser for SQLite (`DB4S`) — Dedicated Featherweight GUI for Day 1
+### 2.1 A. DB Browser for SQLite (`DB4S`) — Dedicated Featherweight GUI for Day 1
 - **Download:** [https://sqlitebrowser.org/dl/](https://sqlitebrowser.org/dl/) *(Free & Open-Source — Windows `.msi`/`.zip`, macOS, Linux `sudo apt install sqlitebrowser`)*
 - **Why It Shines on Day 1:**
   - **Zero JDBC Driver Downloads & Featherweight (`~35 MB` RAM):** Written in native C++/Qt; opens `./day1/weather_ops.db` and `./day1/weather_telemetry.db` (`250,000` rows) instantaneously.
@@ -82,7 +82,7 @@ While every lab in this bootcamp can be executed 100% from the terminal CLI, met
   - **Color-Coded `NULL` Cells (`Browse Data` Tab):** Highlights true SQL `NULL` dropouts (Oran `60490`) in a distinct badge so you can visually contrast them against numeric `-9999.0` sentinels (Constantine `60419`).
   - **`Database Structure` Tab:** Displays the exact `CREATE TABLE` DDL, `CHECK` constraints, and hidden `sqlite_autoindex_*` B-Trees.
 
-### B. DBeaver Community Edition (Days 1, 2, 3 & 5)
+### 2.2 B. DBeaver Community Edition (Days 1, 2, 3 & 5)
 - **Download:** [https://dbeaver.io/download/](https://dbeaver.io/download/) *(Free & Open-Source — Windows, macOS, Linux)*
 - **What You Use It For:**
   - **Day 1 (SQLite):** Open `./day1/weather_ops.db` and `./day1/weather_telemetry.db` to generate visual Entity-Relationship (ER) diagrams.
@@ -91,7 +91,7 @@ While every lab in this bootcamp can be executed 100% from the terminal CLI, met
     - **Visual Execution Plan (`Ctrl+Shift+E`):** Highlight any slow query and press `Ctrl+Shift+E` (`Cmd+Shift+E` on Mac) to visualize `Seq Scan` vs. `Bitmap Heap Scan` vs. `Partition Pruning` cost trees.
   - **Day 5 (DuckDB & Parquet):** Connect DBeaver's DuckDB driver to `:memory:` or `./day5/weather.duckdb` to query `SELECT * FROM read_parquet('day5/lakehouse_parquet/**/*.parquet')` visually.
 
-#### Exact DBeaver Connection Parameters
+#### 2.2.1 Exact DBeaver Connection Parameters
 *(Note: If you are using the **4 GB RAM Hybrid VMware Setup** where DBeaver runs on your Windows Host and the databases run inside the Ubuntu VM, replace `localhost` with your Ubuntu VM's IP address `<VM_IP>` from `hostname -I`!)*
 
 | Bootcamp Day | Engine Driver | Host / File Path | Port | Database | Username | Password |
@@ -103,7 +103,7 @@ While every lab in this bootcamp can be executed 100% from the terminal CLI, met
 
 ---
 
-### C. MongoDB Compass (Day 4 & Day 5)
+### 2.3 C. MongoDB Compass (Day 4 & Day 5)
 - **Download:** [https://www.mongodb.com/try/download/compass](https://www.mongodb.com/try/download/compass) *(Free GUI Edition — Windows, macOS, Linux)*
 - **Connection URI (on Windows Host connecting to local or Ubuntu VM MongoDB):**
   ```text
@@ -122,11 +122,11 @@ While every lab in this bootcamp can be executed 100% from the terminal CLI, met
 
 ## 3. Running the Database Servers (Docker Compose vs. Native CLI)
 
-### Option A — Turnkey Docker Compose Stacks (Recommended for All OS)
+### 3.1 Option A — Turnkey Docker Compose Stacks (Recommended for All OS)
 
 Installing PostgreSQL 16, PostGIS 3.4, a 3-node MongoDB 7.0 Replica Set, Mosquitto MQTT, Redpanda Kafka, and MinIO S3 natively across Windows, macOS, and Linux can take hours. Instead, use **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** (Windows/macOS) or **Docker Engine + Compose v2** (Linux) to spin up the pre-tuned environments in **1 command**:
 
-#### Stack 1: Days 2, 3 & 4 — PostgreSQL 16 / PostGIS 3.4 + 3-Node MongoDB 7.0 Replica Set (`rs_meteo`)
+#### 3.1.1 Stack 1: Days 2, 3 & 4 — PostgreSQL 16 / PostGIS 3.4 + 3-Node MongoDB 7.0 Replica Set (`rs_meteo`)
 ```bash
 # Start PostgreSQL 16 + PostGIS 3.4 (Port 5432) and 3-Node MongoDB Replica Set (Ports 27017, 27018, 27019)
 docker compose -f docker/docker-compose.ha-replicaset.yml up -d
@@ -141,7 +141,7 @@ docker exec -it weather-pg-primary psql -U postgres -d weather_ops -f /workspace
 docker exec -it weather-mongo-node1 mongosh
 ```
 
-#### Stack 2: Day 5 — Enterprise Polyglot Streaming & Lakehouse Stack
+#### 3.1.2 Stack 2: Day 5 — Enterprise Polyglot Streaming & Lakehouse Stack
 ```bash
 # Stop Stack 1 first (so ports 5432 and 27017 are free), then launch Stack 2:
 docker compose -f docker/docker-compose.ha-replicaset.yml down
@@ -155,7 +155,7 @@ Stack 2 also includes two built-in browser UIs:
 
 ---
 
-### Option B — Python Environment Setup (Days 1 & 5)
+### 3.2 Option B — Python Environment Setup (Days 1 & 5)
 
 - **Day 1 (`day1/generate_weather_db.py`)** and **`start_bootcamp.py`** use **100% Python 3 Standard Library** (`sqlite3`, `http.server`, `math`, `random`) — **zero `pip install` needed!**
 - **Day 5 Benchmarks & Polyglot Capstone (`day5/*.py`)** use `duckdb`, `pyarrow`, `pandas`, `numpy`, `netCDF4`, `psycopg`, `pymongo`, `paho-mqtt`, `fastapi`, and `uvicorn`. Install them inside a virtual environment:

@@ -336,9 +336,9 @@ $$;
 
 ---
 
-## 5. Sections 3, 4, 5 & 6: 5,000,000-Row Partitioned Telemetry Table & BRIN Propagation (Lines 143–206)
+## 5. Sections 3, 4, 5 & 6: Declarative Range Partitioning, 5,000,000-Row Telemetry Synthesis & BRIN Propagation (Lines 143–206)
 
-### 5.1 Section 3: Tuple-Tetris-Aligned Partitioned Parent Table (`Lines 143–159`)
+### 5.1 Section 3: Declarative Partitioned Parent Table & Tuple-Tetris Alignment (`Lines 143–159`)
 
 #### 5.1.1 Exact SQL Code (`Lines 143–159`)
 
@@ -362,7 +362,56 @@ CREATE TABLE raw_telemetry_partitioned (
 ) PARTITION BY RANGE (recorded_at);
 ```
 
-#### 5.1.2 Deep-Dive Architectural Breakdown: Tuple-Tetris Memory Alignment
+#### 5.1.2 Course Concept 1: What Is Declarative Table Partitioning & Why Do Weather Databases Need It?
+
+When an Automated Weather Station (AWS) network ingests millions of observations per month into a **single monolithic table**, four severe architectural bottlenecks emerge as the table grows past 50–100 million rows:
+1. **B-Tree Index Bloat & RAM Cache Thrashing:** A B-Tree index on a monolithic table grows to multiple gigabytes. Once internal and leaf B-Tree pages exceed `shared_buffers` RAM, every index insert or lookup triggers random disk I/O.
+2. **Full-Table Sequential Scan Penalties:** Analytical queries that inspect a single storm date (`WHERE recorded_at >= '2026-10-15' AND recorded_at < '2026-10-16'`) risk scanning gigabytes of historical data from other months if an index is not selective enough.
+3. **Catastrophic `DELETE` & `VACUUM` Bloat During Data Retention:** When you expire old telemetry using `DELETE FROM raw_telemetry WHERE recorded_at < '2026-10-01';`, PostgreSQL does **not** free disk space! Under MVCC (Day 2), `DELETE` merely visits 1.23 million rows, stamps their `t_xmax` transaction ID, writes 80+ MB of Write-Ahead Log (`pg_wal`), and leaves 80 MB of dead tuples behind that `autovacuum` must clean up.
+4. **All-or-Nothing Maintenance:** Running `VACUUM`, `REINDEX`, or `CLUSTER` on a monolithic table processes immutable 6-month-old history alongside today's active data.
+
+**How `PARTITION BY RANGE (recorded_at)` (`Line 159`) Solves All Four Bottlenecks:**
+
+```
+                     ┌───────────────────────────────────────────────────────────┐
+                     │          VIRTUAL PARENT TABLE (relkind = 'p')             │
+  INSERT / SELECT ──►│               raw_telemetry_partitioned                   │
+                     │     • Stores ZERO rows on disk (0-byte routing shell)     │
+                     │     • Partition Key: PARTITION BY RANGE (recorded_at)     │
+                     └──────┬─────────────┬─────────────┬─────────────┬──────────┘
+                            │             │             │             │
+         ┌──────────────────┴──┐   ┌──────┴──────┐   ┌──┴──────────┐  └──────────────────┐
+         ▼                     ▼   ▼             ▼   ▼             ▼                     ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│telemetry_y2026m09│ │telemetry_y2026m10│ │telemetry_y2026m11│ │telemetry_y2026m12│ │telemetry_default│
+│ (relkind = 'r') │ │ (relkind = 'r') │ │ (relkind = 'r') │ │ (relkind = 'r') │ │ (relkind = 'r') │
+│  [Sept 2026)    │ │   [Oct 2026)    │ │   [Nov 2026)    │ │   [Dec 2026)    │ │   Out-of-Range  │
+│ 1,234,285 rows  │ │ 1,275,429 rows  │ │ 1,234,285 rows  │ │ 1,256,001 rows  │ │     0 rows      │
+│   80 MB Heap    │ │   82 MB Heap    │ │   80 MB Heap    │ │   81 MB Heap    │ │   0 bytes Heap  │
+└─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
+- **Virtual Parent Table (`relkind = 'p'`):** Appending `PARTITION BY RANGE (recorded_at)` tells PostgreSQL that `raw_telemetry_partitioned` is a **partitioned parent table**. In `pg_catalog.pg_class`, it has `relkind = 'p'` and **allocates zero 8 KB heap pages of its own (`0 bytes` on disk)**.
+- **Transparent Tuple Routing on `INSERT`:** Applications still write to `INSERT INTO raw_telemetry_partitioned ...`. PostgreSQL's internal Tuple Routing engine inspects each row's `recorded_at` timestamp and routes it into the matching monthly child table (`relkind = 'r'`).
+- **Transparent Partition Pruning on `SELECT`:** Applications still query `SELECT ... FROM raw_telemetry_partitioned WHERE recorded_at >= ...`. The query planner automatically prunes away every monthly child table whose date range does not overlap the `WHERE` filter.
+- **Why `RANGE` Instead of `LIST` or `HASH`?**
+  | PostgreSQL Partition Strategy | SQL Clause | How It Routes Rows | When to Use in Weather Engineering |
+  | :--- | :--- | :--- | :--- |
+  | **1. Range Partitioning** | `PARTITION BY RANGE (recorded_at)` | Continuous non-overlapping intervals $[A, B)$ | **Chronological time-series telemetry** (`recorded_at`, `obs_time`, `valid_time`). Enables time-window pruning and instant monthly `DROP TABLE` / `DETACH PARTITION` retention. |
+  | **2. List Partitioning** | `PARTITION BY LIST (climate_zone)` | Explicit discrete values (`IN ('Mediterranean', 'Highland')`) | Isolating discrete regional networks or WMO bulletin types with distinct storage policies. |
+  | **3. Hash Partitioning** | `PARTITION BY HASH (station_id)` | Modulo hash `MODULUS N REMAINDER R` | Evenly spreading a massive static lookup table across $N$ disks when no time range exists. |
+
+#### 5.1.3 Course Concept 2: Primary Keys & Foreign Keys on Partitioned Tables (`Line 158`)
+
+- **Partitioned Foreign Key (`CONSTRAINT fk_station FOREIGN KEY (station_id) REFERENCES stations(station_id)`, `Line 158`):**
+  - PostgreSQL 12+ supports declaring `FOREIGN KEY` constraints directly on the partitioned parent table referencing a standard primary key (`stations.station_id`). Every child partition automatically inherits and enforces this referential integrity check.
+- **Why Partitioned `PRIMARY KEY`s Must Include the Partition Key — And Why Section 3 Omits `PRIMARY KEY` Here:**
+  - As established in [`day3_weather_advanced_pg.sql`](./day3_weather_advanced_pg.sql) (`PRIMARY KEY (obs_time, station_id)`), PostgreSQL does **not** maintain a single global B-Tree across all partitions (because a global index would ruin instant $O(1)$ `DETACH PARTITION`). Therefore, any `PRIMARY KEY` or `UNIQUE` constraint on a partitioned table **must include `recorded_at`**.
+  - Why does `raw_telemetry_partitioned` intentionally omit `PRIMARY KEY (recorded_at, station_id)` in this benchmark script?
+    1. **Pure Heap-Append Bulk Ingestion Speed:** Without a B-Tree primary key to update on every row, Section 5 streams 5,000,000 rows into the 4 monthly heaps in **~5–8 seconds**.
+    2. **Clean Unindexed Baseline for Section 8:** Omitting an automatic B-Tree on `recorded_at` allows Section 8 (`Lines 231–245`) to build `idx_oct_btree` (`27 MB`) and `idx_oct_brin` (`24 kB`) side-by-side from scratch under `\timing on` and measure their exact creation speed and byte size.
+
+#### 5.1.4 Course Concept 3: Tuple-Tetris Memory Alignment Inside Each Child Partition (`Lines 148–157`)
 
 On a 64-bit CPU architecture, PostgreSQL aligns every column inside a heap tuple according to its `pg_type.typalign` requirement:
 - **`d` (`double` = 8-byte alignment):** `TIMESTAMPTZ`, `BIGINT`, `DOUBLE PRECISION` must start at a byte offset divisible by `8` (`0, 8, 16, 24, ...`).
@@ -389,7 +438,7 @@ Tuple Layout: │recorded_│station_ │temp │press│wind_│rain_│dir│p
 
 ---
 
-### 5.2 Section 4: Explicit Monthly Child Partitions (`Lines 161–176`)
+### 5.2 Section 4: Explicit Monthly Child Partitions, Half-Open $[A, B)$ Bounds & The `DEFAULT` Partition (`Lines 161–176`)
 
 #### 5.2.1 Exact SQL Code (`Lines 161–176`)
 
@@ -412,11 +461,54 @@ CREATE TABLE telemetry_y2026m12 PARTITION OF raw_telemetry_partitioned
 CREATE TABLE telemetry_default PARTITION OF raw_telemetry_partitioned DEFAULT;
 ```
 
-#### 5.2.2 Architectural Explanation
-- Creates 4 contiguous monthly child partitions covering Q3/Q4 (`September 2026` through `December 2026`) using half-open range intervals $[T_{\text{start}}, T_{\text{end}})$, plus `telemetry_default` as the overflow safety net.
-- Notice that `raw_telemetry_partitioned` intentionally omits a `PRIMARY KEY` on `(recorded_at, station_id)` during the initial DDL so that:
-  1. The 5,000,000-row bulk load in Section 5 runs at pure sequential heap-append speed ($\approx 5\text{--}8\text{ seconds}$) without maintaining a massive 110 MB B-Tree during ingestion.
-  2. Section 8 can benchmark creating a B-Tree vs. a BRIN index cleanly on `telemetry_y2026m10`.
+#### 5.2.2 Course Concept 1: How `PARTITION OF` Works Under the Hood (`Lines 164–176`)
+
+When PostgreSQL executes `CREATE TABLE telemetry_y2026m09 PARTITION OF raw_telemetry_partitioned FOR VALUES FROM (...) TO (...);`:
+1. **Physical Storage Allocation:** Unlike the virtual parent table (`relkind = 'p'`), `telemetry_y2026m09` is created as a standard physical heap table (`relkind = 'r'`) with its own 8 KB data files on disk (`main`, `_fsm`, `_vm`).
+2. **Schema & Constraint Inheritance:** You do **not** repeat the column list `(recorded_at, station_id, ...)` inside `CREATE TABLE telemetry_y2026m09`. The child partition automatically inherits every column, data type, `NOT NULL` rule, `DEFAULT` value, and `FOREIGN KEY` from `raw_telemetry_partitioned`.
+3. **Internal Partition Constraint Check:** PostgreSQL registers the partition bound in `pg_catalog.pg_class.relpartbound`. Every row inserted either through the parent `raw_telemetry_partitioned` or directly into `telemetry_y2026m09` is guaranteed to satisfy:
+   $$\text{'2026-09-01 00:00:00+00'} \le \text{recorded\_at} < \text{'2026-10-01 00:00:00+00'}$$
+
+#### 5.2.3 Course Concept 2: Why `FOR VALUES FROM (A) TO (B)` Uses Half-Open Intervals $[A, B)$
+
+A critical rule to emphasize when teaching PostgreSQL range partitioning is that **`FOR VALUES FROM (A) TO (B)` is ALWAYS a half-open mathematical interval $[A, B)$**:
+- **Lower bound `FROM (A)` is INCLUSIVE (`>= A`).**
+- **Upper bound `TO (B)` is STRICTLY EXCLUSIVE (`< B`).**
+
+Why did the PostgreSQL core team design `FROM (A) TO (B)` as $[A, B)$ instead of a closed interval $[A, B]$ like `BETWEEN`?
+1. **Zero Microsecond Boundary Gaps:** PostgreSQL `TIMESTAMPTZ` has **1-microsecond ($10^{-6}\text{ s}$) resolution**. If someone tried to define September's upper bound as `'2026-09-30 23:59:59+00'`, then any observation arriving during the last second of September (e.g., `'2026-09-30 23:59:59.450000+00'`) would fall into a 1-second gap between September and October!
+2. **Zero Midnight Overlap Collisions:** Because the upper bound `TO ('2026-10-01 00:00:00+00')` on `telemetry_y2026m09` is **exclusive (`<`)** and the lower bound `FROM ('2026-10-01 00:00:00+00')` on `telemetry_y2026m10` is **inclusive (`>=`)**, the two partitions touch seamlessly with zero gap and zero overlap. An observation recorded at exact midnight `'2026-10-01 00:00:00.000000+00'` routes deterministically to `telemetry_y2026m10`.
+
+| Child Partition Name | SQL DDL Bound Clause | Exact Mathematical Interval $[A, B)$ | Sample Boundary Timestamp Routing | Rows Routed in Section 5 |
+| :--- | :--- | :---: | :--- | :---: |
+| **`telemetry_y2026m09`** | `FROM ('2026-09-01 00:00:00+00')`<br/>`TO ('2026-10-01 00:00:00+00')` | $[\text{2026-09-01 00:00:00},\; \text{2026-10-01 00:00:00})$ | `'2026-09-01 00:00:00.000000+00'` $\rightarrow$ **Included**<br/>`'2026-09-30 23:59:59.999999+00'` $\rightarrow$ **Included**<br/>`'2026-10-01 00:00:00.000000+00'` $\rightarrow$ *Excluded (goes to m10)* | `1,234,285` *(30 days)* |
+| **`telemetry_y2026m10`** | `FROM ('2026-10-01 00:00:00+00')`<br/>`TO ('2026-11-01 00:00:00+00')` | $[\text{2026-10-01 00:00:00},\; \text{2026-11-01 00:00:00})$ | `'2026-10-01 00:00:00.000000+00'` $\rightarrow$ **Included**<br/>`'2026-10-31 23:59:59.999999+00'` $\rightarrow$ **Included** | `1,275,429` *(31 days)* |
+| **`telemetry_y2026m11`** | `FROM ('2026-11-01 00:00:00+00')`<br/>`TO ('2026-12-01 00:00:00+00')` | $[\text{2026-11-01 00:00:00},\; \text{2026-12-01 00:00:00})$ | `'2026-11-01 00:00:00.000000+00'` $\rightarrow$ **Included**<br/>`'2026-11-30 23:59:59.999999+00'` $\rightarrow$ **Included** | `1,234,285` *(30 days)* |
+| **`telemetry_y2026m12`** | `FROM ('2026-12-01 00:00:00+00')`<br/>`TO ('2027-01-01 00:00:00+00')` | $[\text{2026-12-01 00:00:00},\; \text{2027-01-01 00:00:00})$ | `'2026-12-01 00:00:00.000000+00'` $\rightarrow$ **Included**<br/>`'2026-12-31 12:40:00.000000+00'` $\rightarrow$ **Included** | `1,256,001` *(30.53 days)* |
+| **`telemetry_default`** | `DEFAULT` | $(-\infty, \text{2026-09-01}) \cup [\text{2027-01-01}, +\infty)$ | Any timestamp $< \text{2026-09-01}$ or $\ge \text{2027-01-01}$ | `0` *(Safety net)* |
+
+#### 5.2.4 Course Concept 3: Why We Create `telemetry_default` (`Line 176`) & The Production Locking Gotcha
+
+- **Why `DEFAULT` Is Essential for High-Frequency Telemetry:**
+  - Suppose a remote Saharan station suffers a GPS RTC battery reset and transmits a row stamped `'1970-01-01 00:00:00+00'`, or a midnight batch crosses into `'2027-01-01 00:00:05+00'` before the DBA created the January 2027 partition.
+  - **Without `telemetry_default`:** PostgreSQL aborts the entire multi-row `INSERT` or `COPY` transaction with `ERROR: no partition of relation "raw_telemetry_partitioned" found for row (SQLSTATE 23514)`, dropping the whole telemetry batch!
+  - **With `CREATE TABLE telemetry_default PARTITION OF raw_telemetry_partitioned DEFAULT;` (`Line 176`):** Any row that does not match an explicit monthly partition is safely routed into `telemetry_default` so ingestion never halts.
+- **The Production `DEFAULT` Partition Gotcha (Why `telemetry_default` Must Stay at `0 bytes`):**
+  - When you later create a new monthly partition (e.g., `telemetry_y2027m01` for January 2027), PostgreSQL must verify that `telemetry_default` does **not** already contain any rows with `recorded_at` inside January 2027.
+  - To check this, PostgreSQL acquires an **`ACCESS EXCLUSIVE` lock** and scans `telemetry_default`! If `telemetry_default` is empty (`0 bytes`, as we verify in Section 7A), adding a new partition takes `< 1 millisecond`. If a DBA forgot to pre-create partitions for 3 months and allowed 4 million rows to pile up inside `telemetry_default`, creating a new partition will lock the table while scanning those 4 million rows!
+  - **Production Rule:** Always pre-create monthly partitions ahead of time (or automate via `pg_partman`) and monitor `pg_relation_size('telemetry_default') = 0`.
+
+#### 5.2.5 Course Concept 4: Zero-Bloat Partition Retention (`DETACH PARTITION CONCURRENTLY` vs. `DELETE`)
+
+How do you archive or expire old partitions in production (such as September 2026 `telemetry_y2026m09`) without causing MVCC bloat or locking live `INSERT`s?
+1. **Step 1 — Non-Blocking Detach:**
+   ```sql
+   ALTER TABLE raw_telemetry_partitioned
+       DETACH PARTITION telemetry_y2026m09 CONCURRENTLY;
+   ```
+   - `DETACH PARTITION CONCURRENTLY` unlinks `telemetry_y2026m09` from the parent routing catalog using only a weak `SHARE UPDATE EXCLUSIVE` lock (never blocking concurrent `SELECT` or `INSERT` traffic on active months!).
+2. **Step 2 — Cold Lakehouse Export & Instant Drop:**
+   - Once detached, `telemetry_y2026m09` is an independent standalone table. You can stream it to compressed Apache Parquet on S3/MinIO (Day 5) and then run `DROP TABLE telemetry_y2026m09;`, reclaiming **80 MB of disk space in `< 5 ms`** with **zero dead tuples** and **zero `autovacuum` work**.
 
 ---
 
@@ -494,16 +586,51 @@ ANALYZE stations;
 ANALYZE raw_telemetry_partitioned;
 ```
 
-#### 5.4.2 Deep-Dive Architectural Explanation
+#### 5.4.2 Course Concept 1: How Partitioned Index Propagation Works (`Lines 199–202`)
 
-- **Partitioned Index Propagation (`Lines 199–202`):**
-  - Creating `idx_telemetry_brin_time` on the parent partitioned table `raw_telemetry_partitioned` automatically builds **5 independent physical BRIN indexes**—one on each existing child partition (`telemetry_y2026m09_recorded_at_idx`, `telemetry_y2026m10_recorded_at_idx`, `telemetry_y2026m11_recorded_at_idx`, `telemetry_y2026m12_recorded_at_idx`, and `telemetry_default_recorded_at_idx`)—and guarantees that any future partition attached or created via `PARTITION OF raw_telemetry_partitioned` automatically inherits the same BRIN index!
-- **Understanding `WITH (pages_per_range = 64)`:**
-  - Each BRIN summary entry covers $64 \times 8\text{ KB} = \mathbf{512\text{ KB}}$ of contiguous heap blocks.
-  - Because each monthly partition (`~1.25M rows`) occupies **$\approx 81\text{ MB}$** on disk ($\approx 10,368$ pages of 8 KB), $10,368 / 64 \approx \mathbf{162\text{ block ranges}}$ per month.
-  - Storing 162 `[min, max]` timestamp pairs requires only **3 pages (`24 KB`)** on disk per partition!
-- **`ANALYZE stations;` & `ANALYZE raw_telemetry_partitioned;` (`Lines 204–205`):**
-  - Refreshes `pg_class.reltuples`, `pg_class.relpages`, and `pg_statistic` histograms across both parent and child tables so the Section 7 catalog query and `EXPLAIN` plan reflect exact post-ingestion row counts.
+When you run `CREATE INDEX idx_telemetry_brin_time ON raw_telemetry_partitioned ...` on a **partitioned parent table**, PostgreSQL performs a two-tier catalog operation:
+1. **Virtual Parent Index (`relkind = 'I'`, `0 bytes` on disk):** Creates a partitioned index entry named `idx_telemetry_brin_time` in `pg_class` with `relkind = 'I'` (capital `I` = partitioned index template). Like the parent table (`relkind = 'p'`), the parent index stores zero bytes on disk.
+2. **Automatic Child Index Cascade (`relkind = 'i'`, `24 kB` each):** PostgreSQL automatically walks `pg_inherits` and builds **5 real physical BRIN indexes (`relkind = 'i'`)**—one on each child partition—and guarantees that any future monthly partition created via `CREATE TABLE telemetry_y2027m01 PARTITION OF raw_telemetry_partitioned` automatically receives its own local BRIN index:
+
+| Catalog Object Name | `pg_class.relkind` | Attached Table | Physical Size on Disk |
+| :--- | :---: | :--- | :---: |
+| **`idx_telemetry_brin_time`** | `'I'` *(Virtual Partitioned Index)* | `raw_telemetry_partitioned` *(Parent)* | `0 bytes` |
+| **`telemetry_y2026m09_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m09` | `24 kB` (`3 pages`) |
+| **`telemetry_y2026m10_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m10` | `24 kB` (`3 pages`) |
+| **`telemetry_y2026m11_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m11` | `24 kB` (`3 pages`) |
+| **`telemetry_y2026m12_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m12` | `24 kB` (`3 pages`) |
+| **`telemetry_default_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_default` | `24 kB` (`3 pages`) |
+
+#### 5.4.3 Course Concept 2: How BRIN (`WITH (pages_per_range = 64)`) Summarizes an 82 MB Partition Into 24 kB
+
+Why is a **Block Range Index (`BRIN`)** so much smaller than a **B-Tree** on chronological weather data?
+- **B-Tree (`USING BTREE`) is a Row-Level Index:** It stores the exact `recorded_at` value and a 6-byte row pointer (`ctid = (block_number, tuple_offset)`) for **every single row** (`1,275,429 entries` in October = `27 MB`).
+- **BRIN (`USING BRIN`) is a Lossy Block-Range Summary Index:** It stores **zero row pointers (`ctid`s)**. Instead, it groups every `pages_per_range = 64` consecutive 8 KB heap pages ($64 \times 8\text{ KB} = 512\text{ KB}$ of physical disk blocks, holding $\approx 7,800$ rows) into a single summary entry containing only two timestamps: **`[min(recorded_at), max(recorded_at)]`**:
+
+```
+October Partition Heap (telemetry_y2026m10: 82 MB = ~10,480 Pages of 8 KB):
+┌───────────────────────────┬───────────────────────────┬─────────┬───────────────────────────┐
+│   Heap Pages 0 .. 63      │   Heap Pages 64 .. 127    │   ...   │ Heap Pages 10432 .. 10479 │
+│  (512 KB, ~7,800 rows)    │  (512 KB, ~7,800 rows)    │         │  (384 KB, ~5,900 rows)    │
+└─────────────┬─────────────┴─────────────┬─────────────┴─────────┴─────────────┬─────────────┘
+              │                           │                                     │
+              ▼                           ▼                                     ▼
+BRIN Index (telemetry_y2026m10_recorded_at_idx: ONLY 24 kB = 3 Pages of 8 KB!):
+┌───────────────────────────┬───────────────────────────┬─────────┬───────────────────────────┐
+│ Range #0 Summary:         │ Range #1 Summary:         │   ...   │ Range #163 Summary:       │
+│ min: 2026-10-01 00:00:01  │ min: 2026-10-01 04:33:01  │         │ min: 2026-10-31 20:15:00  │
+│ max: 2026-10-01 04:32:59  │ max: 2026-10-01 09:05:59  │         │ max: 2026-10-31 23:59:59  │
+└───────────────────────────┴───────────────────────────┴─────────┴───────────────────────────┘
+```
+
+- Because $10,480\text{ pages} / 64\text{ pages per range} = \mathbf{164\text{ block ranges}}$, storing 164 `[min, max]` timestamp pairs requires only **3 pages (`24 kB`)** on disk (Page 0: BRIN metapage, Page 1: Reverse Range Map `revmap`, Page 2: regular summary tuples)!
+
+#### 5.4.4 Course Concept 3: Why `ANALYZE` Is Mandatory After Bulk Partition Ingestion (`Lines 204–205`)
+
+- Bulk `INSERT INTO ... SELECT` populates heap pages rapidly, but PostgreSQL's background `autovacuum` daemon runs asynchronously and may not immediately update catalog statistics before the next query in a script executes.
+- Running `ANALYZE stations;` and `ANALYZE raw_telemetry_partitioned;` (`Lines 204–205`) immediately samples both the parent table and all 5 child partitions, updating:
+  1. `pg_class.reltuples` and `pg_class.relpages` (read directly by our Section 7A catalog query).
+  2. `pg_stats.correlation` on `recorded_at` (`correlation = 1.0`, proving to the query planner that rows are stored in strict chronological order on disk so BRIN scans are ultra-cheap).
 
 ---
 
@@ -529,20 +656,28 @@ WHERE parent.relname = 'raw_telemetry_partitioned'
 ORDER BY c.relname;
 ```
 
-#### 6.1.2 Line-by-Line Catalog Breakdown
+#### 6.1.2 Course Concept 1: How PostgreSQL Tracks Partition Hierarchies & Measures Disk Sizes
 
-- **How PostgreSQL Tracks Partition Hierarchies in `pg_inherits` (`Lines 215–218`):**
-  - Every table, index, view, and partitioned parent has an entry in `pg_catalog.pg_class` identified by its Object Identifier (`oid`).
-  - The catalog table `pg_catalog.pg_inherits` stores parent-child inheritance and partitioning links:
-    - `i.inhparent`: The `oid` of the parent partitioned table (`parent.relname = 'raw_telemetry_partitioned'`).
-    - `i.inhrelid`: The `oid` of the child partition (`c.relname`).
-- **System Catalog Columns & Size Functions (`Lines 211–214`):**
-  - `c.relname AS partition_name`: Name of the child partition (`telemetry_default`, `telemetry_y2026m09`, etc.).
-  - `pg_size_pretty(pg_relation_size(c.oid)) AS heap_size`: `pg_relation_size(c.oid)` returns the exact byte size of the main 8 KB heap fork (`main`) of that child partition on disk (excluding indexes, FSM, and VM). `pg_size_pretty(...)` formats it into human-readable units (`MB` / `kB` / `bytes`).
-  - `pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size`: Returns the total on-disk footprint of that child partition **including the main heap fork, Free Space Map (`_fsm`), Visibility Map (`_vm`), TOAST table (if any), and all attached local indexes**. Notice that because our only index at this stage is the `24 KB` BRIN index, `total_size` is virtually identical to `heap_size` (`81 MB` vs `81 MB`)!
-  - `c.reltuples::BIGINT AS estimated_rows`: Reads the floating-point row-count estimate stored in `pg_class.reltuples` by `ANALYZE` (`Line 205`) and casts it to a 64-bit integer.
+1. **Joining `pg_class` and `pg_inherits` (`Lines 215–218`):**
+   - If you run `SELECT pg_relation_size('raw_telemetry_partitioned');` on the parent table directly, PostgreSQL returns **`0 bytes`** because the parent (`relkind = 'p'`) has no physical storage fork!
+   - To inspect the physical child partitions, we join `pg_catalog.pg_class` (aliased as `parent` for the parent table and `c` for each child partition) through `pg_catalog.pg_inherits i`:
+     ```
+     pg_class (parent)                    pg_inherits (i)                     pg_class (c)
+     ┌───────────────────────────────┐    ┌───────────────────────────┐       ┌──────────────────────┐
+     │ oid: 16402                    │◄───│ inhparent: 16402          │       │ oid: 16405           │
+     │ relname:                      │    │ inhrelid:  16405          │──────►│ relname:             │
+     │  'raw_telemetry_partitioned'  │    │ inhseqno:  1              │       │  'telemetry_y2026m09'│
+     │ relkind: 'p' (0 bytes)        │    └───────────────────────────┘       │ relkind: 'r' (80 MB) │
+     └───────────────────────────────┘                                        └──────────────────────┘
+     ```
+2. **Understanding PostgreSQL's Disk Size Functions (`Lines 212–213`):**
+   | PostgreSQL Size Function | What Physical Files It Counts on Disk | Value on `telemetry_y2026m10` | Value on `telemetry_default` |
+   | :--- | :--- | :---: | :---: |
+   | **`pg_relation_size(c.oid)`** | **Only the main 8 KB data heap (`main` fork)** of the table (excludes indexes, `_fsm`, `_vm`, and TOAST). | `82 MB` | `0 bytes` *(0 rows)* |
+   | **`pg_indexes_size(c.oid)`** | All physical indexes attached to that table (`telemetry_y2026m10_recorded_at_idx`). | `24 kB` *(BRIN)* | `24 kB` *(3-page BRIN header)* |
+   | **`pg_total_relation_size(c.oid)`** | **Everything:** Main heap + Free Space Map (`_fsm`) + Visibility Map (`_vm`) + TOAST + all indexes. | `82 MB` | `24 kB` |
 
-#### 6.1.3 Expected Terminal Output (`Lines 210–219`)
+#### 6.1.3 Expected Terminal Output & Forensic Interpretation (`Lines 210–219`)
 
 ```text
    partition_name   | heap_size | total_size | estimated_rows 
@@ -555,9 +690,14 @@ ORDER BY c.relname;
 (5 rows)
 ```
 
+- **Three Key Insights to Point Out in Class:**
+  1. **Why `telemetry_default` has `heap_size = 0 bytes` but `total_size = 24 kB`:** Because `0 rows` fell outside `[2026-09-01, 2027-01-01)`, the data heap is `0 bytes`. The `24 kB` in `total_size` is the empty 3-page BRIN index (`telemetry_default_recorded_at_idx`) propagated from the parent table in Section 6!
+  2. **Why `total_size` equals `heap_size` (`80 MB` vs. `80 MB`) on the 4 monthly partitions:** Because the inherited BRIN index is only `24 kB` (`0.03%` of `80 MB`), indexing adds virtually zero storage overhead.
+  3. **Exact Row Sum Verification:** $1,234,285 + 1,275,429 + 1,234,285 + 1,256,001 + 0 = \mathbf{5,000,000\text{ rows}}$.
+
 ---
 
-### 6.2 Section 7B: Partition Pruning Verification via `EXPLAIN (COSTS OFF)` (`Lines 221–229`)
+### 6.2 Section 7B: Partition Pruning & BRIN Two-Stage Filtering via `EXPLAIN (COSTS OFF)` (`Lines 221–229`)
 
 #### 6.2.1 Exact SQL Code (`Lines 221–229`)
 
@@ -573,14 +713,32 @@ WHERE recorded_at >= '2026-10-15 00:00:00+00'
 GROUP BY station_id;
 ```
 
-#### 6.2.2 Deep-Dive Architectural Breakdown
+#### 6.2.2 Course Concept 1: How Partition Pruning + BRIN Indexing Work Together in Two Stages
 
-- **`EXPLAIN (COSTS OFF)` (`Line 221`):**
-  - Instructs the query planner to output the physical execution plan tree while suppressing hardware-dependent cost numbers (`cost=0.00..1234.56 rows=... width=...`), producing clean, deterministic plan output ideal for architectural verification.
-- **Compile-Time Partition Pruning (`Lines 226–228`):**
-  - Even though the query targets the 5,000,000-row parent table `FROM raw_telemetry_partitioned`, the planner compares the predicate `recorded_at >= '2026-10-15 00:00:00+00' AND recorded_at < '2026-10-16 00:00:00+00'` against the catalog partition bounds.
-  - It mathematically proves that rows in `[2026-10-15, 2026-10-16)` **cannot exist** in `telemetry_y2026m09`, `telemetry_y2026m11`, `telemetry_y2026m12`, or `telemetry_default`. Those 4 partitions (~3.72 million rows) are pruned away completely before execution starts!
-  - Furthermore, inside the single surviving partition **`telemetry_y2026m10`**, the planner uses the inherited BRIN index (`telemetry_y2026m10_recorded_at_idx`) via a `Bitmap Index Scan` to read only the 24-hour slice of October 15 (`~41,142 rows`, or `< 1%` of the 5M-row table).
+When a forecaster queries a single 24-hour storm window (`2026-10-15`) against the 5,000,000-row `raw_telemetry_partitioned` parent table (`323 MB` total heap), PostgreSQL eliminates **99.18% of disk I/O** in two distinct stages:
+
+```
+STAGE 1: Compile-Time Partition Pruning (Catalog Bound Check)
+  Query Predicate: recorded_at >= '2026-10-15' AND recorded_at < '2026-10-16'
+  ├── [PRUNED] telemetry_y2026m09 (1.23M rows, 80 MB) ──► Never opened!
+  ├── [ACTIVE] telemetry_y2026m10 (1.27M rows, 82 MB) ──► Passes to Stage 2
+  ├── [PRUNED] telemetry_y2026m11 (1.23M rows, 80 MB) ──► Never opened!
+  ├── [PRUNED] telemetry_y2026m12 (1.25M rows, 81 MB) ──► Never opened!
+  └── [PRUNED] telemetry_default  (0 rows, 0 bytes)   ──► Never opened!
+                                      │
+                                      ▼
+STAGE 2: Intra-Partition BRIN Block-Range Skipping (Inside telemetry_y2026m10)
+  1. Bitmap Index Scan on telemetry_y2026m10_recorded_at_idx (24 kB in RAM):
+     • Inspects 164 block-range [min, max] summaries.
+     • Skips ~158 block ranges (Oct 1..14 and Oct 16..31).
+     • Flags ONLY the ~6 block ranges (~3 MB) overlapping Oct 15 in a bitmap.
+  2. Bitmap Heap Scan on telemetry_y2026m10 (Recheck Cond):
+     • Reads only those ~6 sequential block ranges and filters exact Oct 15 rows (~41,143 rows).
+```
+
+- **Why Does a `BRIN` Plan Always Show `Bitmap Index Scan` $\rightarrow$ `Bitmap Heap Scan` with `Recheck Cond`?**
+  - Because BRIN stores `[min, max]` per 64-page block range rather than per-row `ctid`s, the boundary block range where October 14 ends and October 15 begins contains rows from **both** late October 14 and early October 15.
+  - Therefore, `Bitmap Index Scan` flags the 64-page range as a candidate, and `Bitmap Heap Scan` applies **`Recheck Cond`** to inspect each tuple inside those candidate pages and discard any row from late October 14 or early October 16.
 
 #### 6.2.3 Expected Terminal Output (`Lines 221–229`)
 
@@ -619,14 +777,16 @@ WHERE relname IN ('idx_oct_btree', 'idx_oct_brin')
 ORDER BY pg_relation_size(c.oid) DESC;
 ```
 
-#### 6.3.2 Deep-Dive Architectural Breakdown
+#### 6.3.2 Course Concept 1: Side-by-Side Physical Comparison (`B-Tree` vs. `BRIN` on 1,275,429 Rows)
 
-- **`\timing on` / `\timing off` (`Lines 234, 237`):**
-  - Toggles `psql`'s millisecond wall-clock timer around the two index creation statements on `telemetry_y2026m10` (`1,275,429 rows`):
-    - **`CREATE INDEX idx_oct_btree ON telemetry_y2026m10 (recorded_at);` (`Line 235`):** Must read all $1,275,429$ rows, sort them, and construct thousands of 8 KB B-Tree leaf and internal branch pages storing `(recorded_at, ctid)` for every single tuple ($\approx 150\text{--}600\text{ ms}$ build time).
-    - **`CREATE INDEX idx_oct_brin ON telemetry_y2026m10 USING BRIN (recorded_at) WITH (pages_per_range = 64);` (`Line 236`):** Scans the partition sequentially and writes only 164 `[min, max]` block-range summaries ($\approx 40\text{--}80\text{ ms}$ build time).
-- **The Storage Audit Query (`Lines 239–245`):**
-  - Queries `pg_class` for `'idx_oct_btree'` and `'idx_oct_brin'` and compares both `pg_size_pretty(pg_relation_size(c.oid))` and raw `exact_bytes`:
+| Engineering Dimension | `idx_oct_btree` (`USING BTREE (recorded_at)`) | `idx_oct_brin` (`USING BRIN (recorded_at) WITH (pages_per_range = 64)`) |
+| :--- | :--- | :--- |
+| **Index Entries Stored** | **1,275,429 leaf tuples** (`8B timestamp` + `6B ctid` + header per row) | **164 block-range summaries** (`[min_time, max_time]` per 64 heap pages) |
+| **Physical Size (`exact_bytes`)** | **`28,672,000 bytes` (`27 MB` = 3,500 pages of 8 KB)** | **`24,576 bytes` (`24 kB` = 3 pages of 8 KB)** |
+| **Size Across All 4 Months (5M Rows)** | **`~110 MB`** of RAM/disk | **`96 kB`** total (**`1,166.67x` smaller — `99.914%` savings!**) |
+| **Build Mechanism & Speed** | Full scan + external/in-memory sort + tree construction (`~185 ms`) | Single sequential pass computing running `min`/`max` per 64 pages (`~59 ms`, **3x–10x faster**) |
+| **Write Amplification on `INSERT`** | Every `INSERT` dirty-writes B-Tree leaf pages and generates WAL records | Near-zero (only updates range `max` when crossing a 64-page boundary) |
+| **When to Choose Each** | Need `UNIQUE` constraint, exact single-row point lookup, or `ORDER BY` without sorting | Append-only chronological timestamp column (`correlation > 0.95`) scanned by time range |
 
 #### 6.3.3 Expected Terminal Output (`Lines 234–245`)
 
@@ -644,10 +804,6 @@ Timing is off.
  idx_oct_brin  | 24 kB      |       24576
 (2 rows)
 ```
-
-- **Engineering Math Verification:**
-  $$\frac{\text{B-Tree Size}}{\text{BRIN Size}} = \frac{28,672,000\text{ bytes}}{24,576\text{ bytes}} = \mathbf{1,166.67\times\text{ smaller}} \quad (\mathbf{99.914\%\text{ space reduction!}})$$
-  Across all 4 partitions (`5,000,000 rows`), a B-Tree consumes **~110 MB** of RAM/disk while the BRIN index consumes under **120 KB** total, leaving `shared_buffers` completely free for active query processing.
 
 ---
 

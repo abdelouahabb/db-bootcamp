@@ -2,7 +2,8 @@
 -- DAY 3 BOOTCAMP: 5,000,000-ROW PARTITIONED TELEMETRY SEED, B-TREE VS BRIN
 -- BENCHMARK & POSTGIS GEODESIC PROXIMITY QUERIES
 -- File: day3_postgis_5m_benchmark.sql
--- Usage: psql -U postgres -f day3_postgis_5m_benchmark.sql
+-- Usage: psql -d postgres -f day3_postgis_5m_benchmark.sql
+--    or: psql -U postgres -f day3_postgis_5m_benchmark.sql
 -- ============================================================================
 
 -- Create dedicated benchmark database if running standalone (or run inside existing DB)
@@ -20,6 +21,12 @@ SET datestyle = 'iso, ymd';
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry' AND typtype = 'd') THEN
+            DROP DOMAIN geometry CASCADE;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geography' AND typtype = 'd') THEN
+            DROP DOMAIN geography CASCADE;
+        END IF;
         CREATE EXTENSION IF NOT EXISTS postgis;
         RAISE NOTICE 'Native PostGIS extension enabled!';
     ELSE
@@ -84,8 +91,11 @@ BEGIN
 END
 $$;
 
--- Seed 50 Meteorological Stations with spatial geometries across Northern Algeria
-INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, is_active, geom)
+-- Fix PRNG seed so all 50 station coordinates are 100% deterministic across machines
+SELECT setseed(0.42);
+
+-- Seed 50 Meteorological Stations across Northern Algeria
+INSERT INTO stations (station_id, station_name, latitude, longitude, elevation_m, is_active)
 SELECT 
     'AWS-' || LPAD(g::TEXT, 3, '0'),
     CASE g
@@ -102,19 +112,22 @@ SELECT
     ROUND((35.5 + (random() * 2.0))::numeric, 4),
     ROUND((2.0 + (random() * 5.0))::numeric, 4),
     ROUND((10.0 + (random() * 1200.0))::numeric, 1),
-    TRUE,
-    ST_SetSRID(ST_MakePoint(
-        ROUND((2.0 + (random() * 5.0))::numeric, 4),
-        ROUND((35.5 + (random() * 2.0))::numeric, 4)
-    ), 4326)
+    TRUE
 FROM generate_series(1, 50) AS g;
 
--- Pin precise ground-truth coordinates for our benchmark coastal stations
-UPDATE stations SET latitude = 36.7538, longitude = 3.0588, geom = ST_SetSRID(ST_MakePoint(3.0588, 36.7538), 4326) WHERE station_id = 'AWS-001'; -- Algiers Port
-UPDATE stations SET latitude = 36.7664, longitude = 3.4772, geom = ST_SetSRID(ST_MakePoint(3.4772, 36.7664), 4326) WHERE station_id = 'AWS-002'; -- Boumerdes Coastal
-UPDATE stations SET latitude = 36.9172, longitude = 3.9130, geom = ST_SetSRID(ST_MakePoint(3.9130, 36.9172), 4326) WHERE station_id = 'AWS-003'; -- Dellys Cape
-UPDATE stations SET latitude = 36.7118, longitude = 4.0459, geom = ST_SetSRID(ST_MakePoint(4.0459, 36.7118), 4326) WHERE station_id = 'AWS-004'; -- Tizi Ouzou
-UPDATE stations SET latitude = 36.7559, longitude = 5.0699, geom = ST_SetSRID(ST_MakePoint(5.0699, 36.7559), 4326) WHERE station_id = 'AWS-005'; -- Bejaia Airport
+-- Pin precise ground-truth coordinates & elevations for all 8 named Algerian stations
+UPDATE stations SET latitude = 36.7538, longitude =  3.0588, elevation_m =  12.0 WHERE station_id = 'AWS-001'; -- Algiers Port
+UPDATE stations SET latitude = 36.7664, longitude =  3.4772, elevation_m =  18.0 WHERE station_id = 'AWS-002'; -- Boumerdes Coastal
+UPDATE stations SET latitude = 36.9172, longitude =  3.9130, elevation_m =  85.0 WHERE station_id = 'AWS-003'; -- Dellys Cape
+UPDATE stations SET latitude = 36.7118, longitude =  4.0459, elevation_m = 189.0 WHERE station_id = 'AWS-004'; -- Tizi Ouzou
+UPDATE stations SET latitude = 36.7559, longitude =  5.0699, elevation_m =   6.0 WHERE station_id = 'AWS-005'; -- Bejaia Airport
+UPDATE stations SET latitude = 36.7950, longitude =  5.8736, elevation_m =  11.0 WHERE station_id = 'AWS-006'; -- Jijel Achouat
+UPDATE stations SET latitude = 35.6971, longitude = -0.6308, elevation_m =  22.0 WHERE station_id = 'AWS-007'; -- Oran Marine
+UPDATE stations SET latitude = 36.2760, longitude =  6.6200, elevation_m = 694.0 WHERE station_id = 'AWS-008'; -- Constantine Plateau
+
+-- Construct WGS-84 spatial point geometry (X = longitude, Y = latitude) from exact station coordinates
+UPDATE stations
+SET geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326);
 
 -- Create Spatial Index on Station Geometries (GiST: Generalized Search Tree)
 CREATE INDEX idx_stations_gist_geom ON stations USING GIST (geom);
@@ -165,6 +178,8 @@ CREATE TABLE telemetry_default PARTITION OF raw_telemetry_partitioned DEFAULT;
 -- ============================================================================
 -- 5. INGEST 5,000,000 SYNTHETIC OBSERVATIONS ACROSS SEPT-DEC 2026
 -- ============================================================================
+SELECT setseed(0.42);
+
 INSERT INTO raw_telemetry_partitioned (
     recorded_at, station_id, temperature, pressure, wind_speed, wind_direction, rain_accum_1m
 )
@@ -251,7 +266,7 @@ WHERE is_active = TRUE
       ST_SetSRID(ST_MakePoint(3.9000, 36.9500), 4326)::geography, 
       40000 -- Radius in meters (40 km)
   )
-ORDER BY distance_km ASC;
+ORDER BY distance_km ASC, station_id ASC;
 
 -- 9B. Join stations within 50 km of Boumerdes (36.7664N, 3.4772E) with October 2026 telemetry
 WITH nearby_stations AS (
@@ -281,4 +296,4 @@ JOIN raw_telemetry_partitioned t
 WHERE t.recorded_at >= '2026-10-01 00:00:00+00' 
   AND t.recorded_at <  '2026-11-01 00:00:00+00'
 GROUP BY ns.station_id, ns.station_name, ns.dist_km
-ORDER BY ns.dist_km ASC;
+ORDER BY ns.dist_km ASC, ns.station_id ASC;

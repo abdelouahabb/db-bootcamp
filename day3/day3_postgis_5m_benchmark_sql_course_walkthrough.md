@@ -54,18 +54,32 @@ The [`day3_postgis_5m_benchmark.sql`](./day3_postgis_5m_benchmark.sql) script is
 └──────────────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 What Is PostGIS & Why Do Weather Databases Need It?
+### 1.2 What Is PostGIS, What Is `SRID 4326`, and Why Do Weather Databases Need Them?
 
-**PostGIS** (`CREATE EXTENSION postgis;`) is the industry-standard spatial extension that turns PostgreSQL into a full Open Geospatial Consortium (**OGC**) geographic information system powered by three C/C++ computational geometry engines: **`GEOS`** (topological predicates: `ST_Covers`, `ST_Intersects`, `ST_Buffer`), **`PROJ`** (coordinate reference system transformations across `8,000+` map projections), and **`GDAL`** (raster processing).
+1. **Definition — What Is `PostGIS`?**
+   - **PostGIS** (`CREATE EXTENSION postgis;`) is the industry-standard spatial database extension that transforms PostgreSQL into a full Open Geospatial Consortium (**OGC**) Geographic Information System (**GIS**).
+   - Instead of storing coordinates as two disconnected numbers (`latitude`, `longitude`), PostGIS introduces native binary spatial data types (`GEOMETRY` and `GEOGRAPHY`), multidimensional spatial indexes (`GiST` and `SP-GiST`), and over `1,000` spatial functions powered by three C/C++ computational geometry engines:
+     - **`GEOS` (Geometry Engine, Open Source):** Executes topological predicates (`ST_Intersects`, `ST_Covers`, `ST_Contains`, `ST_Buffer`, `ST_Union`).
+     - **`PROJ` (Cartographic Projections Library):** Transforms coordinates across `8,000+` Coordinate Reference Systems stored in the `spatial_ref_sys` catalog table (`ST_Transform`).
+     - **`GDAL` (Geospatial Data Abstraction Library):** Processes gridded satellite and radar rasters (`postgis_raster`).
 
-1. **Why Plain `latitude` / `longitude` Float Columns + B-Tree Bounding Boxes Fail in Meteorology:**
+2. **Why Plain `latitude` / `longitude` Float Columns + B-Tree Bounding Boxes Fail in Meteorology:**
    - Because meridians of longitude converge toward the poles ($\Delta x \propto \cos(\phi)$), $1^\circ$ of latitude is $\approx 111.1\text{ km}$ everywhere, whereas $1^\circ$ of longitude shrinks from $111.3\text{ km}$ at the Equator to **$\approx 89.3\text{ km}$** along the Algerian Mediterranean coast ($\phi \approx 36.8^\circ\text{N}$) and $0\text{ km}$ at the poles.
    - A naive SQL filter `WHERE latitude BETWEEN ... AND longitude BETWEEN ...` searches a **distorted rectangle** (whose corners are $\sqrt{2} \approx 1.414\times$ farther away than the radius!), cannot test whether a weather station falls inside a 24-vertex radar storm polygon, and cannot use a single 1D B-Tree to prune 2D/3D space efficiently.
-2. **`GEOMETRY(Point, 4326)` vs. `GEOGRAPHY(Point, 4326)`:**
-   - **`GEOMETRY(Point, 4326)`:** Treats longitude and latitude as flat 2D Cartesian $(X, Y)$ coordinates. `ST_Distance` returns **decimal degrees** (meaningless for physical distance!).
-   - **`GEOGRAPHY(Point, 4326)` (or `geom::geography`):** Models coordinates on the curved **WGS-84 Earth ellipsoid** ($a = 6,378,137\text{ m}$, $f = 1/298.257223563$). `ST_Distance` and `ST_DWithin` compute true geodesic distances in **meters** (`40000` = `40 km`).
-3. **The #1 Coordinate Order Rule — `(X, Y) = (Longitude, Latitude)`:**
-   - In PostGIS (`ST_MakePoint(lon, lat)`)—and in MongoDB GeoJSON (`coordinates: [lon, lat]`)—**Longitude ($X$) ALWAYS comes first, and Latitude ($Y$) ALWAYS comes second!** Passing `(36.7538, 3.0588)` instead of `(3.0588, 36.7538)` teleports Algiers (`36.75° N, 3.05° E`) into the Indian Ocean off Somalia (`3.05° N, 36.75° E`)!
+
+3. **Definition — What Is an `SRID` and What Does `4326` Mean?**
+   - **SRID (`Spatial Reference System Identifier`):** A unique integer code (standardized by the **EPSG** registry and stored in PostGIS's `spatial_ref_sys` table) that tells PostgreSQL which mathematical model of the Earth, coordinate axes, and measurement units a spatial object uses. Without an SRID, a coordinate pair like `(3.0588, 36.7538)` is just two unitless numbers.
+   - **`SRID 4326` (`EPSG:4326` / `WGS-84`):** The **World Geodetic System 1984** reference ellipsoid used by all GPS satellites, WMO synoptic station registries, and GeoJSON (`semi-major equatorial radius` $a = 6,378,137.0\text{ m}$, `semi-minor polar radius` $b = 6,356,752.3142\text{ m}$, flattening $f = 1 / 298.257223563$), where coordinates are expressed in angular **Longitude ($^\circ\text{E/W}$) and Latitude ($^\circ\text{N/S}$)**.
+   - **`ST_SetSRID(geom, 4326)`:** Tags a newly constructed point (`ST_MakePoint(lon, lat)`) with `SRID = 4326` so PostGIS knows those coordinates are WGS-84 GPS degrees.
+
+4. **Definition — `GEOMETRY(Point, 4326)` vs. `GEOGRAPHY(Point, 4326)`:**
+   | Spatial Type | Mathematical Surface Model | Coordinate Input | Distance Unit Returned by `ST_Distance` / `ST_DWithin` | CPU Speed & When to Use |
+   | :--- | :--- | :--- | :--- | :--- |
+   | **`GEOMETRY(Point, 4326)`** | **Flat 2D Cartesian Plane** (Euclidean $X, Y$ grid; ignores Earth curvature) | `(lon, lat)` in degrees | **Decimal Degrees** *(meaningless for physical distance on SRID 4326!)* | Fast Euclidean math; use with projected meter grids (e.g., `SRID 32631` UTM Zone 31N) or cast via `geom::geography` |
+   | **`GEOGRAPHY(Point, 4326)`** *(or `geom::geography`)* | **Curved WGS-84 Spheroid** (Great-circle / geodetic paths over the 3D globe) | `(lon, lat)` in degrees | **Meters (`m`)** (`40000` = `40 km` everywhere on Earth) | True spheroidal trigonometry; **mandatory for radial distance queries (`ST_DWithin`, `ST_Distance`) across unprojected GPS coordinates** |
+
+5. **The #1 Coordinate Order Rule — `(X, Y) = (Longitude, Latitude)`:**
+   - In PostGIS (`ST_MakePoint(lon, lat)`)—and in MongoDB GeoJSON (`coordinates: [lon, lat]`)—**Longitude ($X$, East/West) ALWAYS comes first, and Latitude ($Y$, North/South) ALWAYS comes second!** Passing `(36.7538, 3.0588)` instead of `(3.0588, 36.7538)` teleports Algiers (`36.75° N, 3.05° E`) into the Indian Ocean off Somalia (`3.05° N, 36.75° E`)!
 
 ---
 
@@ -327,12 +341,32 @@ $$;
 - **Constructing `geom` Directly from `(longitude, latitude)` (`Lines 129–130`):**
   - `UPDATE stations SET geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326);`
   - **Why We Construct `geom` After Populating `(latitude, longitude)`:** If you call `random()` inside `latitude`, `longitude`, *and* a second time inside `ST_MakePoint(random(), random())`, each `random()` invocation generates a different number—causing `geom` to disagree with the `latitude` and `longitude` columns! Constructing `geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)` directly from the table's `longitude` ($X$) and `latitude` ($Y$) columns guarantees **100% geometric consistency** across all 50 stations and demonstrates how any legacy relational table with `latitude`/`longitude` columns is upgraded to PostGIS in a single SQL statement.
-- **Spatial Indexing (`idx_stations_gist_geom` & Functional `idx_stations_gist_geog`, `Lines 133–141`):**
-  - **`CREATE INDEX idx_stations_gist_geom ON stations USING GIST (geom);` (`Line 133`):** Builds an R-Tree-on-GiST index over the `geom` column (supporting 2D bounding-box operators `&&` and geometry `ST_DWithin`). Note that PostgreSQL's native `point` type also has a built-in `point_ops` GiST operator class, so `USING GIST (geom)` succeeds in both native PostGIS mode and fallback mode!
-  - **`CREATE INDEX idx_stations_gist_geog ON stations USING GIST ((geom::geography));` (`Line 138`):**
-    - Why is this **functional expression index** on `(geom::geography)` so important?
-    - In Section 9 (`Lines 264–268` and `Lines 281–285`), the proximity queries store `geom` as `GEOMETRY(Point, 4326)` but filter using spheroidal geodesic meters via `WHERE ST_DWithin(geom::geography, target::geography, 40000)`.
-    - In PostgreSQL, an index on raw `geom` (`GEOMETRY`) **cannot** be used when the column is wrapped inside a cast expression `geom::geography`! By creating a functional GiST index explicitly on the cast expression `((geom::geography))` (note the mandatory double parentheses around an expression in `CREATE INDEX`), the PostGIS planner can use the 3D geocentric GiST index directly whenever `geom::geography` appears in `ST_DWithin` or `<->` KNN queries.
+
+#### 4.2.1 Course Concept: What Is a `GiST` (`Generalized Search Tree`) Spatial Index & Why Does 2D Space Break B-Trees? (`Lines 133–141`)
+
+1. **Why a Standard B-Tree Cannot Index 2D/3D Coordinates:**
+   - A **B-Tree (`Balanced Tree`)** requires a **1-dimensional total ordering** (`a < b < c`). It works on numbers, strings, or timestamps because any two values can be ordered along a single line.
+   - Geographic space is **2-dimensional (`Longitude`, `Latitude`) or 3-dimensional**. There is no natural linear `<` ordering of 2D points that preserves spatial proximity in both directions simultaneously. If a B-Tree sorts by `longitude` first and `latitude` second, two coastal stations only `5 km` apart north-south can be separated by thousands of index entries with intermediate longitudes.
+2. **Definition — What Is `GiST` (`Generalized Search Tree`)?**
+   - **GiST** is PostgreSQL's balanced tree indexing framework for multidimensional and non-linear data types. For PostGIS spatial columns, `USING GIST` implements an **R-Tree (`Rectangle Tree`)** of nested **Minimum Bounding Rectangles (`MBR`s)** (or 3D geocentric bounding boxes for `GEOGRAPHY`):
+     ```
+     Root GiST Page (Bounding Box of Northern Algeria: [Lon -1.0..7.0, Lat 35.0..37.5])
+      ├── Internal Node A: Western & Central Coast Box [Lon -1.0..4.2, Lat 35.5..37.0]
+      │    ├── Leaf Entry: AWS-007 Oran     (-0.6308, 35.6971) ──► ctid (0, 7)
+      │    ├── Leaf Entry: AWS-001 Algiers  ( 3.0588, 36.7538) ──► ctid (0, 1)
+      │    ├── Leaf Entry: AWS-002 Boumerdes( 3.4772, 36.7664) ──► ctid (0, 2)
+      │    └── Leaf Entry: AWS-003 Dellys   ( 3.9130, 36.9172) ──► ctid (0, 3)
+      └── Internal Node B: Eastern Coast & Tell Atlas Box [Lon 4.0..7.0, Lat 36.0..37.0]
+           ├── Leaf Entry: AWS-005 Bejaia   ( 5.0699, 36.7559) ──► ctid (0, 5)
+           ├── Leaf Entry: AWS-006 Jijel    ( 5.8736, 36.7950) ──► ctid (0, 6)
+           └── Leaf Entry: AWS-008 Constant.( 6.6200, 36.2760) ──► ctid (0, 8)
+     ```
+   - Instead of comparing `<` or `>`, a GiST search asks at each tree level: ***"Does my query's bounding box overlap (`&&`) this branch's Minimum Bounding Rectangle?"*** If the answer is no, the entire subtree is pruned immediately!
+3. **Why Section 2 Creates Both `idx_stations_gist_geom` and `idx_stations_gist_geog` (`Lines 133–141`):**
+   - **`CREATE INDEX idx_stations_gist_geom ON stations USING GIST (geom);` (`Line 133`):** Builds a 2D R-Tree-on-GiST index over the `geom` column. Note that PostgreSQL's native `point` type also has a built-in `point_ops` GiST operator class, so `USING GIST (geom)` succeeds in both native PostGIS mode and fallback mode!
+   - **`CREATE INDEX idx_stations_gist_geog ON stations USING GIST ((geom::geography));` (`Line 138`):**
+     - In Section 9 (`Lines 264–268` and `Lines 281–285`), the proximity queries store `geom` as `GEOMETRY(Point, 4326)` but filter using spheroidal geodesic meters via `WHERE ST_DWithin(geom::geography, target::geography, 40000)`.
+     - In PostgreSQL, an index on raw `geom` (`GEOMETRY`) **cannot** be used when the column is wrapped inside a cast expression `geom::geography`! By creating a **functional expression GiST index** explicitly on `((geom::geography))` (note the mandatory double parentheses around an expression in `CREATE INDEX`), the PostGIS planner uses the 3D geocentric GiST index directly whenever `geom::geography` appears in `ST_DWithin` or `<->` KNN queries.
 
 ---
 
@@ -586,26 +620,20 @@ ANALYZE stations;
 ANALYZE raw_telemetry_partitioned;
 ```
 
-#### 5.4.2 Course Concept 1: How Partitioned Index Propagation Works (`Lines 199–202`)
+#### 5.4.2 Course Concept 1: What Is a `BRIN` (`Block Range Index`)? (Definition, Architecture & Correlation Rule)
 
-When you run `CREATE INDEX idx_telemetry_brin_time ON raw_telemetry_partitioned ...` on a **partitioned parent table**, PostgreSQL performs a two-tier catalog operation:
-1. **Virtual Parent Index (`relkind = 'I'`, `0 bytes` on disk):** Creates a partitioned index entry named `idx_telemetry_brin_time` in `pg_class` with `relkind = 'I'` (capital `I` = partitioned index template). Like the parent table (`relkind = 'p'`), the parent index stores zero bytes on disk.
-2. **Automatic Child Index Cascade (`relkind = 'i'`, `24 kB` each):** PostgreSQL automatically walks `pg_inherits` and builds **5 real physical BRIN indexes (`relkind = 'i'`)**—one on each child partition—and guarantees that any future monthly partition created via `CREATE TABLE telemetry_y2027m01 PARTITION OF raw_telemetry_partitioned` automatically receives its own local BRIN index:
+1. **Definition — What Does `BRIN` Stand For and What Is It?**
+   - **BRIN** stands for **Block Range Index** (introduced in PostgreSQL 9.5).
+   - Unlike a traditional **B-Tree (`Balanced Tree`)**, which is an **exact row-level index** that stores every single row's value alongside its 6-byte physical row pointer (`ctid = (block_number, tuple_offset)`), a **BRIN** index is a **lossy block-level summary index** designed specifically for very large tables where values are naturally ordered on disk (such as append-only meteorological timestamps).
+   - **The Intuition / Real-World Analogy:**
+     - A **B-Tree** is like the alphabetical index at the back of a 1,275,429-line weather logbook: it lists every single observation's exact timestamp and the exact page and line number where it sits (`27 MB` of index entries per month).
+     - A **BRIN** index throws away the per-row index completely. Instead, it groups every **64 consecutive 8 KB disk pages** (`pages_per_range = 64`, or `512 KB` of data holding $\approx 7,800$ rows) into a **Block Range**, and writes a tiny sticky note summarizing only two numbers for that entire 64-page block range: **`[min(recorded_at), max(recorded_at)]`**.
+   - When a query asks for `WHERE recorded_at >= '2026-10-15 00:00' AND recorded_at < '2026-10-16 00:00'`, PostgreSQL scans those tiny `[min, max]` sticky notes in memory:
+     - If a 64-page block range has `max < '2026-10-15 00:00'` or `min >= '2026-10-16 00:00'`, it is **guaranteed** to contain zero matching rows, and PostgreSQL skips all 64 disk pages (`512 KB`) immediately!
+     - If a 64-page block range's `[min, max]` overlaps October 15, PostgreSQL reads those 64 pages and filters the exact rows.
 
-| Catalog Object Name | `pg_class.relkind` | Attached Table | Physical Size on Disk |
-| :--- | :---: | :--- | :---: |
-| **`idx_telemetry_brin_time`** | `'I'` *(Virtual Partitioned Index)* | `raw_telemetry_partitioned` *(Parent)* | `0 bytes` |
-| **`telemetry_y2026m09_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m09` | `24 kB` (`3 pages`) |
-| **`telemetry_y2026m10_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m10` | `24 kB` (`3 pages`) |
-| **`telemetry_y2026m11_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m11` | `24 kB` (`3 pages`) |
-| **`telemetry_y2026m12_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m12` | `24 kB` (`3 pages`) |
-| **`telemetry_default_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_default` | `24 kB` (`3 pages`) |
-
-#### 5.4.3 Course Concept 2: How BRIN (`WITH (pages_per_range = 64)`) Summarizes an 82 MB Partition Into 24 kB
-
-Why is a **Block Range Index (`BRIN`)** so much smaller than a **B-Tree** on chronological weather data?
-- **B-Tree (`USING BTREE`) is a Row-Level Index:** It stores the exact `recorded_at` value and a 6-byte row pointer (`ctid = (block_number, tuple_offset)`) for **every single row** (`1,275,429 entries` in October = `27 MB`).
-- **BRIN (`USING BRIN`) is a Lossy Block-Range Summary Index:** It stores **zero row pointers (`ctid`s)**. Instead, it groups every `pages_per_range = 64` consecutive 8 KB heap pages ($64 \times 8\text{ KB} = 512\text{ KB}$ of physical disk blocks, holding $\approx 7,800$ rows) into a single summary entry containing only two timestamps: **`[min(recorded_at), max(recorded_at)]`**:
+2. **How `WITH (pages_per_range = 64)` Summarizes an `82 MB` Partition Into Just `24 kB` (`3 Pages`):**
+   - Look at the physical math for our October partition (`telemetry_y2026m10`, containing `1,275,429 rows` across `82 MB` $\approx 10,480$ pages of `8 KB`):
 
 ```
 October Partition Heap (telemetry_y2026m10: 82 MB = ~10,480 Pages of 8 KB):
@@ -623,7 +651,34 @@ BRIN Index (telemetry_y2026m10_recorded_at_idx: ONLY 24 kB = 3 Pages of 8 KB!):
 └───────────────────────────┴───────────────────────────┴─────────┴───────────────────────────┘
 ```
 
-- Because $10,480\text{ pages} / 64\text{ pages per range} = \mathbf{164\text{ block ranges}}$, storing 164 `[min, max]` timestamp pairs requires only **3 pages (`24 kB`)** on disk (Page 0: BRIN metapage, Page 1: Reverse Range Map `revmap`, Page 2: regular summary tuples)!
+   - Because $10,480\text{ heap pages} / 64\text{ pages per range} = \mathbf{164\text{ block ranges}}$, the entire BRIN index on disk consists of **exactly 3 pages (`24 kB` = `24,576 bytes`)**:
+     1. **Page 0 (`BRIN Metapage`, `8 kB`):** Stores the BRIN magic number, version, and `pages_per_range = 64` setting.
+     2. **Page 1 (`Reverse Range Map / revmap`, `8 kB`):** An array of 6-byte item pointers mapping `Range #0 .. Range #163` to its summary tuple on Page 2.
+     3. **Page 2 (`Regular BRIN Summary Page`, `8 kB`):** Holds all 164 `[min(recorded_at), max(recorded_at)]` summary tuples!
+   - **Tuning `pages_per_range`:** PostgreSQL's default is `pages_per_range = 128` (`1 MB` per range). Setting `WITH (pages_per_range = 64)` (`512 KB` per range) doubles the selectivity precision on high-frequency weather streams while still keeping the index inside the exact same `24 kB` (3-page) footprint!
+
+3. **The Golden Rule of BRIN — Physical-to-Logical Correlation (`pg_stats.correlation`):**
+   - A BRIN index **only works** when the physical order of rows on disk matches the logical sort order of the indexed column (measured by PostgreSQL's `pg_stats.correlation` statistic in $[-1.0, +1.0]$):
+     | Column | Physical Order on Disk | `pg_stats.correlation` | Example Range #0 `[min, max]` | Blocks Skipped by BRIN | Verdict |
+     | :--- | :--- | :---: | :---: | :---: | :--- |
+     | **`recorded_at`** | Append-only chronological | **`+1.000`** | `[Oct 01 00:00, Oct 01 04:32]` | **96%–99% of blocks skipped** | **Ideal for BRIN** |
+     | **`temperature`** | Oscillates every day/hour | **`~0.015`** | `[+2.0°C, +29.0°C]` in *every* range | **0% skipped** (Full Table Scan!) | **Never use BRIN** (use B-Tree) |
+     | **`station_id`** | All 50 stations report every minute | **`~0.000`** | `['AWS-001', 'AWS-050']` in *every* range | **0% skipped** (Full Table Scan!) | **Never use BRIN** (use B-Tree) |
+
+#### 5.4.3 Course Concept 2: How Partitioned BRIN Index Propagation Works (`Lines 199–202`)
+
+When you run `CREATE INDEX idx_telemetry_brin_time ON raw_telemetry_partitioned USING BRIN (recorded_at) WITH (pages_per_range = 64);` on the **partitioned parent table**, PostgreSQL performs a two-tier catalog operation:
+1. **Virtual Parent Index (`relkind = 'I'`, `0 bytes` on disk):** Creates a partitioned index entry named `idx_telemetry_brin_time` in `pg_class` with `relkind = 'I'` (capital `I` = partitioned index template). Like the parent table (`relkind = 'p'`), the parent index stores zero bytes on disk.
+2. **Automatic Child Index Cascade (`relkind = 'i'`, `24 kB` each):** PostgreSQL automatically walks `pg_inherits` and builds **5 real physical BRIN indexes (`relkind = 'i'`)**—one on each child partition—and guarantees that any future monthly partition created via `CREATE TABLE telemetry_y2027m01 PARTITION OF raw_telemetry_partitioned` automatically receives its own local BRIN index:
+
+| Catalog Object Name | `pg_class.relkind` | Attached Table | Physical Size on Disk |
+| :--- | :---: | :--- | :---: |
+| **`idx_telemetry_brin_time`** | `'I'` *(Virtual Partitioned Index)* | `raw_telemetry_partitioned` *(Parent)* | `0 bytes` |
+| **`telemetry_y2026m09_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m09` | `24 kB` (`3 pages`) |
+| **`telemetry_y2026m10_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m10` | `24 kB` (`3 pages`) |
+| **`telemetry_y2026m11_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m11` | `24 kB` (`3 pages`) |
+| **`telemetry_y2026m12_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_y2026m12` | `24 kB` (`3 pages`) |
+| **`telemetry_default_recorded_at_idx`** | `'i'` *(Physical Child BRIN Index)* | `telemetry_default` | `24 kB` (`3 pages`) |
 
 #### 5.4.4 Course Concept 3: Why `ANALYZE` Is Mandatory After Bulk Partition Ingestion (`Lines 204–205`)
 

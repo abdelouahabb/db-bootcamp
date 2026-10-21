@@ -133,7 +133,7 @@ WITH DATA;
 CREATE UNIQUE INDEX idx_mv_daily_verif_unique
 ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 
--- Automatically enable PostGIS (or WGS-84 geodesic fallback) and populate synoptic.stations.geog & geom
+-- Automatically enable PostGIS (or WGS-84 geodesic fallback) and populate synoptic.stations.geog, geom & alerts.storm_polygons
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
@@ -145,7 +145,23 @@ BEGIN
             geom = ST_SetSRID(ST_MakePoint(longitude::float8, latitude::float8), 4326);
         CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);
         CREATE INDEX IF NOT EXISTS idx_stations_geom_gist ON synoptic.stations USING GIST (geom);
-        RAISE NOTICE 'PostGIS enabled and synoptic.stations.geog + geom populated!';
+
+        DROP TABLE IF EXISTS alerts.storm_polygons CASCADE;
+        CREATE TABLE alerts.storm_polygons (
+            storm_id             VARCHAR(30) PRIMARY KEY,
+            storm_name           TEXT        NOT NULL,
+            detected_at          TIMESTAMPTZ NOT NULL,
+            max_reflectivity_dbz NUMERIC(4,1),
+            vil_kg_m2            NUMERIC(4,1),
+            footprint            GEOGRAPHY(Polygon, 4326) NOT NULL
+        );
+        CREATE INDEX idx_storm_polygons_gist ON alerts.storm_polygons USING GIST (footprint);
+        INSERT INTO alerts.storm_polygons VALUES
+            ('CELL-MED-20261006-A', 'Mediterranean Convective System Alpha', '2026-10-06 00:00:00+00', 58.5, 42.0,
+             ST_GeogFromText('POLYGON((2.5 35.8, 7.2 35.8, 7.2 37.1, 2.5 37.1, 2.5 35.8))')),
+            ('CELL-SAH-20261006-B', 'Southern Erg Haboob Dust Front', '2026-10-06 12:00:00+00', 34.0, 8.5,
+             ST_GeogFromText('POLYGON((1.5 22.0, 6.5 22.0, 6.5 28.0, 1.5 28.0, 1.5 22.0))'));
+        RAISE NOTICE 'PostGIS enabled and synoptic.stations.geog + alerts.storm_polygons populated!';
     ELSE
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry') THEN
             CREATE DOMAIN public.geometry AS point;
@@ -169,6 +185,18 @@ BEGIN
             CREATE OR REPLACE FUNCTION public.ST_DWithin(p1 point, p2 point, dist_m double precision) RETURNS boolean AS $body$
                 SELECT public.ST_Distance(p1, p2) <= dist_m;
             $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_GeogFromText(wkt text) RETURNS polygon AS $body$
+                SELECT ('((' || regexp_replace(regexp_replace(trim(regexp_replace(wkt, '^POLYGON\s*\(\((.*)\)\)$', '\1', 'i')), '\s*,\s*', '),(', 'g'), '\s+', ',', 'g') || '))')::polygon;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Covers(poly polygon, pt point) RETURNS boolean AS $body$
+                SELECT poly @> pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Intersects(poly polygon, pt point) RETURNS boolean AS $body$
+                SELECT poly @> pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Within(pt point, poly polygon) RETURNS boolean AS $body$
+                SELECT poly @> pt;
+            $body$ LANGUAGE sql IMMUTABLE;
         $fn$;
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog public.geography;
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom public.geometry;
@@ -177,7 +205,23 @@ BEGIN
             geom = public.ST_SetSRID(public.ST_MakePoint(longitude::float8, latitude::float8), 4326);
         CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);
         CREATE INDEX IF NOT EXISTS idx_stations_geom_gist ON synoptic.stations USING GIST (geom);
-        RAISE NOTICE 'WGS-84 geodesic fallback enabled and synoptic.stations.geog + geom populated!';
+
+        DROP TABLE IF EXISTS alerts.storm_polygons CASCADE;
+        CREATE TABLE alerts.storm_polygons (
+            storm_id             VARCHAR(30) PRIMARY KEY,
+            storm_name           TEXT        NOT NULL,
+            detected_at          TIMESTAMPTZ NOT NULL,
+            max_reflectivity_dbz NUMERIC(4,1),
+            vil_kg_m2            NUMERIC(4,1),
+            footprint            polygon     NOT NULL
+        );
+        CREATE INDEX idx_storm_polygons_gist ON alerts.storm_polygons USING GIST (footprint);
+        INSERT INTO alerts.storm_polygons VALUES
+            ('CELL-MED-20261006-A', 'Mediterranean Convective System Alpha', '2026-10-06 00:00:00+00', 58.5, 42.0,
+             public.ST_GeogFromText('POLYGON((2.5 35.8, 7.2 35.8, 7.2 37.1, 2.5 37.1, 2.5 35.8))')),
+            ('CELL-SAH-20261006-B', 'Southern Erg Haboob Dust Front', '2026-10-06 12:00:00+00', 34.0, 8.5,
+             public.ST_GeogFromText('POLYGON((1.5 22.0, 6.5 22.0, 6.5 28.0, 1.5 28.0, 1.5 22.0))'));
+        RAISE NOTICE 'WGS-84 geodesic fallback enabled and synoptic.stations.geog + alerts.storm_polygons populated!';
     END IF;
 END
 $$;

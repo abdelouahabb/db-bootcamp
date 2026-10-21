@@ -5,6 +5,7 @@
 **Bootcamp:** Weather Forecast & Meteorological Data Engineering (5-Day Intensive — Unified Best-of-Both Edition)  
 **Companion to:**
 - [../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) — **Dedicated MongoDB NoSQL Basics & CRUD Guide (`find`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)**
+- [../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) — **Dedicated Side-by-Side Cheatsheet: PostgreSQL `PostGIS` vs. MongoDB `2dsphere` & `PARTITION BY RANGE` vs. MongoDB Time-Series / Sharding**
 - [day4_master_coursebook.md](./day4_master_coursebook.md)
 - [day4_mongodb_architecture_ha_and_sharding_guide.md](./day4_mongodb_architecture_ha_and_sharding_guide.md)
 - [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) (`weather_nosql`: `stations`, `radiosonde_soundings`, `synoptic_timeseries`, `cap_alerts`)

@@ -10,6 +10,7 @@
 
 **Companion Files in Day 3 Directory & Root:**
 - [../SQL_BASICS_CRUD_GUIDE.md](../SQL_BASICS_CRUD_GUIDE.md) — **Dedicated SQL Basics & CRUD Guide (`SELECT`, `WHERE`, `GROUP BY`, `JOIN`, `INSERT ... RETURNING`, `ON CONFLICT DO UPDATE`, `UPDATE`, `DELETE`)**
+- [../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) — **Dedicated Side-by-Side Cheatsheet: PostgreSQL `PostGIS` vs. MongoDB `2dsphere` Geospatial & PostgreSQL Table Partitioning (`PARTITION BY RANGE`) vs. MongoDB Time-Series / Sharding Equivalents**
 - [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) ([Course Walkthrough](./day3_weather_advanced_pg_sql_course_walkthrough.md)) — Partitioned synoptic tables (`synoptic.observations_part`), BRIN/Partial/Covering/GIN indexes, `JSONB` sensor payloads, and Materialized Views (`nwp.mv_daily_model_verification`)
 - [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) ([Course Walkthrough](./day3_postgis_5m_benchmark_sql_course_walkthrough.md)) — Automated 5,000,000-row partitioned telemetry seed (`raw_telemetry_partitioned`), B-Tree vs. BRIN benchmark, and PostGIS `ST_DWithin` geodesic radial queries
 - [day3_postgres_advanced_cheatsheet.md](./day3_postgres_advanced_cheatsheet.md) — Quick-reference guide for Partitioning, Index Selection, PostGIS Geodesy, Window Functions, `UPSERT`, and `JSONB`

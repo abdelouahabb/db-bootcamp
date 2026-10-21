@@ -4,6 +4,7 @@
 
 **Companion to:**
 - [../SQL_BASICS_CRUD_GUIDE.md](../SQL_BASICS_CRUD_GUIDE.md) — **Dedicated SQL Basics & CRUD Guide (`SELECT`, `INSERT ... RETURNING`, `UPDATE`, `DELETE`, `JOIN`s)**
+- [../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) — **Dedicated Side-by-Side Cheatsheet: PostgreSQL `PostGIS` vs. MongoDB `2dsphere` & `PARTITION BY RANGE` vs. MongoDB Time-Series / Sharding**
 - [day3_master_coursebook.md](./day3_master_coursebook.md)
 - [day3_weather_advanced_pg.sql](./day3_weather_advanced_pg.sql) (`weather_ops`: `synoptic.observations_part`, `nwp.mv_daily_model_verification`, `synoptic.stations.geog`)
 - [day3_postgis_5m_benchmark.sql](./day3_postgis_5m_benchmark.sql) (`weather_ops_db`: 5M-row `public.raw_telemetry_partitioned` & 50-station `public.stations.geom`)

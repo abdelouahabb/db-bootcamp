@@ -9,6 +9,7 @@
 **Execution Environment:** MongoDB 7.0+ (`mongod` & `mongosh` CLI + MongoDB Compass / VS Code MongoDB Extension)  
 **Companion Files in `day4/` & `reference_cards/`:**
 - [../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) — **Dedicated MongoDB NoSQL Basics & CRUD Guide (`find`, `findOne`, `$gt`/`$in`, `$exists`, `insertOne`, `insertMany`, `updateOne`, `deleteOne`, `aggregate`)** on `weather_nosql` and `weather_telemetry_db`
+- [../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) — **Dedicated Side-by-Side Cheatsheet: PostgreSQL `PostGIS` vs. MongoDB `2dsphere` Geospatial & PostgreSQL Table Partitioning (`PARTITION BY RANGE`) vs. MongoDB Time-Series / Sharding Equivalents**
 - [day4_weather_ops_mongo.js](./day4_weather_ops_mongo.js) ([Course Walkthrough](./day4_weather_ops_mongo_js_course_walkthrough.md)) — Seed script creating `stations` (with `$jsonSchema`), `radiosonde_soundings` (vertical pressure level arrays), `synoptic_timeseries` (native Time-Series + 90-day TTL collection), and `cap_alerts`
 - [day4_weather_ops_mongo_advanced.js](./day4_weather_ops_mongo_advanced.js) ([Course Walkthrough](./day4_weather_ops_mongo_advanced_js_course_walkthrough.md)) — Seed script creating `2dsphere` geospatial indexes, `storm_polygons` (GeoJSON radar cells), ESR compound indexes (`idx_sonde_esr`), and upper-air aggregation summaries
 - [day4_mongo_50k_polymorphic_benchmark.js](./day4_mongo_50k_polymorphic_benchmark.js) ([Course Walkthrough](./day4_mongo_50k_polymorphic_benchmark_js_course_walkthrough.md)) — 50,000-document polymorphic telemetry generator across 4 sensor classes, Manual Bucket Pattern upsert engine, and `$unwind` hardware fault diagnostics
@@ -245,7 +246,7 @@ db.stations.findOne({ _id: 60901 }); // Coastal marine buoy with buoy_specs
 db.stations.findOne({ _id: 60419 }); // Agro-soil station with soil_depths_cm
 
 // Measure exact BSON binary size in bytes of a complex radiosonde launch document
-const sampleSonde = db.radiosonde_soundings.findOne({ station_id: 60390 });
+var sampleSonde = db.radiosonde_soundings.findOne({ station_id: 60390 });
 print("BSON Document Size (Bytes):", Object.bsonsize(sampleSonde));
 
 // 3. Inspect the active $jsonSchema validator on 'stations'
@@ -388,8 +389,8 @@ db.createCollection("synoptic_timeseries", {
   4. **Zero-Maintenance Retention (`expireAfterSeconds`):** A background TTL thread automatically drops expired buckets once `control.max.obs_time` passes the 90-day retention threshold—zero `DELETE` bloat!
 
 > [!TIP]
-> **Architectural Verification Tip (Peeking Inside `system.buckets.*`):**  
-> Run `db.system.buckets.synoptic_timeseries.findOne()` in `mongosh` to inspect the raw physical storage layout! Observing how 100 logical telemetry documents collapse into a single compressed columnar BSON bucket with `control.min` and `control.max` zone-map headers illustrates the direct architectural parallel to PostgreSQL BRIN indexes from Day 3.
+> **Architectural Verification Tip (Peeking Inside `system.buckets.*` & Comparing to PostgreSQL Partitioning):**  
+> Run `db.system.buckets.synoptic_timeseries.findOne()` in `mongosh` to inspect the raw physical storage layout (`control.min` and `control.max` zone-map headers). For the complete side-by-side comparison of **PostgreSQL `PARTITION BY RANGE` vs. MongoDB's 4 Partitioning Equivalents (`Native Time-Series`, `Manual Bucketing`, `Bucket TTL`, and `Range/Zone Sharding`)**, open **[POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md (Part II)](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md#part-ii-table-partitioning-in-postgresql-partition-by-range-vs-mongodbs-4-partitioning-equivalents)**.
 
 ---
 
@@ -756,8 +757,8 @@ db.sensor_payloads.aggregate([
 ]);
 
 // 4. Physical Storage Compression Audit
-const stdStats = db.sensor_payloads.stats();
-const tsStats = db.weather_stream.stats();
+var stdStats = db.sensor_payloads.stats();
+var tsStats = db.weather_stream.stats();
 print(`Standard BSON Storage Size       : ${(stdStats.storageSize / (1024 * 1024)).toFixed(2)} MB`);
 print(`Time-Series Buckets Storage Size : ${(tsStats.storageSize / (1024 * 1024)).toFixed(2)} MB`);
 print(`Columnar Compression Ratio       : ${(stdStats.storageSize / tsStats.storageSize).toFixed(2)}x savings!`);
@@ -781,6 +782,7 @@ Whereas PostgreSQL requires installing the external `PostGIS` extension (`CREATE
 - **`$geoNear` (Aggregation Stage) / `$nearSphere` (Query):** Finds all stations within `maxDistance` meters of a point on Earth's sphere, sorted automatically from nearest to farthest, and computes exact geodetic distance in meters or kilometers (`distanceMultiplier: 0.001`).
 - **`$geoWithin`:** Finds all `Point` stations located inside a severe weather `Polygon` (`$geometry`).
 - **`$geoIntersects`:** Finds all active storm polygons or warning zones that intersect a given airport point, highway, or flight corridor.
+- **Side-by-Side `PostGIS` vs. MongoDB `2dsphere` Rosetta Stone:** Open **[POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md (Part I)](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md#part-i-spatial-meteorology--postgresql-postgis-day-3-vs-mongodb-2dsphere-day-4)** for the 1-to-1 spatial operator translator (`ST_DWithin` vs. `$geoNear`, `ST_Covers` vs. `$geoWithin`, `ST_Intersects` vs. `$geoIntersects`).
 
 ---
 
@@ -863,7 +865,7 @@ db.stations.aggregate([
 ]);
 
 // 2. Find all stations inside the 'CELL-MED-20261006-A' radar storm footprint ($geoWithin)
-const medStorm = db.storm_polygons.findOne({ _id: "CELL-MED-20261006-A" });
+var medStorm = db.storm_polygons.findOne({ _id: "CELL-MED-20261006-A" });
 
 db.stations.find(
   {
@@ -889,7 +891,7 @@ db.storm_polygons.find(
 );
 
 // 4. Inspect ESR Compound Index execution plan on radiosonde_soundings
-const statsESR = db.radiosonde_soundings
+var statsESR = db.radiosonde_soundings
   .find({ station_id: 60390, cape_j_kg: { $gte: 200 } })
   .sort({ launch_time: -1 })
   .explain("executionStats");
@@ -1108,6 +1110,7 @@ When `mongos` receives a `find()` or `aggregate()` query:
 use weather_nosql;
 
 // 1. Insert critical severe weather alert with strict journaled majority Write Concern (CP)
+db.cap_alerts.deleteOne({ _id: "DZ-ONM-2026-10-06-003" });
 db.cap_alerts.insertOne(
   {
     _id: "DZ-ONM-2026-10-06-003",
@@ -1127,7 +1130,7 @@ db.cap_alerts.insertOne(
 );
 
 // 2. Inspect WiredTiger internal cache & ticket health
-const wtCache = db.serverStatus().wiredTiger.cache;
+var wtCache = db.serverStatus().wiredTiger.cache;
 print("Max Cache Configured (MB):", (wtCache["maximum bytes configured"] / 1024 / 1024).toFixed(1));
 print("Current Cache Used (MB)  :", (wtCache["bytes currently in the cache"] / 1024 / 1024).toFixed(2));
 print("Tracked Dirty Bytes (MB) :", (wtCache["tracked dirty bytes in the cache"] / 1024 / 1024).toFixed(2));

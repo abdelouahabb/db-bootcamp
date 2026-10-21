@@ -481,22 +481,100 @@ ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 
 ---
 
-### 5.3 Dynamic PL/pgSQL PostGIS Enablement & `GEOGRAPHY(Point, 4326)` Upgrade (`Lines 136–152`)
+### 5.3 Dynamic PL/pgSQL PostGIS Enablement, `alerts.storm_polygons` & Geodesic Fallback (`Lines 136–229`)
 
-#### Exact SQL Code (`Lines 136–152`)
+#### Exact SQL Code (`Lines 136–229`)
 
 ```sql
--- Automatically enable PostGIS and populate synoptic.stations.geog if PostGIS package is installed
+-- Automatically enable PostGIS (or WGS-84 geodesic fallback) and populate synoptic.stations.geog, geom & alerts.storm_polygons
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
         CREATE EXTENSION IF NOT EXISTS postgis;
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog GEOGRAPHY(Point, 4326);
-        UPDATE synoptic.stations SET geog = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::GEOGRAPHY;
+        ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom GEOMETRY(Point, 4326);
+        UPDATE synoptic.stations
+        SET geog = ST_SetSRID(ST_MakePoint(longitude::float8, latitude::float8), 4326)::GEOGRAPHY,
+            geom = ST_SetSRID(ST_MakePoint(longitude::float8, latitude::float8), 4326);
         CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);
-        RAISE NOTICE 'PostGIS enabled and synoptic.stations.geog populated!';
+        CREATE INDEX IF NOT EXISTS idx_stations_geom_gist ON synoptic.stations USING GIST (geom);
+
+        DROP TABLE IF EXISTS alerts.storm_polygons CASCADE;
+        CREATE TABLE alerts.storm_polygons (
+            storm_id             VARCHAR(30) PRIMARY KEY,
+            storm_name           TEXT        NOT NULL,
+            detected_at          TIMESTAMPTZ NOT NULL,
+            max_reflectivity_dbz NUMERIC(4,1),
+            vil_kg_m2            NUMERIC(4,1),
+            footprint            GEOGRAPHY(Polygon, 4326) NOT NULL
+        );
+        CREATE INDEX idx_storm_polygons_gist ON alerts.storm_polygons USING GIST (footprint);
+        INSERT INTO alerts.storm_polygons VALUES
+            ('CELL-MED-20261006-A', 'Mediterranean Convective System Alpha', '2026-10-06 00:00:00+00', 58.5, 42.0,
+             ST_GeogFromText('POLYGON((2.5 35.8, 7.2 35.8, 7.2 37.1, 2.5 37.1, 2.5 35.8))')),
+            ('CELL-SAH-20261006-B', 'Southern Erg Haboob Dust Front', '2026-10-06 12:00:00+00', 34.0, 8.5,
+             ST_GeogFromText('POLYGON((1.5 22.0, 6.5 22.0, 6.5 28.0, 1.5 28.0, 1.5 22.0))'));
+        RAISE NOTICE 'PostGIS enabled and synoptic.stations.geog + alerts.storm_polygons populated!';
     ELSE
-        RAISE NOTICE 'PostGIS extension not installed on host OS yet (skipping optional geog column).';
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry') THEN
+            CREATE DOMAIN public.geometry AS point;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geography') THEN
+            CREATE DOMAIN public.geography AS point;
+        END IF;
+        EXECUTE $fn$
+            CREATE OR REPLACE FUNCTION public.ST_MakePoint(lon double precision, lat double precision) RETURNS point AS $body$
+                SELECT point(lon, lat);
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_SetSRID(pt point, srid int) RETURNS point AS $body$
+                SELECT pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Distance(p1 point, p2 point) RETURNS double precision AS $body$
+                SELECT 2.0 * 6371008.8 * asin(sqrt(
+                    power(sin(radians((p2[1] - p1[1]) / 2.0)), 2) +
+                    cos(radians(p1[1])) * cos(radians(p2[1])) * power(sin(radians((p2[0] - p1[0]) / 2.0)), 2)
+                ));
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_DWithin(p1 point, p2 point, dist_m double precision) RETURNS boolean AS $body$
+                SELECT public.ST_Distance(p1, p2) <= dist_m;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_GeogFromText(wkt text) RETURNS polygon AS $body$
+                SELECT ('((' || regexp_replace(regexp_replace(trim(regexp_replace(wkt, '^POLYGON\s*\(\((.*)\)\)$', '\1', 'i')), '\s*,\s*', '),(', 'g'), '\s+', ',', 'g') || '))')::polygon;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Covers(poly polygon, pt point) RETURNS boolean AS $body$
+                SELECT poly @> pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Intersects(poly polygon, pt point) RETURNS boolean AS $body$
+                SELECT poly @> pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+            CREATE OR REPLACE FUNCTION public.ST_Within(pt point, poly polygon) RETURNS boolean AS $body$
+                SELECT poly @> pt;
+            $body$ LANGUAGE sql IMMUTABLE;
+        $fn$;
+        ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog public.geography;
+        ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom public.geometry;
+        UPDATE synoptic.stations
+        SET geog = public.ST_SetSRID(public.ST_MakePoint(longitude::float8, latitude::float8), 4326),
+            geom = public.ST_SetSRID(public.ST_MakePoint(longitude::float8, latitude::float8), 4326);
+        CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);
+        CREATE INDEX IF NOT EXISTS idx_stations_geom_gist ON synoptic.stations USING GIST (geom);
+
+        DROP TABLE IF EXISTS alerts.storm_polygons CASCADE;
+        CREATE TABLE alerts.storm_polygons (
+            storm_id             VARCHAR(30) PRIMARY KEY,
+            storm_name           TEXT        NOT NULL,
+            detected_at          TIMESTAMPTZ NOT NULL,
+            max_reflectivity_dbz NUMERIC(4,1),
+            vil_kg_m2            NUMERIC(4,1),
+            footprint            polygon     NOT NULL
+        );
+        CREATE INDEX idx_storm_polygons_gist ON alerts.storm_polygons USING GIST (footprint);
+        INSERT INTO alerts.storm_polygons VALUES
+            ('CELL-MED-20261006-A', 'Mediterranean Convective System Alpha', '2026-10-06 00:00:00+00', 58.5, 42.0,
+             public.ST_GeogFromText('POLYGON((2.5 35.8, 7.2 35.8, 7.2 37.1, 2.5 37.1, 2.5 35.8))')),
+            ('CELL-SAH-20261006-B', 'Southern Erg Haboob Dust Front', '2026-10-06 12:00:00+00', 34.0, 8.5,
+             public.ST_GeogFromText('POLYGON((1.5 22.0, 6.5 22.0, 6.5 28.0, 1.5 28.0, 1.5 22.0))'));
+        RAISE NOTICE 'WGS-84 geodesic fallback enabled and synoptic.stations.geog + alerts.storm_polygons populated!';
     END IF;
 END
 $$;
@@ -506,26 +584,20 @@ VACUUM ANALYZE;
 
 #### Line-by-Line Architectural Breakdown
 
-- **`DO $$ BEGIN ... END $$;` (`Lines 137–149`):**
+- **`DO $$ BEGIN ... END $$;` (`Lines 137–227`):**
   - Executes an anonymous PL/pgSQL procedural block inside the current transaction without persisting a named stored procedure. This allows conditional DDL execution (`IF EXISTS ... THEN ... ELSE ... END IF;`), which standard declarative SQL does not support natively.
 - **Inspecting `pg_available_extensions` (`Line 139`):**
   - Queries the system view `pg_available_extensions` (which scans PostgreSQL's OS `SHAREDIR/extension/*.control` directory, e.g., `/usr/share/postgresql/16/extension/postgis.control`).
-  - If the `postgresql-16-postgis-3` OS package is installed on the host, `SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'` returns true and the `THEN` branch executes. If running on a bare host without PostGIS binaries, it gracefully logs a `NOTICE` (`Line 146`) rather than aborting the script.
+  - If the `postgresql-16-postgis-3` OS package is installed on the host, `SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'` returns true and the native PostGIS branch (`Lines 140–164`) executes. Otherwise, the pure-SQL WGS-84 geodesic and polygon fallback branch (`Lines 165–225`) executes so every spatial query in Day 3 and [POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) works out-of-the-box on any PostgreSQL 16 installation.
 - **`CREATE EXTENSION IF NOT EXISTS postgis;` (`Line 140`):**
   - Loads the PostGIS C shared libraries (`postgis-3.so`, linked against `GEOS` and `PROJ`), registers the `geometry` and `geography` data types, populates the `spatial_ref_sys` EPSG catalog table, and installs 1,000+ spatial functions (`ST_*`).
-- **`ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog GEOGRAPHY(Point, 4326);` (`Line 141`):**
-  - Appends a spatial column named `geog` to `synoptic.stations` using the PostGIS **`GEOGRAPHY(Point, 4326)`** data type:
-    - **`GEOGRAPHY` vs. `GEOMETRY`:** While `GEOMETRY` treats coordinates as flat Cartesian $(X, Y)$ points on an Euclidean plane (returning meaningless "planar degrees" when using EPSG:4326), **`GEOGRAPHY`** models coordinates on the **WGS-84 oblate spheroid** (Earth equatorial radius $a = 6,378,137.0\text{ m}$, flattening $f = 1 / 298.257223563$). All distance (`ST_Distance`), buffer (`ST_Buffer`), and proximity (`ST_DWithin`) calculations on `GEOGRAPHY` are automatically computed in **exact meters** along geodesic great-circle/ellipsoidal paths.
-    - **`Point`:** Type modifier restricting the column to 0-dimensional point features (rejecting polygons or linestrings).
-    - **`4326`:** Spatial Reference System Identifier (**SRID 4326** = EPSG:4326, the World Geodetic System 1984 / GPS latitude-longitude standard).
-- **`UPDATE synoptic.stations SET geog = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::GEOGRAPHY;` (`Line 142`):**
-  - **`ST_MakePoint(longitude, latitude)` — Critical Coordinate Order Rule:** PostGIS and OGC spatial standards strictly follow Cartesian **`(X, Y)` = `(longitude, latitude)`** order, **NOT** `(latitude, longitude)`. Passing `(latitude, longitude)` flips North Africa into the Indian Ocean / Arabian Peninsula! Here, `longitude` is passed first ($X$) and `latitude` second ($Y$).
-  - **`ST_SetSRID(..., 4326)`:** Tags the constructed `Point` geometry with SRID `4326` (WGS-84).
-  - **`::GEOGRAPHY`:** Casts the SRID-4326 `GEOMETRY(Point, 4326)` object into a spheroidal `GEOGRAPHY(Point, 4326)` object and stores it in `synoptic.stations.geog`.
-- **`CREATE INDEX IF NOT EXISTS idx_stations_geog_gist ON synoptic.stations USING GIST (geog);` (`Line 143`):**
-  - Creates a **Generalized Search Tree (`GiST`)** spatial index on `geog`.
-  - A 1D B-Tree cannot accelerate 2D/3D spatial proximity searches because sorting by longitude destroys latitude locality. PostGIS implements an **R-Tree on GiST** that hierarchically groups 3D geocentric bounding boxes (`Minimum Bounding Rectangles / Boxes`) of spatial features. When a query runs `WHERE ST_DWithin(geog, target_point, radius_meters)`, the GiST index prunes non-overlapping bounding boxes in logarithmic time before evaluating exact spheroidal trigonometry on the surviving candidates.
-- **`VACUUM ANALYZE;` (`Line 151`):**
+- **`ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog GEOGRAPHY(Point, 4326);` & `geom GEOMETRY(Point, 4326);` (`Lines 141–147`):**
+  - Appends both `geog` (`GEOGRAPHY(Point, 4326)`) and `geom` (`GEOMETRY(Point, 4326)`) to `synoptic.stations`, populates them via `ST_SetSRID(ST_MakePoint(longitude::float8, latitude::float8), 4326)` (**always `(X, Y) = (longitude, latitude)`!**), and creates `GiST` spatial indexes (`idx_stations_geog_gist` and `idx_stations_geom_gist`).
+- **`CREATE TABLE alerts.storm_polygons` & `idx_storm_polygons_gist` (`Lines 149–163` and `Lines 209–223`):**
+  - Creates `alerts.storm_polygons` with a `footprint` polygon column indexed via `USING GIST (footprint)` and seeds the two active radar storm cells (`CELL-MED-20261006-A` and `CELL-SAH-20261006-B`, matching Day 4's `db.storm_polygons` collection) via `ST_GeogFromText('POLYGON((...))')` so attendees can execute polygon containment (`ST_Covers`) and reverse point-in-polygon intersection (`ST_Intersects`) queries.
+- **Pure-SQL WGS-84 Geodesic & Polygon Fallback (`Lines 166–207`):**
+  - When the host OS does not have `postgresql-16-postgis-3` installed, defines `public.geography` and `public.geometry` domains over PostgreSQL's native `point` type and creates immutable SQL functions for `ST_MakePoint`, `ST_SetSRID`, `ST_Distance` (exact WGS-84 Haversine great-circle distance in meters using mean Earth radius $R = 6,371,008.8\text{ m}$), `ST_DWithin`, `ST_GeogFromText` (converting closed-ring WKT `POLYGON((lon lat, ...))` to PostgreSQL's native `polygon` type), `ST_Covers`, `ST_Intersects`, and `ST_Within`.
+- **`VACUUM ANALYZE;` (`Line 229`):**
   - Runs across every table and materialized view in the `weather_ops` database to accomplish two essential tasks immediately after bulk loading and indexing:
     1. **`VACUUM`:** Sets the **Visibility Map (`VM`)** all-visible bits on every newly populated 8 KB heap page of `synoptic.observations_part` and `synoptic.observations`. Without an up-to-date Visibility Map, `idx_obs_station_time_covering` cannot execute a zero-heap-fetch `Index Only Scan` (it would still have to visit the heap page to check tuple MVCC `xmin`/`xmax` visibility).
     2. **`ANALYZE`:** Samples every table and child partition to populate `pg_statistic` (`pg_stats`) with accurate row counts (`reltuples`), page counts (`relpages`), `most_common_vals` (such as `'VALID'` = 96% in `qc_flag`), and physical `correlation` (`obs_time ≈ 1.0`), ensuring the cost-based optimizer selects our partial, covering, BRIN, and GIN indexes immediately.
@@ -559,12 +631,12 @@ CREATE INDEX
 DROP MATERIALIZED VIEW
 SELECT 80
 CREATE UNIQUE INDEX
-psql:day3_weather_advanced_pg.sql:149: NOTICE:  PostGIS enabled and synoptic.stations.geog populated!
+psql:day3_weather_advanced_pg.sql:227: NOTICE:  PostGIS enabled and synoptic.stations.geog + alerts.storm_polygons populated!
 DO
 VACUUM
 ```
 
-*(Note: If the host OS does not yet have the `postgresql-16-postgis-3` package installed, Line 149 outputs `NOTICE: PostGIS extension not installed on host OS yet (skipping optional geog column).`)*
+*(Note: If the host OS does not yet have the `postgresql-16-postgis-3` package installed, Line 227 outputs `NOTICE: WGS-84 geodesic fallback enabled and synoptic.stations.geog + alerts.storm_polygons populated!`)*
 
 ### Quick Verification Queries
 

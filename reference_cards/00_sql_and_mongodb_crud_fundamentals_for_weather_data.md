@@ -1,17 +1,18 @@
 # Reference Card 00: SQL & MongoDB CRUD Fundamentals Hub & Cross-Engine Rosetta Stone
 
-> **Navigation:** [Bootcamp README](../README.md) | [SQL Basics & CRUD Guide](../SQL_BASICS_CRUD_GUIDE.md) | [MongoDB NoSQL Basics Guide](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards Index](./README.md)
+> **Navigation:** [Bootcamp README](../README.md) | [SQL Basics & CRUD Guide](../SQL_BASICS_CRUD_GUIDE.md) | [MongoDB NoSQL Basics Guide](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [PostGIS vs MongoDB & Partitioning Cheatsheet](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) | [Interactive Portal](../bootcamp_portal.html) | [Reference Cards Index](./README.md)
 
 ---
 
-## 1. Dedicated Root-Level Guides for SQL Basics & MongoDB NoSQL Basics
+## 1. Dedicated Root-Level Guides for SQL Basics, MongoDB NoSQL Basics & PostGIS/Partitioning
 
-To give attendees two standalone, single-purpose hands-on playbooks without mixing SQL and NoSQL syntax in one document, the complete runnable CRUD tutorials are organized into two dedicated root-level guides:
+To give attendees standalone, single-purpose hands-on playbooks without mixing SQL and NoSQL syntax in one document, the complete runnable CRUD and cross-engine comparison tutorials are organized into three dedicated root-level guides:
 
 | Dedicated Guide (Root Directory) | Engines & Databases Covered | Core Operations Covered |
 | :--- | :--- | :--- |
 | **1. [`SQL_BASICS_CRUD_GUIDE.md`](../SQL_BASICS_CRUD_GUIDE.md)**<br/>*(Dedicated SQL Basics Playbook — Days 1, 2 & 3)* | • **Day 1 SQLite:** `day1/weather_ops.db` (`stations`, `observations`, `forecasts`, `weather_alerts`) & `day1/weather_telemetry.db` (`raw_telemetry`, `250,000` rows)<br/>• **Days 2–3 PostgreSQL:** `weather_ops` (`synoptic.*`, `nwp.*`, `alerts.*`) & `weather_ops_db` (`5,000,000` rows) | • CLI inspection (`.tables`, `PRAGMA table_info`, `\dt+`, `\d+`)<br/>• `SELECT`, projections, math aliases, `DISTINCT`<br/>• `WHERE` (`=`, `!=`, `>=`, `BETWEEN`, `IN`, `LIKE`/`ILIKE`, `AND`/`OR`, `IS NULL`)<br/>• `ORDER BY`, `LIMIT`, `OFFSET`<br/>• `COUNT`, `MIN`, `MAX`, `AVG`, `SUM`, `GROUP BY`, `HAVING`, `INNER JOIN`, `LEFT JOIN`<br/>• `INSERT INTO`, `ON CONFLICT DO UPDATE` (Upsert), `UPDATE`, `DELETE`, `ON DELETE CASCADE`, and PostgreSQL `RETURNING` |
 | **2. [`MONGODB_NOSQL_BASICS_CRUD_GUIDE.md`](../MONGODB_NOSQL_BASICS_CRUD_GUIDE.md)**<br/>*(Dedicated MongoDB NoSQL Basics Playbook — Day 4)* | • **Day 4 Operational MongoDB:** `weather_nosql` (`stations`, `synoptic_timeseries`, `radiosonde_soundings`, `cap_alerts`, `storm_polygons`)<br/>• **Day 4 50k Benchmark MongoDB:** `weather_telemetry_db` (`sensor_payloads`, `weather_stream`, `hourly_sensor_buckets`) | • `mongosh` navigation (`show dbs`, `use`, `db.getName()`, `show collections`, `countDocuments()`)<br/>• `findOne()`, `find()`, field projections (`1` / `0`), `.sort()`, `.limit()`, `.skip()`<br/>• Query operators (`$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$or`, `$exists`, `$elemMatch`, nested `"parent.child"` dot notation)<br/>• `insertOne()` (with `$jsonSchema` compliance) & `insertMany()`<br/>• `updateOne()` & `updateMany()` (`$set`, `$inc`, `$addToSet`, `$push`, `$pull`, `{ upsert: true }`)<br/>• `deleteOne()` & `deleteMany()`<br/>• `aggregate()` pipelines (`$match`, `$group`, `$sort`, `$unwind`, `$lookup`) |
+| **3. [`POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md`](../POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md)**<br/>*(Dedicated Geospatial & Partitioning Rosetta Stone — Days 3 & 4)* | • **Day 3 PostgreSQL:** `weather_ops` (`synoptic.stations.geog`, `alerts.storm_polygons`, `synoptic.observations_part`)<br/>• **Day 4 MongoDB:** `weather_nosql` (`db.stations.location`, `db.storm_polygons.footprint`, `db.synoptic_timeseries`) & `weather_telemetry_db` (`db.hourly_sensor_buckets`) | • **Part I (`PostGIS` vs. `2dsphere`):** `GiST` R-Tree vs. Google S2 B-Tree, `ST_DWithin` vs. `$geoNear`, `ST_Covers` vs. `$geoWithin`, `ST_Intersects` vs. `$geoIntersects`<br/>• **Part II (`PARTITION BY RANGE` vs. MongoDB 4 Partitioning Equivalents):** Native Time-Series (`system.buckets.*`), `control.min`/`control.max` Zone Maps, Bucket TTL (`expireAfterSeconds`), Manual Bucket Pattern, and Range/Zone Sharding (`sh.shardCollection`) |
 
 ---
 

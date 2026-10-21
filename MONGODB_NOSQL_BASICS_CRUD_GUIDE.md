@@ -1,6 +1,6 @@
 # Dedicated MongoDB NoSQL Basics & CRUD Guide (`find`, `insertOne`, `updateOne`, `deleteOne`, `aggregate`)
 
-> **Navigation:** [Bootcamp README](./README.md) | [SQL Basics & CRUD Guide](./SQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 4 Master Coursebook](./day4/day4_master_coursebook.md) | [Day 4 MongoDB Cheatsheet](./day4/day4_mongodb_complete_cheatsheet.md)
+> **Navigation:** [Bootcamp README](./README.md) | [SQL Basics & CRUD Guide](./SQL_BASICS_CRUD_GUIDE.md) | [PostGIS vs MongoDB & Partitioning Cheatsheet](./POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 4 Master Coursebook](./day4/day4_master_coursebook.md) | [Day 4 MongoDB Cheatsheet](./day4/day4_mongodb_complete_cheatsheet.md)
 
 ---
 
@@ -516,4 +516,4 @@ db.sensor_payloads.find(
 
 ---
 
-> **Navigation:** [Bootcamp README](./README.md) | [SQL Basics & CRUD Guide](./SQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 4 Master Coursebook](./day4/day4_master_coursebook.md) | [Day 4 MongoDB Cheatsheet](./day4/day4_mongodb_complete_cheatsheet.md)
+> **Navigation:** [Bootcamp README](./README.md) | [SQL Basics & CRUD Guide](./SQL_BASICS_CRUD_GUIDE.md) | [PostGIS vs MongoDB & Partitioning Cheatsheet](./POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 4 Master Coursebook](./day4/day4_master_coursebook.md) | [Day 4 MongoDB Cheatsheet](./day4/day4_mongodb_complete_cheatsheet.md)

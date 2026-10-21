@@ -1,6 +1,6 @@
 # Dedicated SQL Basics & CRUD Guide (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `WHERE`, `GROUP BY`, `JOIN`)
 
-> **Navigation:** [Bootcamp README](./README.md) | [MongoDB NoSQL Basics Guide](./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 1 (SQLite)](./day1/day1_master_coursebook.md) | [Day 2 (PostgreSQL)](./day2/day2_master_coursebook.md) | [Day 3 (Advanced PostgreSQL)](./day3/day3_master_coursebook.md)
+> **Navigation:** [Bootcamp README](./README.md) | [MongoDB NoSQL Basics Guide](./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [PostGIS vs MongoDB & Partitioning Cheatsheet](./POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 1 (SQLite)](./day1/day1_master_coursebook.md) | [Day 2 (PostgreSQL)](./day2/day2_master_coursebook.md) | [Day 3 (Advanced PostgreSQL)](./day3/day3_master_coursebook.md)
 
 ---
 
@@ -667,4 +667,4 @@ SELECT COUNT(*) AS remaining_60580_obs FROM synoptic.observations WHERE station_
 
 ---
 
-> **Navigation:** [Bootcamp README](./README.md) | [MongoDB NoSQL Basics Guide](./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 1 (SQLite)](./day1/day1_master_coursebook.md) | [Day 2 (PostgreSQL)](./day2/day2_master_coursebook.md) | [Day 3 (Advanced PostgreSQL)](./day3/day3_master_coursebook.md)
+> **Navigation:** [Bootcamp README](./README.md) | [MongoDB NoSQL Basics Guide](./MONGODB_NOSQL_BASICS_CRUD_GUIDE.md) | [PostGIS vs MongoDB & Partitioning Cheatsheet](./POSTGIS_VS_MONGODB_GEOSPATIAL_AND_PARTITIONING_CHEATSHEET.md) | [Interactive Portal](./bootcamp_portal.html) | [Day 1 (SQLite)](./day1/day1_master_coursebook.md) | [Day 2 (PostgreSQL)](./day2/day2_master_coursebook.md) | [Day 3 (Advanced PostgreSQL)](./day3/day3_master_coursebook.md)

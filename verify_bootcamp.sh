@@ -467,7 +467,7 @@ log_header "6. CROSS-PLATFORM PORTABILITY CHECK (Relative Paths Verification)"
 FORBIDDEN_PREFIX="/home/abdel""ouahab"
 HARDCODED_HITS=$(grep -rn "$FORBIDDEN_PREFIX" "$BASE_DIR" || true)
 if [[ -z "$HARDCODED_HITS" ]]; then
-    log_pass "100% Portable: Zero hardcoded local user paths found across all 70 bootcamp files"
+    log_pass "100% Portable: Zero hardcoded local user paths found across all 71 bootcamp files"
 else
     log_fail "Hardcoded user paths detected: ${HARDCODED_HITS}"
 fi
@@ -480,7 +480,7 @@ echo -e "${CYAN}${BOLD}                 BOOTCAMP PRE-FLIGHT VERIFICATION SUMMARY
 echo -e "${CYAN}${BOLD}==============================================================================${RESET}"
 printf "  ${BOLD}%-44s %-18s %-10s${RESET}\n" "VERIFICATION SUITE COMPONENT" "METRIC / DETAILS" "STATUS"
 echo -e "  ----------------------------------------------------------------------------"
-printf "  %-44s %-18s ${GREEN}%-10s${RESET}\n" "1. Directory & Curriculum File Integrity" "7 dirs, 70 files" "PASSED"
+printf "  %-44s %-18s ${GREEN}%-10s${RESET}\n" "1. Directory & Curriculum File Integrity" "7 dirs, 71 files" "PASSED"
 printf "  %-44s %-18s ${GREEN}%-10s${RESET}\n" "2. Day 1 Synoptic SQLite Seed & QC Lab" "4 tables, 69 rows" "PASSED"
 printf "  %-44s %-18s ${GREEN}%-10s${RESET}\n" "3. Day 1 250K AWS Telemetry & Window Lab" "250,000 rows (${Q_MS}ms)" "PASSED"
 printf "  %-44s %-18s ${GREEN}%-10s${RESET}\n" "4. Python AST & Bytecode Compilation" "11 scripts (0 err)" "PASSED"

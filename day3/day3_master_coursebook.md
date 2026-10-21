@@ -391,7 +391,7 @@ Weather observations arrive in temporal order. Because rows are appended sequent
 #### 2.2.1 Partial Indexes (`WHERE ...`)
 Suppose $96\%$ of your observations have `qc_flag = 'VALID'`, and your quality-control dashboard frequently queries `WHERE qc_flag != 'VALID'`. Why waste RAM indexing the $96\%$ valid rows?
 ```sql
-CREATE INDEX idx_obs_suspect_only ON synoptic.observations (station_id, obs_time)
+CREATE INDEX IF NOT EXISTS idx_obs_suspect_only ON synoptic.observations (station_id, obs_time)
 WHERE qc_flag != 'VALID';
 ```
 Only rows matching the `WHERE` predicate are entered into the B-Tree—reducing index size by $96\%$!
@@ -401,7 +401,7 @@ Recall from Day 2 that a normal `Index Scan` reads the B-Tree index and then jum
 By appending `INCLUDE (temp_c, pressure_hpa, precip_1h_mm)` to the index leaf pages (and keeping the table vacuumed so the **Visibility Map** is all-visible), PostgreSQL answers the entire query directly from the index via an **`Index Only Scan` with `Heap Fetches: 0`**!
 
 ```sql
-CREATE INDEX idx_obs_station_time_covering
+CREATE INDEX IF NOT EXISTS idx_obs_station_time_covering
 ON synoptic.observations (station_id, obs_time)
 INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 ```
@@ -475,17 +475,18 @@ WHERE is_active = TRUE
       ST_SetSRID(ST_MakePoint(3.9000, 36.9500), 4326)::geography, 
       40000 -- Radius in meters (40 km)
   )
-ORDER BY distance_km ASC;
+ORDER BY distance_km ASC, station_id ASC;
 ```
 
 #### 2.3.2 Verified Terminal Output:
 ```text
-┌────────────┬─────────────────────────┬─────────────┬──────────┬───────────┬─────────────┐
-│ station_id │ station_name            │ elevation_m │ latitude │ longitude │ distance_km │
-├────────────┼─────────────────────────┼─────────────┼──────────┼───────────┼─────────────┤
-│ AWS-003    │ Dellys Cape Lighthouse  │ 120.0       │ 36.9172  │ 3.9130    │ 3.84        │
-│ AWS-004    │ Tizi Ouzou Valley       │ 210.0       │ 36.7118  │ 4.0459    │ 29.58       │
-└────────────┴─────────────────────────┴─────────────┴──────────┴───────────┴─────────────┘
+ station_id |       station_name       | elevation_m | latitude | longitude | distance_km 
+------------+--------------------------+-------------+----------+-----------+-------------
+ AWS-003    | Dellys Cape Lighthouse   |          85 |  36.9172 |     3.913 |        3.83
+ AWS-027    | AWS Regional Station 027 |      1134.3 |  36.8916 |     3.816 |        9.90
+ AWS-004    | Tizi Ouzou Valley        |         189 |  36.7118 |    4.0459 |       29.50
+ AWS-047    | AWS Regional Station 047 |      1126.7 |  36.9473 |    4.2596 |       31.96
+(4 rows)
 ```
 
 ---
@@ -542,21 +543,22 @@ CREATE INDEX idx_oct_brin ON telemetry_y2026m10 USING BRIN (recorded_at) WITH (p
 -- 3. Compare physical index sizes on disk
 SELECT 
     relname AS index_name,
-    pg_size_pretty(pg_relation_size(c.oid)) AS index_size
+    pg_size_pretty(pg_relation_size(c.oid)) AS index_size,
+    pg_relation_size(c.oid) AS exact_bytes
 FROM pg_class c
-WHERE relname IN ('idx_oct_btree', 'idx_oct_brin');
+WHERE relname IN ('idx_oct_btree', 'idx_oct_brin')
+ORDER BY pg_relation_size(c.oid) DESC;
 ```
 
 #### 2.4.3 Verified Terminal Output:
 ```text
-┌───────────────┬────────────┐
-│ index_name    │ index_size │
-├───────────────┼────────────┤
-│ idx_oct_btree │ 28 MB      │
-│ idx_oct_brin  │ 32 kB      │
-└───────────────┴────────────┘
+  index_name   | index_size | exact_bytes 
+---------------+------------+-------------
+ idx_oct_btree | 27 MB      |    28672000
+ idx_oct_brin  | 24 kB      |       24576
+(2 rows)
 ```
-*Key Takeaway:* The BRIN index is **$900\times$ smaller** than the B-Tree ($32\text{ KB}$ vs. $28\text{ MB}$) on a single month, staying pinned in CPU cache while skipping 64-page blocks!
+*Key Takeaway:* The BRIN index is **$1,166\times$ smaller** than the B-Tree ($24\text{ KB}$ vs. $27\text{ MB}$) on a single month, staying pinned in CPU cache while skipping 64-page blocks!
 
 #### 2.4.4 Lab 2C: PostGIS Radial Distance & Historical Temporal Joins (`weather_ops_db` database)
 Find all weather stations within $50\text{ km}$ of the Boumerdes coastal zone (`3.4772E, 36.7664N`) and join them with their October 2026 average temperature and peak wind gust from the 5M-row partitioned table:
@@ -591,18 +593,22 @@ JOIN raw_telemetry_partitioned t
 WHERE t.recorded_at >= '2026-10-01 00:00:00+00' 
   AND t.recorded_at <  '2026-11-01 00:00:00+00'
 GROUP BY ns.station_id, ns.station_name, ns.dist_km
-ORDER BY ns.dist_km ASC;
+ORDER BY ns.dist_km ASC, ns.station_id ASC;
 ```
 
 #### 2.4.5 Verified Terminal Output:
 ```text
-┌────────────┬─────────────────────────┬─────────┬───────────────┬───────────────┐
-│ station_id │ station_name            │ dist_km │ oct_mean_temp │ oct_peak_gust │
-├────────────┼─────────────────────────┼─────────┼───────────────┼───────────────┤
-│ AWS-002    │ Boumerdes Coastal Point │ 0.00    │ 16.42         │ 21.84         │
-│ AWS-001    │ Algiers Port Marine     │ 37.45   │ 16.51         │ 21.90         │
-│ AWS-003    │ Dellys Cape Lighthouse  │ 42.11   │ 16.38         │ 21.75         │
-└────────────┴─────────────────────────┴─────────┴───────────────┴───────────────┘
+ station_id |       station_name       | dist_km | oct_mean_temp | oct_peak_gust 
+------------+--------------------------+---------+---------------+---------------
+ AWS-002    | Boumerdes Coastal Point  |    0.00 |         15.48 |            22
+ AWS-048    | AWS Regional Station 048 |   16.66 |         15.37 |            22
+ AWS-050    | AWS Regional Station 050 |   19.15 |         15.31 |            22
+ AWS-027    | AWS Regional Station 027 |   33.21 |         15.46 |            22
+ AWS-001    | Algiers Port Marine      |   37.30 |         15.37 |            22
+ AWS-003    | Dellys Cape Lighthouse   |   42.25 |         15.48 |            22
+ AWS-022    | AWS Regional Station 022 |   42.25 |         15.50 |            22
+ AWS-029    | AWS Regional Station 029 |   42.63 |         15.39 |            22
+(8 rows)
 ```
 
 ---

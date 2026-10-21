@@ -42,11 +42,11 @@ flowchart TD
 // Usage: mongosh "mongodb://localhost:27017/weather_telemetry_db" day4_mongo_50k_polymorphic_benchmark.js
 // ============================================================================
 
-const DB_NAME = "weather_telemetry_db";
-const TOTAL_DOCUMENTS = 50000;
-const BATCH_SIZE = 5000;
+var DB_NAME = "weather_telemetry_db";
+var TOTAL_DOCUMENTS = 50000;
+var BATCH_SIZE = 5000;
 
-const dbTarget = db.getSiblingDB(DB_NAME);
+var dbTarget = db.getSiblingDB(DB_NAME);
 
 print(`[*] Initializing database: ${DB_NAME}...`);
 
@@ -93,7 +93,7 @@ dbTarget.sensor_payloads.createIndex({ "hardware_faults": 1 });
 ### 2.2 Station Topology, Fault Catalog & 4-Class Polymorphic Payload Synthesis (Lines 36–128)
 
 ```javascript
-const stationList = [];
+var stationList = [];
 for (let i = 1; i <= 50; i++) {
   stationList.push({
     id: "AWS-" + String(i).padStart(3, "0"),
@@ -101,7 +101,7 @@ for (let i = 1; i <= 50; i++) {
   });
 }
 
-const faultCatalog = [
+var faultCatalog = [
   "ERR_BATTERY_UNDERVOLT",
   "ERR_HEATER_CIRCUIT_OPEN",
   "WARN_OPTICAL_LENS_DUST",
@@ -109,13 +109,13 @@ const faultCatalog = [
   "WARN_SOLAR_REGULATOR_DROP"
 ];
 
-const baseTime = new Date("2026-10-01T00:00:00Z").getTime();
-let batchStandard = [];
-let batchTimeSeries = [];
-let totalInserted = 0;
+var baseTime = new Date("2026-10-01T00:00:00Z").getTime();
+var batchStandard = [];
+var batchTimeSeries = [];
+var totalInserted = 0;
 
 print(`[*] Generating ${TOTAL_DOCUMENTS.toLocaleString()} polymorphic telemetry documents across 4 sensor classes...`);
-const startTime = Date.now();
+var startTime = Date.now();
 
 for (let i = 1; i <= TOTAL_DOCUMENTS; i++) {
   const station = stationList[Math.floor(Math.random() * stationList.length)];
@@ -184,7 +184,7 @@ for (let i = 1; i <= TOTAL_DOCUMENTS; i++) {
   }
 
   batchStandard.push(payload);
-  batchTimeSeries.push(payload);
+  batchTimeSeries.push({ ...payload });
 ```
 
 #### 2.2.1 Deep-Dive Breakdown of the 4 Polymorphic Instrument Payloads
@@ -229,7 +229,7 @@ if (batchStandard.length > 0) {
   totalInserted += batchStandard.length;
 }
 
-const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(2);
+var elapsedSec = ((Date.now() - startTime) / 1000).toFixed(2);
 print(`[+] Complete! ${totalInserted.toLocaleString()} documents ingested in ${elapsedSec}s.`);
 ```
 
@@ -251,7 +251,7 @@ Calling `insertOne()` 50,000 times inside a loop forces 50,000 synchronous TCP r
 // 2. Manual Bucket Pattern Demonstration (Upserting High-Frequency Readings)
 // ============================================================================
 print("\n[*] Demonstrating Manual Bucket Pattern Upsert (hourly_sensor_buckets)...");
-const sampleReadings = [
+var sampleReadings = [
   { sec: 0, w: 4.1, temp: 18.2 },
   { sec: 1, w: 4.6, temp: 18.2 },
   { sec: 2, w: 5.2, temp: 18.3 },
@@ -330,7 +330,7 @@ Every single 1-second sensor reading (`r`) executes the exact same idempotent `u
 // 3. Multi-Stage Aggregation: Road Safety & Reduced Grip Analytics
 // ============================================================================
 print("\n[*] Running Road Surface Radar Safety Aggregation Pipeline...");
-const roadSafetyReport = dbTarget.sensor_payloads.aggregate([
+var roadSafetyReport = dbTarget.sensor_payloads.aggregate([
   {
     $match: {
       "metadata.sensor_type": "ROAD_SURFACE_RADAR",
@@ -386,7 +386,7 @@ printjson(roadSafetyReport);
 // 4. Multi-Stage Aggregation: $unwind Hardware Fault Diagnostics
 // ============================================================================
 print("\n[*] Running $unwind Hardware Fault Diagnostics Pipeline across 50,000 payloads...");
-const faultDiagnostics = dbTarget.sensor_payloads.aggregate([
+var faultDiagnostics = dbTarget.sensor_payloads.aggregate([
   { $match: { hardware_faults: { $exists: true, $not: { $size: 0 } } } },
   { $unwind: "$hardware_faults" },
   {
@@ -442,8 +442,8 @@ printjson(faultDiagnostics);
 // 5. Storage Compression Audit (Standard BSON vs. Native Columnar Buckets)
 // ============================================================================
 print("\n================== STORAGE METRICS COMPARISON ==================");
-const stdStats = dbTarget.sensor_payloads.stats();
-const tsStats = dbTarget.weather_stream.stats();
+var stdStats = dbTarget.sensor_payloads.stats();
+var tsStats = dbTarget.weather_stream.stats();
 
 print(`Standard Collection ("sensor_payloads"):`);
 print(`  • Document Count  : ${stdStats.count}`);

@@ -253,25 +253,25 @@ FROM synoptic.observations;
 -- ============================================================================
 
 -- 1. BRIN Index (Block Range Index) on chronological time-series column
-CREATE INDEX idx_obs_brin_time
+CREATE INDEX IF NOT EXISTS idx_obs_brin_time
 ON synoptic.observations USING BRIN (obs_time) WITH (pages_per_range = 8);
 
 -- 2. Standard B-Tree Index on obs_time (to compare disk size against BRIN!)
-CREATE INDEX idx_obs_btree_time
+CREATE INDEX IF NOT EXISTS idx_obs_btree_time
 ON synoptic.observations USING BTREE (obs_time);
 
 -- 3. Partial Index: Only index anomalous ('SUSPECT' or 'ERRONEOUS') observations (~4% of rows)
-CREATE INDEX idx_obs_suspect_only
+CREATE INDEX IF NOT EXISTS idx_obs_suspect_only
 ON synoptic.observations (station_id, obs_time)
 WHERE qc_flag != 'VALID';
 
 -- 4. Covering Index (INCLUDE) for Index-Only Scans on station temperature queries
-CREATE INDEX idx_obs_station_time_covering
+CREATE INDEX IF NOT EXISTS idx_obs_station_time_covering
 ON synoptic.observations (station_id, obs_time)
 INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 
 -- 5. GIN Index on JSONB sensor_payload for fast NoSQL-style containment queries (@>)
-CREATE INDEX idx_obs_part_sensor_gin
+CREATE INDEX IF NOT EXISTS idx_obs_part_sensor_gin
 ON synoptic.observations_part USING GIN (sensor_payload);
 ```
 
@@ -294,7 +294,7 @@ ON synoptic.observations_part USING GIN (sensor_payload);
 #### 4.3.1 `idx_obs_brin_time` — Block Range Index (`Lines 86–88`)
 
 ```sql
-CREATE INDEX idx_obs_brin_time
+CREATE INDEX IF NOT EXISTS idx_obs_brin_time
 ON synoptic.observations USING BRIN (obs_time) WITH (pages_per_range = 8);
 ```
 
@@ -314,7 +314,7 @@ ON synoptic.observations USING BRIN (obs_time) WITH (pages_per_range = 8);
 #### 4.3.2 `idx_obs_btree_time` — Standard B-Tree Baseline (`Lines 90–92`)
 
 ```sql
-CREATE INDEX idx_obs_btree_time
+CREATE INDEX IF NOT EXISTS idx_obs_btree_time
 ON synoptic.observations USING BTREE (obs_time);
 ```
 
@@ -328,7 +328,7 @@ ON synoptic.observations USING BTREE (obs_time);
 #### 4.3.3 `idx_obs_suspect_only` — Partial (Filtered) B-Tree Index (`Lines 94–97`)
 
 ```sql
-CREATE INDEX idx_obs_suspect_only
+CREATE INDEX IF NOT EXISTS idx_obs_suspect_only
 ON synoptic.observations (station_id, obs_time)
 WHERE qc_flag != 'VALID';
 ```
@@ -344,7 +344,7 @@ WHERE qc_flag != 'VALID';
 #### 4.3.4 `idx_obs_station_time_covering` — Covering Index with `INCLUDE` Payload (`Lines 99–102`)
 
 ```sql
-CREATE INDEX idx_obs_station_time_covering
+CREATE INDEX IF NOT EXISTS idx_obs_station_time_covering
 ON synoptic.observations (station_id, obs_time)
 INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 ```
@@ -375,7 +375,7 @@ INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 #### 4.3.5 `idx_obs_part_sensor_gin` — Generalized Inverted Index on Partitioned `JSONB` (`Lines 104–106`)
 
 ```sql
-CREATE INDEX idx_obs_part_sensor_gin
+CREATE INDEX IF NOT EXISTS idx_obs_part_sensor_gin
 ON synoptic.observations_part USING GIN (sensor_payload);
 ```
 
@@ -481,15 +481,21 @@ ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 
 ---
 
-### 5.3 Dynamic PL/pgSQL PostGIS Enablement, `alerts.storm_polygons` & Geodesic Fallback (`Lines 136–229`)
+### 5.3 Dynamic PL/pgSQL PostGIS Enablement, `alerts.storm_polygons` & Geodesic Fallback (`Lines 136–235`)
 
-#### 5.3.1 Exact SQL Code (`Lines 136–229`)
+#### 5.3.1 Exact SQL Code (`Lines 136–235`)
 
 ```sql
 -- Automatically enable PostGIS (or WGS-84 geodesic fallback) and populate synoptic.stations.geog, geom & alerts.storm_polygons
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry' AND typtype = 'd') THEN
+            DROP DOMAIN public.geometry CASCADE;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geography' AND typtype = 'd') THEN
+            DROP DOMAIN public.geography CASCADE;
+        END IF;
         CREATE EXTENSION IF NOT EXISTS postgis;
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog GEOGRAPHY(Point, 4326);
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom GEOMETRY(Point, 4326);
@@ -622,21 +628,21 @@ CREATE TABLE
 CREATE TABLE
 CREATE TABLE
 CREATE TABLE
-INSERT 0 4320
+INSERT 0 18432
 CREATE INDEX
 CREATE INDEX
 CREATE INDEX
 CREATE INDEX
 CREATE INDEX
 DROP MATERIALIZED VIEW
-SELECT 80
-CREATE UNIQUE INDEX
-psql:day3_weather_advanced_pg.sql:227: NOTICE:  PostGIS enabled and synoptic.stations.geog + alerts.storm_polygons populated!
+SELECT 2304
+CREATE INDEX
+psql:day3_weather_advanced_pg.sql:233: NOTICE:  PostGIS enabled and synoptic.stations.geog + alerts.storm_polygons populated!
 DO
 VACUUM
 ```
 
-*(Note: If the host OS does not yet have the `postgresql-16-postgis-3` package installed, Line 227 outputs `NOTICE: WGS-84 geodesic fallback enabled and synoptic.stations.geog + alerts.storm_polygons populated!`)*
+*(Note: If the host OS does not yet have the `postgresql-16-postgis-3` package installed, Line 233 outputs `NOTICE: WGS-84 geodesic fallback enabled and synoptic.stations.geog + alerts.storm_polygons populated!`)*
 
 ### 6.2 Quick Verification Queries
 

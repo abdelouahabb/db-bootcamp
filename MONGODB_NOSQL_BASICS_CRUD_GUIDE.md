@@ -211,7 +211,7 @@ db.stations.find(
 ### 1.3 Basic Create (`insertOne()` & `insertMany()`) in MongoDB
 
 > [!IMPORTANT]
-> **Schema Validation Note on `db.stations`:** Recall from [`day4/day4_weather_ops_mongo.js`](./day4/day4_weather_ops_mongo.js) that `db.stations` has a `$jsonSchema` validator requiring `_id` (`Int32`), `station_name` (`string`), `station_type` (`"SURFACE_AWS"`, `"COASTAL_BUOY"`, `"UPPER_AIR_RADIOSONDE"`, or `"AGRO_SOIL"`), `is_active` (`bool`), and `location` (`{ type: "Point", coordinates: [lon, lat] }`).
+> **Schema Validation Note on `db.stations`:** Recall from [`day4/day4_weather_ops_mongo.js`](./day4/day4_weather_ops_mongo.js) that `db.stations` has a `$jsonSchema` validator requiring `_id` (numeric WMO ID: `["int", "long", "double"]`), `station_name` (`string`), `station_type` (`"SURFACE_AWS"`, `"COASTAL_BUOY"`, `"UPPER_AIR_RADIOSONDE"`, or `"AGRO_SOIL"`), `is_active` (`bool`), and `location` (`{ type: "Point", coordinates: [lon, lat] }`).
 
 ```javascript
 // TARGET DATABASE: MongoDB 'weather_nosql' (mongosh weather_nosql)
@@ -223,7 +223,7 @@ db.synoptic_timeseries.deleteMany({ "station_meta.station_id": 60580 });
 
 // 1. insertOne() — Insert a new Saharan station (WMO 60580: Ouargla - Ain Beida):
 db.stations.insertOne({
-  _id: Int32(60580),
+  _id: 60580,
   station_name: "Ouargla - Ain Beida",
   station_type: "SURFACE_AWS",
   climate_zone: "Arid",

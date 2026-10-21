@@ -270,7 +270,7 @@ try {
 // 5. Insert valid station 60445 (Setif) with custom winter icing_sensor metadata
 db.stations.deleteOne({ _id: 60445 }); // Safe pre-cleanup for repeatable runs
 db.stations.insertOne({
-  _id: Int32(60445),
+  _id: 60445,
   station_name: "Setif - Ain Arnat",
   station_type: "SURFACE_AWS",
   climate_zone: "Highland",

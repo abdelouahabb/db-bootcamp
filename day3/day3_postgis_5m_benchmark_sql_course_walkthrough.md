@@ -699,12 +699,12 @@ ORDER BY distance_km ASC, station_id ASC;
 *(Showing our deterministic ground-truth stations `AWS-003` Dellys Cape at `3.83 km` and `AWS-004` Tizi Ouzou at `29.50 km`, plus the two `setseed(0.42)` regional stations `AWS-027` at `9.90 km` and `AWS-047` at `31.96 km` falling inside the 40 km circle)*:
 
 ```text
- station_id |      station_name      | elevation_m | latitude | longitude | distance_km 
-------------+------------------------+-------------+----------+-----------+-------------
- AWS-003    | Dellys Cape Lighthouse |       412.5 |  36.9172 |     3.913 |        3.83
- AWS-027    | Chrea Summit AWS       |       925.5 |  36.9129 |    3.7993 |        9.90
- AWS-004    | Tizi Ouzou Valley      |       285.0 |  36.7118 |    4.0459 |       29.50
- AWS-047    | Boumerdes Coastal AWS  |      1090.7 |  36.9135 |    4.2564 |       31.96
+ station_id |       station_name       | elevation_m | latitude | longitude | distance_km 
+------------+--------------------------+-------------+----------+-----------+-------------
+ AWS-003    | Dellys Cape Lighthouse   |          85 |  36.9172 |     3.913 |        3.83
+ AWS-027    | AWS Regional Station 027 |      1134.3 |  36.8916 |     3.816 |        9.90
+ AWS-004    | Tizi Ouzou Valley        |         189 |  36.7118 |    4.0459 |       29.50
+ AWS-047    | AWS Regional Station 047 |      1126.7 |  36.9473 |    4.2596 |       31.96
 (4 rows)
 ```
 
@@ -767,16 +767,16 @@ Query 9B combines **every major Day 3 architectural pillar** in a single product
 ##### 6.4.2.3 Expected Terminal Output (`Lines 272–299`)
 
 ```text
- station_id |      station_name       | dist_km | oct_mean_temp | oct_peak_gust 
-------------+-------------------------+---------+---------------+---------------
- AWS-002    | Boumerdes Coastal Point |    0.00 |         15.53 |            22
- AWS-048    | Bejaia Marine AWS       |   16.66 |         15.55 |            22
- AWS-050    |Constantine Plateau AWS  |   19.15 |         15.49 |            22
- AWS-027    | Chrea Summit AWS        |   33.21 |         15.45 |            22
- AWS-001    | Algiers Port Marine     |   37.30 |         15.57 |            22
- AWS-003    | Dellys Cape Lighthouse  |   42.25 |         15.49 |            22
- AWS-022    | Boumerdes Coastal AWS   |   42.25 |         15.61 |            22
- AWS-029    | Dellys Cape AWS         |   42.63 |         15.59 |            22
+ station_id |       station_name       | dist_km | oct_mean_temp | oct_peak_gust 
+------------+--------------------------+---------+---------------+---------------
+ AWS-002    | Boumerdes Coastal Point  |    0.00 |         15.48 |            22
+ AWS-048    | AWS Regional Station 048 |   16.66 |         15.37 |            22
+ AWS-050    | AWS Regional Station 050 |   19.15 |         15.31 |            22
+ AWS-027    | AWS Regional Station 027 |   33.21 |         15.46 |            22
+ AWS-001    | Algiers Port Marine      |   37.30 |         15.37 |            22
+ AWS-003    | Dellys Cape Lighthouse   |   42.25 |         15.48 |            22
+ AWS-022    | AWS Regional Station 022 |   42.25 |         15.50 |            22
+ AWS-029    | AWS Regional Station 029 |   42.63 |         15.39 |            22
 (8 rows)
 ```
 

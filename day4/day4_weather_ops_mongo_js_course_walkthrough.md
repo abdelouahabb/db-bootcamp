@@ -82,7 +82,7 @@ db.createCollection("stations", {
       bsonType: "object",
       required: ["_id", "station_name", "station_type", "location", "is_active"],
       properties: {
-        _id: { bsonType: "int", description: "WMO 5-digit station ID" },
+        _id: { bsonType: ["int", "long", "double"], description: "WMO 5-digit station ID" },
         station_name: { bsonType: "string" },
         station_type: { enum: ["SURFACE_AWS", "COASTAL_BUOY", "UPPER_AIR_RADIOSONDE", "AGRO_SOIL"] },
         is_active: { bsonType: "bool" },
@@ -116,10 +116,10 @@ db.createCollection("stations", {
 * **Line 20 (`required: ["_id", "station_name", "station_type", "location", "is_active"]`):**
   * Enforces the **Minimum Viable Station Contract**. Every weather station document—regardless of whether it is a Sahara dust sensor or a Mediterranean wave buoy—must contain these 5 top-level keys. Any insert omitting one of these keys is immediately rejected.
   * Notice that `additionalProperties` is **not** set to `false`. This is the core architectural mechanism of **Governed Polymorphism**: the 5 core fields are strictly enforced, while extra instrument-specific fields (`sensors`, `calibration`, `soil_depths_cm`, `buoy_specs`) are freely permitted without schema migration.
-* **Line 22 (`_id: { bsonType: "int", description: "WMO 5-digit station ID" }`):**
-  * Overrides MongoDB's default 12-byte `ObjectId` generator by requiring the primary key `_id` to be a numeric integer representing the 5-digit World Meteorological Organization (WMO) station identifier (e.g., `60390` for Algiers, `60680` for Tamanrasset).
+* **Line 22 (`_id: { bsonType: ["int", "long", "double"], description: "WMO 5-digit station ID" }`):**
+  * Overrides MongoDB's default 12-byte `ObjectId` generator by requiring the primary key `_id` to be a numeric value representing the 5-digit World Meteorological Organization (WMO) station identifier (e.g., `60390` for Algiers, `60680` for Tamanrasset).
   * Using the natural WMO integer identifier as `_id` maps directly onto the mandatory unique `_id_` B-Tree index, eliminating the need for a secondary unique index on `wmo_id` and saving 12 bytes per document header.
-  * Note on `mongosh` numeric literals: In JavaScript, numeric literals like `60390` are IEEE 754 64-bit floats (`double`), which `mongosh` serializes as BSON `double` unless matched by numeric type rules or wrapped in `NumberInt()`. In MongoDB's `$jsonSchema` validator implementation inside `mongosh`, whole-number literals or integer-compatible numbers should be watched carefully in strict environments, or `bsonType: ["int", "double", "long"]` / `NumberInt()` can be used when clients send 64-bit floats.
+  * Why `bsonType: ["int", "long", "double"]` is required in `mongosh`: In JavaScript, bare numeric literals like `60390` are IEEE 754 64-bit floats (`double`), whereas Python `PyMongo` serializes integers as BSON `int` or `long`. Specifying `["int", "long", "double"]` allows both `mongosh` scripts and Python/Go drivers to insert numeric WMO station IDs cleanly.
 * **Line 23 (`station_name: { bsonType: "string" }`):**
   * Requires `station_name` to be a UTF-8 BSON string (BSON Type `0x02`).
 * **Line 24 (`station_type: { enum: ["SURFACE_AWS", "COASTAL_BUOY", "UPPER_AIR_RADIOSONDE", "AGRO_SOIL"] }`):**

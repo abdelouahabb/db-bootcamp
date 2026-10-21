@@ -63,7 +63,7 @@ db.radiosonde_soundings.createIndex(
 );
 
 print("=== 4. Running Sample Aggregation Pipeline: Isobaric Pressure Surface Summary ===");
-const levelSummary = db.radiosonde_soundings.aggregate([
+var levelSummary = db.radiosonde_soundings.aggregate([
   { $unwind: "$vertical_levels" },
   {
     $group: {

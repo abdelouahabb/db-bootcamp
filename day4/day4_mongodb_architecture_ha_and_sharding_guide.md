@@ -229,7 +229,7 @@ rs.add({
 });
 
 // 6. Dynamically change node priorities or tags without restarting mongod:
-let cfg = rs.conf();
+var cfg = rs.conf();
 cfg.members[1].priority = 3;        // Make node 1 the new preferred Primary
 rs.reconfig(cfg);
 ```

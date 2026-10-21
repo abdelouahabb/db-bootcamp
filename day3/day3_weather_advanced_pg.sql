@@ -84,25 +84,25 @@ FROM synoptic.observations;
 -- ============================================================================
 
 -- 1. BRIN Index (Block Range Index) on chronological time-series column
-CREATE INDEX idx_obs_brin_time
+CREATE INDEX IF NOT EXISTS idx_obs_brin_time
 ON synoptic.observations USING BRIN (obs_time) WITH (pages_per_range = 8);
 
 -- 2. Standard B-Tree Index on obs_time (to compare disk size against BRIN!)
-CREATE INDEX idx_obs_btree_time
+CREATE INDEX IF NOT EXISTS idx_obs_btree_time
 ON synoptic.observations USING BTREE (obs_time);
 
 -- 3. Partial Index: Only index anomalous ('SUSPECT' or 'ERRONEOUS') observations (~4% of rows)
-CREATE INDEX idx_obs_suspect_only
+CREATE INDEX IF NOT EXISTS idx_obs_suspect_only
 ON synoptic.observations (station_id, obs_time)
 WHERE qc_flag != 'VALID';
 
 -- 4. Covering Index (INCLUDE) for Index-Only Scans on station temperature queries
-CREATE INDEX idx_obs_station_time_covering
+CREATE INDEX IF NOT EXISTS idx_obs_station_time_covering
 ON synoptic.observations (station_id, obs_time)
 INCLUDE (temp_c, pressure_hpa, precip_1h_mm);
 
 -- 5. GIN Index on JSONB sensor_payload for fast NoSQL-style containment queries (@>)
-CREATE INDEX idx_obs_part_sensor_gin
+CREATE INDEX IF NOT EXISTS idx_obs_part_sensor_gin
 ON synoptic.observations_part USING GIN (sensor_payload);
 
 -- ============================================================================
@@ -137,6 +137,12 @@ ON nwp.mv_daily_model_verification (model_name, station_id, valid_date);
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis') THEN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geometry' AND typtype = 'd') THEN
+            DROP DOMAIN public.geometry CASCADE;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'geography' AND typtype = 'd') THEN
+            DROP DOMAIN public.geography CASCADE;
+        END IF;
         CREATE EXTENSION IF NOT EXISTS postgis;
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geog GEOGRAPHY(Point, 4326);
         ALTER TABLE synoptic.stations ADD COLUMN IF NOT EXISTS geom GEOMETRY(Point, 4326);

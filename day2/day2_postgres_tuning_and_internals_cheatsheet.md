@@ -287,7 +287,8 @@ shared_preload_libraries = 'pg_stat_statements'
 
 Always profile queries using:
 ```sql
-EXPLAIN (ANALYZE, BUFFERS, SETTINGS, TIMING) <SQL_QUERY>;
+EXPLAIN (ANALYZE, BUFFERS, SETTINGS, TIMING)
+SELECT * FROM synoptic.observations WHERE station_id = 60390;
 ```
 > **Warning:** `EXPLAIN ANALYZE` actually executes the query! Wrap `DELETE` / `UPDATE` in `BEGIN; EXPLAIN ANALYZE ...; ROLLBACK;`.
 
